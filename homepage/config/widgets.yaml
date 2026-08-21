@@ -1,11 +1,22 @@
 - Resources:
     - cpu:
-        label: System
+        label: CPU Usage
     - memory:
-        label: RAM
+        label: Memory Usage
     - disk:
-        label: Root
+        label: Disk Usage
         path: /
+    - uptime:
+        label: System Uptime
+- Information:
+    - github:
+        user: dcazes
+        repo: homelab
+        type: stars
+    - rss:
+        url: https://feeds.feedburner.com/techcrunch/IT
+        title: TechCrunch
+        limit: 3
 - search:
     provider: duckduckgo
     target: _blank

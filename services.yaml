@@ -105,6 +105,7 @@ services:
     backup:
       binds:
         - data
+
   - id: homepage
     display_name: Homepage
     description: Landing page / service dashboard

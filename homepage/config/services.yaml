@@ -1,4 +1,36 @@
-- AI & Research:
+- Media:
+    - Immich:
+        icon: immich
+        href: http://localhost:2283
+        description: Photo library
+        siteMonitor: http://localhost:2283
+    - Paperless-ngx:
+        icon: paperless-ngx
+        href: http://localhost:8010
+        description: Document archive
+        siteMonitor: http://localhost:8010
+- Productivity:
+    - Mealie:
+        icon: mealie
+        href: http://localhost:9000
+        description: Recipes
+        siteMonitor: http://localhost:9000
+    - Actual Budget:
+        icon: actualbudget
+        href: http://localhost:5006
+        description: Budgeting
+        siteMonitor: http://localhost:5006
+    - Nextcloud:
+        icon: nextcloud
+        href: http://localhost:8020
+        description: Files & sync
+        siteMonitor: http://localhost:8020
+    - AdventureLog:
+        icon: si-adventofcode
+        href: http://localhost:8015
+        description: Travel tracker
+        siteMonitor: http://localhost:8015
+- "AI & Research":
     - SurfSense:
         icon: si-surfdotsh
         href: http://localhost:3929
@@ -14,41 +46,6 @@
         href: http://localhost:8082
         description: Graph view of SurfSense DB
         siteMonitor: http://localhost:8082
-
-- Media:
-    - Immich:
-        icon: immich
-        href: http://localhost:2283
-        description: Photo library
-        siteMonitor: http://localhost:2283
-
-- Productivity:
-    - Paperless-ngx:
-        icon: paperless-ngx
-        href: http://localhost:8010
-        description: Document archive
-        siteMonitor: http://localhost:8010
-    - Actual Budget:
-        icon: actualbudget
-        href: http://localhost:5006
-        description: Budgeting
-        siteMonitor: http://localhost:5006
-    - Mealie:
-        icon: mealie
-        href: http://localhost:9000
-        description: Recipes
-        siteMonitor: http://localhost:9000
-    - Nextcloud:
-        icon: nextcloud
-        href: http://localhost:8020
-        description: Files & sync
-        siteMonitor: http://localhost:8020
-    - AdventureLog:
-        icon: si-adventofcode
-        href: http://localhost:8015
-        description: Travel tracker
-        siteMonitor: http://localhost:8015
-
 - Infrastructure:
     - Control Dashboard:
         icon: si-fastapi
@@ -65,3 +62,38 @@
         href: http://localhost:8081
         description: Password manager
         siteMonitor: http://localhost:8081
+- Monitoring:
+    - System:
+        icon: si-monitor
+        href: http://localhost:8787
+        description: Dashboard & Controls
+        siteMonitor: http://localhost:8787
+    - Resources:
+        icon: si-cpu-chip
+        href: http://localhost:8083
+        description: Resource Overview
+        siteMonitor: http://localhost:8083
+- Logs:
+    - Log Viewer:
+        icon: si-file-text
+        href: http://localhost:8083
+        description: System Logs
+        siteMonitor: http://localhost:8083
+    - Debug:
+        icon: si-bug
+        href: http://localhost:8083
+        description: Debug Tools
+        siteMonitor: http://localhost:8083
+- Links:
+    - Documentation:
+        icon: si-book-open
+        href: https://github.com/dcazes/homelab/wiki
+        description: Homelab Documentation
+    - Community:
+        icon: si-users
+        href: https://github.com/dcazes/homelab/discussions
+        description: Community Discussions
+    - Releases:
+        icon: si-git-branch
+        href: https://github.com/dcazes/homelab/releases
+        description: Latest Releases

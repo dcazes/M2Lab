@@ -1,0 +1,70 @@
+/* Custom CSS for Homelab Homepage */
+
+/* Make cards more prominent */
+.card {
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Improve header appearance */
+.header {
+  background: rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(10px);
+}
+
+/* Make tabs more prominent */
+.tab {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.tab-active {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-radius: 8px;
+}
+
+/* Improve widget appearance */
+.widget {
+  border-radius: 10px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Make links more appealing */
+.bookmark-item {
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.bookmark-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.02);
+}
+
+/* Improve service cards */
+.service-card {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.service-card:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Add some animation to icons */
+.icon {
+  transition: transform 0.3s ease;
+}
+
+.icon:hover {
+  transform: scale(1.2) rotate(5deg);
+}

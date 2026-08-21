@@ -41,3 +41,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Homepage runtime logs
+homepage/config/logs/
