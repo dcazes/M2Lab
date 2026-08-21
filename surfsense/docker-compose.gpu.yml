@@ -1,0 +1,30 @@
+services:
+  backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities: [gpu]
+
+  celery_worker:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities: [gpu]
+
+  celery_beat:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities: [gpu]

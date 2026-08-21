@@ -1,0 +1,14 @@
+name: vaultwarden
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    environment:
+      DOMAIN: "https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:8446"
+      ROCKET_PORT: "80"
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8081:80"
+    restart: unless-stopped

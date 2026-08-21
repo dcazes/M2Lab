@@ -1,0 +1,83 @@
+# services.yaml — single source of truth for CLI + dashboard
+settings:
+  dashboard_port: 8787
+  compose_timeout_stop: 120
+  tailnet_base: "https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net"
+
+services:
+  - id: surfsense
+    display_name: SurfSense
+    description: AI research / knowledge base
+    category: research
+    icon: "🧠"
+    dir: surfsense
+    project: surfsense
+    compose_files:
+      - docker-compose.gpu.yml
+    port: 3929
+    tailnet_port: 8444
+    url: http://localhost:3929
+    health:
+      mode: tcp
+      port: 3929
+    ignore_containers:
+      - migrations
+
+  - id: immich
+    display_name: Immich
+    description: Photo library
+    category: photos
+    icon: "📷"
+    dir: immich-app
+    project: immich
+    port: 2283
+    tailnet_port: 8443
+    url: http://localhost:2283
+    health:
+      mode: tcp
+      port: 2283
+
+  - id: freellmapi
+    display_name: FreeLLMAPI
+    description: OpenAI-compatible gateway (8 providers)
+    category: ai
+    icon: "🤖"
+    dir: FreeLLMAPI
+    project: freellmapi
+    port: 3001
+    tailnet_port: 8445
+    url: http://localhost:3001
+    health:
+      mode: http
+      url: "http://localhost:3001/api/ping"
+      expect: 200
+
+  - id: vaultwarden
+    display_name: Vaultwarden
+    description: Password manager (Bitwarden-compatible)
+    category: security
+    icon: "🔐"
+    dir: vaultwarden
+    project: vaultwarden
+    port: 8081
+    tailnet_port: 8446
+    url: http://localhost:8081
+    health:
+      mode: http
+      url: "http://localhost:8081/alive"
+      expect: 200
+
+  - id: puppygraph
+    display_name: PuppyGraph
+    description: Graph visualizer for SurfSense PostgreSQL
+    category: graph
+    icon: "📊"
+    dir: puppygraph
+    project: puppygraph
+    port: 8082
+    tailnet_port: 8448
+    url: http://localhost:8082
+    health:
+      mode: http
+      url: "http://localhost:8082/"
+      expect: 200

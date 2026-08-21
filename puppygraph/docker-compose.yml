@@ -1,0 +1,16 @@
+name: puppygraph
+services:
+  puppygraph:
+    image: puppygraph/puppygraph:latest
+    container_name: puppygraph
+    environment:
+      - PUPPYGRAPH_USERNAME=puppygraph
+      - PUPPYGRAPH_PASSWORD=puppygraph123
+      - QUERY_TIMEOUT=5m
+    ports:
+      - "127.0.0.1:8082:8081"
+      - "127.0.0.1:8182:8182"
+      - "127.0.0.1:7687:7687"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

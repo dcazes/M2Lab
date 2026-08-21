@@ -1,0 +1,63 @@
+.PHONY: help surfsense stop-surfsense logs-surfsense pull-surfsense immich stop-immich logs-immich pull-immich freellmapi stop-freellmapi logs-freellmapi pull-freellmapi status-freellmapi
+
+help:
+	@echo "SurfSense & Immich Docker Management"
+	@echo ""
+	@echo "SurfSense (with GPU):"
+	@echo "  make surfsense        - Start SurfSense (detached)"
+	@echo "  make stop-surfsense   - Stop SurfSense (preserves volumes)"
+	@echo "  make logs-surfsense   - Follow SurfSense logs"
+	@echo "  make pull-surfsense   - Pull latest SurfSense images"
+	@echo ""
+	@echo "Immich:"
+	@echo "  make immich           - Start Immich (detached)"
+	@echo "  make stop-immich      - Stop Immich (preserves volumes)"
+	@echo "  make logs-immich      - Follow Immich logs"
+	@echo "  make pull-immich      - Pull latest Immich images"
+	@echo ""
+	@echo "FreeLLMAPI (Docker instance, standalone in ./FreeLLMAPI, port 3001):"
+	@echo "  make freellmapi       - Start FreeLLMAPI (detached)"
+	@echo "  make stop-freellmapi  - Stop FreeLLMAPI (preserves data)"
+	@echo "  make logs-freellmapi  - Follow FreeLLMAPI logs"
+	@echo "  make pull-freellmapi  - Pull latest FreeLLMAPI image"
+	@echo "  make status-freellmapi - Show FreeLLMAPI container status"
+	@echo "  (Desktop app on port 31415 is separate and unaffected)"
+
+surfsense:
+	cd surfsense && docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+stop-surfsense:
+	cd surfsense && docker compose -f docker-compose.yml -f docker-compose.gpu.yml down
+
+logs-surfsense:
+	cd surfsense && docker compose -f docker-compose.yml -f docker-compose.gpu.yml logs -f
+
+pull-surfsense:
+	cd surfsense && docker compose -f docker-compose.yml -f docker-compose.gpu.yml pull
+
+immich:
+	cd immich-app && docker compose up -d
+
+stop-immich:
+	cd immich-app && docker compose down
+
+logs-immich:
+	cd immich-app && docker compose logs -f
+
+pull-immich:
+	cd immich-app && docker compose pull
+
+freellmapi:
+	cd FreeLLMAPI && docker compose up -d
+
+stop-freellmapi:
+	cd FreeLLMAPI && docker compose down
+
+logs-freellmapi:
+	cd FreeLLMAPI && docker compose logs -f
+
+pull-freellmapi:
+	cd FreeLLMAPI && docker compose pull
+
+status-freellmapi:
+	cd FreeLLMAPI && docker compose ps
