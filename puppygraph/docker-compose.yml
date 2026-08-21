@@ -21,4 +21,5 @@ services:
 
 networks:
   frontend-net:
-    internal: false
+    external: true
+    name: homelab_frontend

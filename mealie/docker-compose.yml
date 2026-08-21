@@ -14,18 +14,13 @@ services:
       TZ: ${TZ}
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    user: "1000:1000"
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run
     networks:
       - frontend-net
       - backend-net
 networks:
   frontend-net:
-    internal: false
+    external: true
+    name: homelab_frontend
   backend-net:
-    internal: true
+    external: true
+    name: homelab_backend

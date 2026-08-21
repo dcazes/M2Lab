@@ -69,6 +69,8 @@ services:
       - backend-net
 networks:
   frontend-net:
-    internal: false
+    external: true
+    name: homelab_frontend
   backend-net:
-    internal: true
+    external: true
+    name: homelab_backend

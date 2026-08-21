@@ -39,8 +39,12 @@ services:
     cap_drop:
       - ALL
     user: "1000:1000"
+    group_add:
+      - "986"
 networks:
   frontend-net:
-    internal: false
+    external: true
+    name: homelab_frontend
   backend-net:
-    internal: true
+    external: true
+    name: homelab_backend
