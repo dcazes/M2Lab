@@ -18,6 +18,12 @@ services:
       - portainer_data:/data
     security_opt:
       - no-new-privileges:true
+    networks:
+      - frontend-net
+
+networks:
+  frontend-net:
+    internal: false
 
 volumes:
   portainer_data:
