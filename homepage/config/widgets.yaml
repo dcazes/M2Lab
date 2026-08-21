@@ -1,4 +1,4 @@
-- Resources:
+- resources:
     - cpu:
         label: CPU Usage
     - memory:
@@ -8,7 +8,7 @@
         path: /
     - uptime:
         label: System Uptime
-- Information:
+- information:
     - github:
         user: dcazes
         repo: homelab

@@ -9,4 +9,7 @@ services:
       - ./config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      HOMEPAGE_ALLOWED_HOSTS: localhost:8083,dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:443
+      # Hosts Homepage accepts in the HTTP Host header. Must include the
+      # Tailscale hostname you open it from (https://home.taile2cc7a.ts.net)
+      # and localhost for direct access. Update this if you rename the host.
+      HOMEPAGE_ALLOWED_HOSTS: localhost:8083,127.0.0.1:8083,home.taile2cc7a.ts.net,home.taile2cc7a.ts.net:443

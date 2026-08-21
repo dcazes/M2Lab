@@ -54,6 +54,8 @@ adventurelog:
 	@$(PY) ctl/registry.py up adventurelog
 nextcloud:
 	@$(PY) ctl/registry.py up nextcloud
+portainer:
+	@$(PY) ctl/registry.py up portainer
 
 start-all:
 	@for s in $(SERVICES); do $(MAKE) --no-print-directory $$s || exit 1; done

@@ -1,99 +1,106 @@
+# =============================================================================
+# Homepage services.yaml  —  what cards appear + the URL each card opens
+# -----------------------------------------------------------------------------
+# HOW TO EDIT MANUALLY (full guide in homepage/config/HOMEPAGE_CONFIG.md):
+#   * Each "- GroupName:" is a column/tab. List services under it.
+#   * Fields: icon, href (URL opened on click), description, (optional) siteMonitor.
+#   * Service id in HomeServer/services.yaml MUST equal the Docker compose
+#     project name used by custom.js (see custom.js NAME_TO_PROJECT).
+#   * All hrefs below use the SECURE Tailscale URL https://home.taile2cc7a.ts.net
+#     (Tailscale Serve terminates TLS with a real Let's Encrypt cert — no cert
+#     files to manage). If you rename the Tailscale machine, update these host
+#     names. After editing, Homepage hot-reloads (no restart needed).
+# =============================================================================
+
 - Media:
     - Immich:
         icon: immich
-        href: http://localhost:2283
+        href: https://home.taile2cc7a.ts.net:8443
         description: Photo library
-        siteMonitor: http://localhost:2283
     - Paperless-ngx:
         icon: paperless-ngx
-        href: http://localhost:8010
+        href: https://home.taile2cc7a.ts.net:8451
         description: Document archive
-        siteMonitor: http://localhost:8010
+
 - Productivity:
     - Mealie:
         icon: mealie
-        href: http://localhost:9000
+        href: https://home.taile2cc7a.ts.net:8455
         description: Recipes
-        siteMonitor: http://localhost:9000
     - Actual Budget:
-        icon: actualbudget
-        href: http://localhost:5006
+        icon: si-actualbudget
+        href: https://home.taile2cc7a.ts.net:8452
         description: Budgeting
-        siteMonitor: http://localhost:5006
     - Nextcloud:
         icon: nextcloud
-        href: http://localhost:8020
+        href: https://home.taile2cc7a.ts.net:8453
         description: Files & sync
-        siteMonitor: http://localhost:8020
     - AdventureLog:
         icon: si-adventofcode
-        href: http://localhost:8015
+        href: https://home.taile2cc7a.ts.net:8454
         description: Travel tracker
-        siteMonitor: http://localhost:8015
+
 - "AI & Research":
     - SurfSense:
-        icon: si-surfdotsh
-        href: http://localhost:3929
+        # surfsense.svg (custom icon) doesn't render in Homepage; using a valid
+        # generic AI icon instead.
+        icon: si-huggingface
+        href: https://home.taile2cc7a.ts.net:8444
         description: AI research / knowledge base
-        siteMonitor: http://localhost:3929
     - FreeLLMAPI:
         icon: si-openai
-        href: http://localhost:3001
+        href: https://home.taile2cc7a.ts.net:8445
         description: OpenAI-compatible gateway
-        siteMonitor: http://localhost:3001
     - PuppyGraph:
         icon: si-neo4j
-        href: http://localhost:8082
+        href: https://home.taile2cc7a.ts.net:8448
         description: Graph view of SurfSense DB
-        siteMonitor: http://localhost:8082
+
 - Infrastructure:
     - Control Dashboard:
+        # Portainer is the stack manager / control plane (replaces the old :8787 UI).
         icon: si-fastapi
-        href: http://localhost:8787
-        description: Stack manager (start/stop/logs)
-        siteMonitor: http://localhost:8787
+        href: https://home.taile2cc7a.ts.net:9090
+        description: Stack manager (start/stop/logs) — Portainer
     - Beszel:
         icon: si-prometheus
-        href: http://localhost:8090
+        href: https://home.taile2cc7a.ts.net:8450
         description: Server monitoring
-        siteMonitor: http://localhost:8090
     - Vaultwarden:
         icon: vaultwarden
-        href: http://localhost:8081
+        href: https://home.taile2cc7a.ts.net:8446
         description: Password manager
-        siteMonitor: http://localhost:8081
+
 - Monitoring:
     - System:
-        icon: si-monitor
-        href: http://localhost:8787
-        description: Dashboard & Controls
-        siteMonitor: http://localhost:8787
+        icon: si-grafana
+        href: https://home.taile2cc7a.ts.net:9090
+        description: Dashboard & Controls — Portainer
     - Resources:
-        icon: si-cpu-chip
-        href: http://localhost:8083
+        icon: si-amd
+        href: https://home.taile2cc7a.ts.net
         description: Resource Overview
-        siteMonitor: http://localhost:8083
+
 - Logs:
     - Log Viewer:
-        icon: si-file-text
-        href: http://localhost:8083
+        icon: si-datadog
+        href: https://home.taile2cc7a.ts.net
         description: System Logs
-        siteMonitor: http://localhost:8083
     - Debug:
-        icon: si-bug
-        href: http://localhost:8083
+        icon: si-sentry
+        href: https://home.taile2cc7a.ts.net
         description: Debug Tools
-        siteMonitor: http://localhost:8083
+
 - Links:
     - Documentation:
-        icon: si-book-open
+        icon: si-gitbook
         href: https://github.com/dcazes/homelab/wiki
         description: Homelab Documentation
     - Community:
-        icon: si-users
+        icon: si-github
         href: https://github.com/dcazes/homelab/discussions
         description: Community Discussions
     - Releases:
-        icon: si-git-branch
+        icon: si-git
         href: https://github.com/dcazes/homelab/releases
         description: Latest Releases

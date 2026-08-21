@@ -49,11 +49,15 @@
   transform: scale(1.02);
 }
 
-/* Improve service cards */
+/* Improve service cards — give them a solid-ish dark fill so the text stays
+   readable now that the background is no longer blurred. Tweak the 0.55 alpha
+   to taste (higher = more opaque / darker cards). */
 .service-card {
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.55) !important;
+  backdrop-filter: blur(2px);
 }
 
 .service-card:hover {

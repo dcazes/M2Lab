@@ -23,7 +23,7 @@
 - `.env` with `$$` escaping for Argon2 `$` characters in compose interpolation
 
 ### Tailscale
-- `https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:8446/` → `127.0.0.1:8081`
+- `https://home.taile2cc7a.ts.net:8446/` → `127.0.0.1:8081`
 - Required for Bitwarden clients (WebCrypto needs HTTPS)
 
 ---
@@ -38,7 +38,7 @@
 - Connect to SurfSense DB: configure in Web UI → Create Catalog → PostgreSQL → JDBC `jdbc:postgresql://host.docker.internal:5432/surfsense`, user `surfsense`, password `surfsense`
 
 ### Tailscale
-- `https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:8448/` → `127.0.0.1:8082`
+- `https://home.taile2cc7a.ts.net:8448/` → `127.0.0.1:8082`
 
 ---
 

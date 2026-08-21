@@ -1,0 +1,23 @@
+# Portainer — Docker management UI + REST API.
+# Replaces the old custom control backend (was on :8787).
+# The Homepage service cards call Portainer's API (see homepage/config/custom.js).
+#
+# Ports (host-bound to localhost; expose remotely via Tailscale):
+#   9090 -> 9000  HTTP UI + API   (we use HTTP locally to avoid self-signed-cert
+#                                    problems when the browser calls the API)
+#   8000          Edge agent port (not needed for single-host local use)
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  portainer_data:

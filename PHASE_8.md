@@ -108,7 +108,7 @@ All services integrate with the existing Makefile CLI, FastAPI dashboard, and Ta
   ```bash
   docker exec nextcloud-occ \
     php occ config:system:set trusted_domains \
-    --value="localhost:8020" --value="dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net"
+    --value="localhost:8020" --value="home.taile2cc7a.ts.net"
   docker exec nextcloud-occ \
     php occ config:system:set overwriteprotocol --value=https
   ```
@@ -116,7 +116,7 @@ All services integrate with the existing Makefile CLI, FastAPI dashboard, and Ta
 
 ### 5. Tailscale Integration
 All services expose via Tailscale MagicDNS:
-- `https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:443` → Homepage (landing page)
+- `https://home.taile2cc7a.ts.net:443` → Homepage (landing page)
 - `:8449` → Control dashboard (FastAPI)
 - `:8450` → Beszel hub
 - `:8451` → Paperless-ngx

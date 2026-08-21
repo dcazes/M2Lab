@@ -50,13 +50,14 @@ footer:
   - version:
       text: Homelab Control Panel
 background:
-  image: https://images.unsplash.com/photo-1555066931-4365d14bab8c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80
-  blur: 20
-  opacity: 80
+  image: https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80
+  blur: 0                 # 0 = crisp mountains (no blur)
+  opacity: 65
   attachment: fixed
   position: center
   repeat: no-repeat
   size: cover
-cardBlur: 10
+cardBlur: 0             # 0 = sharp cards (no blur behind cards)
 opacity: 90
 footerStyle: small
+statusStyle: none

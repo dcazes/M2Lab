@@ -1,0 +1,15 @@
+# Portainer proxy — secure CORS + API-key shim for Homepage buttons.
+# See portainer-proxy/proxy.py for how it works.
+# Listens on 127.0.0.1:8788, forwards authenticated calls to Portainer (:9090).
+[Unit]
+Description=Portainer CORS + API-key proxy (secure shim for Homepage control buttons)
+After=network.target
+
+[Service]
+WorkingDirectory=/home/dak/Desktop/Programs/HomeServer/portainer-proxy
+ExecStart=/home/dak/Desktop/Programs/HomeServer/.venv/bin/python proxy.py
+EnvironmentFile=/home/dak/.config/homelab/portainer.env
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

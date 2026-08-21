@@ -198,7 +198,7 @@
       e.stopPropagation();
       if (action === "logs") {
         // Logs just opens Portainer's container list in a new tab — no confirm.
-        window.open("https://home.taile2cc7a.ts.net:9090/#!2/docker/containers", "_blank");
+        window.open("http://localhost:9090/#!2/docker/containers", "_blank");
         return;
       }
       if (confirmMsg && !confirm(confirmMsg.replace("{name}", serviceName))) return;

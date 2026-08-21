@@ -2,7 +2,7 @@
 settings:
   dashboard_port: 8787
   compose_timeout_stop: 120
-  tailnet_base: "https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net"
+  tailnet_base: "https://home.taile2cc7a.ts.net"
 
 services:
   - id: surfsense
@@ -246,3 +246,21 @@ services:
       binds:
         - html
         - data
+
+  - id: portainer
+    display_name: Portainer
+    description: Docker management UI + control API
+    category: infra
+    icon: "🐳"
+    dir: portainer
+    project: portainer
+    port: 9090
+    tailnet_port: 9090
+    url: http://localhost:9090
+    health:
+      mode: http
+      url: "http://localhost:9090/api/status"
+      expect: 200
+    backup:
+      volumes:
+        - portainer_data

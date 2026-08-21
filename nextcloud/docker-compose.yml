@@ -17,7 +17,9 @@ services:
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: ${NEXTCLOUD_DBPASSWORD}
       REDIS_HOST: redis
-      NEXTCLOUD_TRUSTED_DOMAINS: localhost:8020 dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net
+      # Hosts Nextcloud accepts. Include localhost (direct) and the secure
+      # Tailscale URL. Update the tailnet host if you rename the machine.
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost:8020 home.taile2cc7a.ts.net:8453
 
   db:
     image: postgres:17

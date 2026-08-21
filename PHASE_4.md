@@ -64,10 +64,10 @@ Test each app:
 
 **Serve mappings created:**
 ```
-https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net/        → 127.0.0.1:8787 (dashboard)
-https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:8443/   → 127.0.0.1:2283 (Immich)
-https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:8444/   → 127.0.0.1:3929 (SurfSense)
-https://dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net:8445/   → 127.0.0.1:3001 (FreeLLMAPI)
+https://home.taile2cc7a.ts.net/        → 127.0.0.1:8787 (dashboard)
+https://home.taile2cc7a.ts.net:8443/   → 127.0.0.1:2283 (Immich)
+https://home.taile2cc7a.ts.net:8444/   → 127.0.0.1:3929 (SurfSense)
+https://home.taile2cc7a.ts.net:8445/   → 127.0.0.1:3001 (FreeLLMAPI)
 ```
 
 **Phone-on-LTE test (Pixel 8, tailnet):**
