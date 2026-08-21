@@ -18,10 +18,8 @@ services:
       - /tmp
       - /run
     networks:
-      frontend-net:
-        internal: false
-      backend-net:
-        internal: true
+      - frontend-net
+      - backend-net
   beszel-agent:
     image: henrygd/beszel-agent:latest
     container_name: beszel-agent

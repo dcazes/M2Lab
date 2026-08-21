@@ -13,10 +13,8 @@ services:
       - ALL
     user: "1000:1000"
     networks:
-      frontend-net:
-        internal: false
-      backend-net:
-        internal: true
+      - frontend-net
+      - backend-net
 networks:
   frontend-net:
     internal: false

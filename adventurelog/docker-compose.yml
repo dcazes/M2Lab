@@ -19,14 +19,9 @@ services:
       SITE_URL: ${SITE_URL}
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    user: "1000:1000"
     networks:
-      frontend-net:
-        internal: false
-      backend-net:
-        internal: true
+      - frontend-net
+      - backend-net
   db:
     image: postgis/postgis:16-3.5
     container_name: adventurelog-db
@@ -39,12 +34,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    user: "1000:1000"
     networks:
-      backend-net:
-        internal: true
+      - backend-net
 networks:
   frontend-net:
     internal: false

@@ -22,14 +22,9 @@ services:
       NEXTCLOUD_TRUSTED_DOMAINS: localhost:8020 home.taile2cc7a.ts.net:8453
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    user: "1000:1000"
     networks:
-      frontend-net:
-        internal: false
-      backend-net:
-        internal: true
+      - frontend-net
+      - backend-net
   db:
     image: postgres:17
     container_name: nextcloud-db
@@ -46,20 +41,15 @@ services:
       - ALL
     user: "1000:1000"
     networks:
-      backend-net:
-        internal: true
+      - backend-net
   redis:
     image: redis:7
     container_name: nextcloud-redis
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    user: "1000:1000"
     networks:
-      backend-net:
-        internal: true
+      - backend-net
   cron:
     image: nextcloud:apache
     container_name: nextcloud-cron
@@ -76,8 +66,7 @@ services:
       - ALL
     user: "1000:1000"
     networks:
-      backend-net:
-        internal: true
+      - backend-net
 networks:
   frontend-net:
     internal: false
