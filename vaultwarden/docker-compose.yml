@@ -18,3 +18,22 @@ services:
     ports:
       - "127.0.0.1:8081:80"
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    networks:
+      frontend-net:
+        internal: false
+      backend-net:
+        internal: true
+networks:
+  frontend-net:
+    internal: false
+  backend-net:
+    internal: true

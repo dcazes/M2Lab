@@ -28,7 +28,16 @@ services:
       PAPERLESS_CSRF_TRUSTED_ORIGINS: ${PAPERLESS_CSRF_TRUSTED_ORIGINS}
       USERMAP_UID: 1000
       USERMAP_GID: 1000
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      frontend-net:
+        internal: false
+      backend-net:
+        internal: true
   db:
     image: postgres:17
     container_name: paperless-db
@@ -39,12 +48,26 @@ services:
       POSTGRES_DB: paperless
       POSTGRES_USER: paperless
       POSTGRES_PASSWORD: ${PAPERLESS_DBPASSWORD}
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
   redis:
     image: redis:7
     container_name: paperless-redis
     restart: unless-stopped
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
   gotenberg:
     image: gotenberg/gotenberg:8
     container_name: paperless-gotenberg
@@ -53,8 +76,28 @@ services:
       - "gotenberg"
       - "--chromium-disable-javascript=true"
       - "--chromium-allow-list=file:///tmp/.*"
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
   tika:
     image: apache/tika:latest-full
     container_name: paperless-tika
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
+networks:
+  frontend-net:
+    internal: false
+  backend-net:
+    internal: true

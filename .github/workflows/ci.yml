@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-and-linting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Secret scanning (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CHARSET_BINARY: true
+
+      - name: YAML Linting
+        uses: ibusql/yamllint-action@v1
+        with:
+          file_or_dir: .
+          format: parsable
+          fail_on_warnings: false
+
+      - name: Trivy configuration scan (IaC)
+        uses: aquasecurity/trivy-action@0.27.0
+        with:
+          scan-type: config
+          scan-ref: .
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.27.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          # Exclude directories that are not needed (like .git, volumes)
+          exclude-dir: .git,postgres_data,redis_data,.*_data,.*/data,pgdata
+          # Optional: skip downloading vulnerability DB if already present
+          # offline: false

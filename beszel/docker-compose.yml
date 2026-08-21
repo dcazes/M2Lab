@@ -8,7 +8,20 @@ services:
     volumes:
       - ./beszel_data:/beszel_data
       - ./beszel_socket:/beszel_socket
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    networks:
+      frontend-net:
+        internal: false
+      backend-net:
+        internal: true
   beszel-agent:
     image: henrygd/beszel-agent:latest
     container_name: beszel-agent
@@ -23,3 +36,13 @@ services:
       HUB_URL: http://localhost:8090
       TOKEN: ${BESZEL_TOKEN}
       KEY: ${BESZEL_KEY}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+networks:
+  frontend-net:
+    internal: false
+  backend-net:
+    internal: true

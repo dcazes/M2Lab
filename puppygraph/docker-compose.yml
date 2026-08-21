@@ -4,8 +4,8 @@ services:
     image: puppygraph/puppygraph:latest
     container_name: puppygraph
     environment:
-      - PUPPYGRAPH_USERNAME=puppygraph
-      - PUPPYGRAPH_PASSWORD=puppygraph123
+      - PUPPYGRAPH_USERNAME=${PUPPYGRAPH_USERNAME}
+      - PUPPYGRAPH_PASSWORD=${PUPPYGRAPH_PASSWORD}
       - QUERY_TIMEOUT=5m
     ports:
       - "127.0.0.1:8082:8081"

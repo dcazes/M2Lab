@@ -20,7 +20,16 @@ services:
       # Hosts Nextcloud accepts. Include localhost (direct) and the secure
       # Tailscale URL. Update the tailnet host if you rename the machine.
       NEXTCLOUD_TRUSTED_DOMAINS: localhost:8020 home.taile2cc7a.ts.net:8453
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      frontend-net:
+        internal: false
+      backend-net:
+        internal: true
   db:
     image: postgres:17
     container_name: nextcloud-db
@@ -31,12 +40,26 @@ services:
       POSTGRES_DB: nextcloud
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: ${NEXTCLOUD_DBPASSWORD}
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
   redis:
     image: redis:7
     container_name: nextcloud-redis
     restart: unless-stopped
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
   cron:
     image: nextcloud:apache
     container_name: nextcloud-cron
@@ -47,3 +70,16 @@ services:
       - ./html:/var/www/html
       - ./data:/var/www/html/data
     entrypoint: /cron.sh
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
+networks:
+  frontend-net:
+    internal: false
+  backend-net:
+    internal: true

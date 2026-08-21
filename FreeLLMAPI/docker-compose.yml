@@ -28,3 +28,18 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      frontend-net:
+        internal: false
+      backend-net:
+        internal: true
+networks:
+  frontend-net:
+    internal: false
+  backend-net:
+    internal: true

@@ -17,7 +17,16 @@ services:
       POSTGRES_USER: adventure
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SITE_URL: ${SITE_URL}
-
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      frontend-net:
+        internal: false
+      backend-net:
+        internal: true
   db:
     image: postgis/postgis:16-3.5
     container_name: adventurelog-db
@@ -28,3 +37,16 @@ services:
       POSTGRES_DB: adventure
       POSTGRES_USER: adventure
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
+    networks:
+      backend-net:
+        internal: true
+networks:
+  frontend-net:
+    internal: false
+  backend-net:
+    internal: true
