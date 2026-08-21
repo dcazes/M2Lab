@@ -1,0 +1,47 @@
+services:
+  app:
+    image: nextcloud:apache
+    container_name: nextcloud
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "127.0.0.1:8020:80"
+    volumes:
+      - ./html:/var/www/html
+      - ./data:/var/www/html/data
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DBPASSWORD}
+      REDIS_HOST: redis
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost:8020 dak-rog-strix-g10dk-g10dk.taile2cc7a.ts.net
+
+  db:
+    image: postgres:17
+    container_name: nextcloud-db
+    restart: unless-stopped
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DBPASSWORD}
+
+  redis:
+    image: redis:7
+    container_name: nextcloud-redis
+    restart: unless-stopped
+
+  cron:
+    image: nextcloud:apache
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - ./html:/var/www/html
+      - ./data:/var/www/html/data
+    entrypoint: /cron.sh

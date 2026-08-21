@@ -1,0 +1,11 @@
+- Resources:
+    - cpu:
+        label: System
+    - memory:
+        label: RAM
+    - disk:
+        label: Root
+        path: /
+- search:
+    provider: duckduckgo
+    target: _blank

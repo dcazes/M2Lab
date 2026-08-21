@@ -1,0 +1,30 @@
+services:
+  server:
+    image: ghcr.io/seanmorley15/adventurelog:latest
+    container_name: adventurelog
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:8015:80"
+    volumes:
+      - ./media:/app/media
+    environment:
+      PGHOST: db
+      PGUSER: adventure
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: adventure
+      POSTGRES_USER: adventure
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SITE_URL: ${SITE_URL}
+
+  db:
+    image: postgis/postgis:16-3.5
+    container_name: adventurelog-db
+    restart: unless-stopped
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: adventure
+      POSTGRES_USER: adventure
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

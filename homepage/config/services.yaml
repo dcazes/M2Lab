@@ -1,0 +1,67 @@
+- AI & Research:
+    - SurfSense:
+        icon: si-surfdotsh
+        href: http://localhost:3929
+        description: AI research / knowledge base
+        siteMonitor: http://localhost:3929
+    - FreeLLMAPI:
+        icon: si-openai
+        href: http://localhost:3001
+        description: OpenAI-compatible gateway
+        siteMonitor: http://localhost:3001
+    - PuppyGraph:
+        icon: si-neo4j
+        href: http://localhost:8082
+        description: Graph view of SurfSense DB
+        siteMonitor: http://localhost:8082
+
+- Media:
+    - Immich:
+        icon: immich
+        href: http://localhost:2283
+        description: Photo library
+        siteMonitor: http://localhost:2283
+
+- Productivity:
+    - Paperless-ngx:
+        icon: paperless-ngx
+        href: http://localhost:8010
+        description: Document archive
+        siteMonitor: http://localhost:8010
+    - Actual Budget:
+        icon: actualbudget
+        href: http://localhost:5006
+        description: Budgeting
+        siteMonitor: http://localhost:5006
+    - Mealie:
+        icon: mealie
+        href: http://localhost:9000
+        description: Recipes
+        siteMonitor: http://localhost:9000
+    - Nextcloud:
+        icon: nextcloud
+        href: http://localhost:8020
+        description: Files & sync
+        siteMonitor: http://localhost:8020
+    - AdventureLog:
+        icon: si-adventofcode
+        href: http://localhost:8015
+        description: Travel tracker
+        siteMonitor: http://localhost:8015
+
+- Infrastructure:
+    - Control Dashboard:
+        icon: si-fastapi
+        href: http://localhost:8787
+        description: Stack manager (start/stop/logs)
+        siteMonitor: http://localhost:8787
+    - Beszel:
+        icon: si-prometheus
+        href: http://localhost:8090
+        description: Server monitoring
+        siteMonitor: http://localhost:8090
+    - Vaultwarden:
+        icon: vaultwarden
+        href: http://localhost:8081
+        description: Password manager
+        siteMonitor: http://localhost:8081

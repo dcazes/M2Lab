@@ -22,6 +22,14 @@ services:
       port: 3929
     ignore_containers:
       - migrations
+    backup:
+      dumps:
+        - {container: surfsense-db-1, user: surfsense, database: surfsense}
+      volumes:
+        - surfsense-caddy-config
+        - surfsense-caddy-data
+        - surfsense-object-store
+        - surfsense-opensandbox
 
   - id: immich
     display_name: Immich
@@ -36,6 +44,13 @@ services:
     health:
       mode: tcp
       port: 2283
+    backup:
+      dumps:
+        - {container: immich_postgres, user: postgres, database: immich}
+      volumes:
+        - immich_model-cache
+      binds:
+        - library
 
   - id: freellmapi
     display_name: FreeLLMAPI
@@ -51,6 +66,9 @@ services:
       mode: http
       url: "http://localhost:3001/api/ping"
       expect: 200
+    backup:
+      binds:
+        - data
 
   - id: vaultwarden
     display_name: Vaultwarden
@@ -66,6 +84,9 @@ services:
       mode: http
       url: "http://localhost:8081/alive"
       expect: 200
+    backup:
+      binds:
+        - data
 
   - id: puppygraph
     display_name: PuppyGraph
@@ -81,3 +102,146 @@ services:
       mode: http
       url: "http://localhost:8082/"
       expect: 200
+    backup:
+      binds:
+        - data
+  - id: homepage
+    display_name: Homepage
+    description: Landing page / service dashboard
+    category: infra
+    icon: "🏠"
+    dir: homepage
+    project: homepage
+    port: 8083
+    tailnet_port: 443
+    url: http://localhost:8083
+    health:
+      mode: http
+      url: "http://localhost:8083/"
+      expect: 200
+    backup:
+      binds: []
+
+  - id: mealie
+    display_name: Mealie
+    description: Recipe manager
+    category: productivity
+    icon: "🍳"
+    dir: mealie
+    project: mealie
+    port: 9000
+    tailnet_port: 8455
+    url: http://localhost:9000
+    health:
+      mode: http
+      url: "http://localhost:9000/"
+      expect: 200
+    backup:
+      binds:
+        - data
+
+  - id: actual-budget
+    display_name: Actual Budget
+    description: Local-first budgeting
+    category: productivity
+    icon: "💰"
+    dir: actual-budget
+    project: actual-budget
+    port: 5006
+    tailnet_port: 8452
+    url: http://localhost:5006
+    health:
+      mode: http
+      url: "http://localhost:5006/"
+      expect: 200
+    backup:
+      binds:
+        - server-files
+
+  - id: beszel
+    display_name: Beszel
+    description: Server monitoring (hub + agent)
+    category: infra
+    icon: "📈"
+    dir: beszel
+    project: beszel
+    port: 8090
+    tailnet_port: 8450
+    url: http://localhost:8090
+    health:
+      mode: http
+      url: "http://localhost:8090/"
+      expect: 200
+    ignore_containers:
+      - beszel-agent
+    backup:
+      binds:
+        - beszel_data
+
+  - id: paperless-ngx
+    display_name: Paperless-ngx
+    description: Document archive / OCR
+    category: productivity
+    icon: "📄"
+    dir: paperless-ngx
+    project: paperless-ngx
+    port: 8010
+    tailnet_port: 8451
+    url: http://localhost:8010
+    health:
+      mode: http
+      url: "http://localhost:8010/"
+      expect: 200
+    backup:
+      dumps:
+        - {container: paperless-db, user: paperless, database: paperless}
+      binds:
+        - data
+        - media
+        - export
+
+  - id: adventurelog
+    display_name: AdventureLog
+    description: Travel tracker & trip planner
+    category: productivity
+    icon: "🧭"
+    dir: adventurelog
+    project: adventurelog
+    port: 8015
+    tailnet_port: 8454
+    url: http://localhost:8015
+    health:
+      mode: http
+      url: "http://localhost:8015/"
+      expect: 200
+    ignore_containers:
+      - db
+    backup:
+      dumps:
+        - {container: adventurelog-db, user: adventure, database: adventure}
+      binds:
+        - media
+
+  - id: nextcloud
+    display_name: Nextcloud
+    description: Files & sync
+    category: productivity
+    icon: "☁️"
+    dir: nextcloud
+    project: nextcloud
+    port: 8020
+    tailnet_port: 8453
+    url: http://localhost:8020
+    health:
+      mode: http
+      url: "http://localhost:8020/status.php"
+      expect: 200
+    ignore_containers:
+      - cron
+      - redis
+    backup:
+      dumps:
+        - {container: nextcloud-db, user: nextcloud, database: nextcloud}
+      binds:
+        - html
+        - data

@@ -12,11 +12,12 @@ endef
 help:
 	@echo "Usage: make <target> [SERVICE=<id>]"
 	@echo "Services:"; for s in $(SERVICES); do echo "  $$s"; done
-	@echo "Start targets:  surfsense  immich  freellmapi  vaultwarden  puppygraph"
-	@echo "Stop targets:   stop-surfsense  stop-immich  stop-freellmapi  stop-vaultwarden  stop-puppygraph"
-	@echo "Logs targets:   logs-surfsense  logs-immich  logs-freellmapi  logs-vaultwarden  logs-puppygraph"
-	@echo "Pull targets:   pull-surfsense  pull-immich  pull-freellmapi  pull-vaultwarden  pull-puppygraph"
-	@echo "Global: start-all stop-all status update"
+	@echo "Start:   make <service-id>"
+	@echo "Stop:    make stop-<service-id> SERVICE=<service-id>"
+	@echo "Logs:    make logs-<service-id> SERVICE=<service-id>"
+	@echo "Pull:    make pull-<service-id> SERVICE=<service-id>"
+	@echo "Backup:  ./scripts/backup.sh [service-id|all]"
+	@echo "Global:  start-all stop-all status update"
 
 # ---- registry-driven per-service verbs (stop/logs/pull) -------------------
 ifneq ($(S),)
@@ -39,6 +40,20 @@ vaultwarden:
 	@$(PY) ctl/registry.py up vaultwarden
 puppygraph:
 	@$(PY) ctl/registry.py up puppygraph
+homepage:
+	@$(PY) ctl/registry.py up homepage
+mealie:
+	@$(PY) ctl/registry.py up mealie
+actual-budget:
+	@$(PY) ctl/registry.py up actual-budget
+beszel:
+	@$(PY) ctl/registry.py up beszel
+paperless-ngx:
+	@$(PY) ctl/registry.py up paperless-ngx
+adventurelog:
+	@$(PY) ctl/registry.py up adventurelog
+nextcloud:
+	@$(PY) ctl/registry.py up nextcloud
 
 start-all:
 	@for s in $(SERVICES); do $(MAKE) --no-print-directory $$s || exit 1; done

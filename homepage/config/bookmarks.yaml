@@ -1,0 +1,7 @@
+- Homelab:
+    - GitHub - homelab:
+        - abbr: GH
+          href: https://github.com/dcazes/homelab
+    - Tailscale admin:
+        - abbr: TS
+          href: https://login.tailscale.com/admin/machines

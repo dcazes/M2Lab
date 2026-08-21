@@ -13,6 +13,21 @@ immich-app/postgres/
 FreeLLMAPI/data/
 vaultwarden/data/
 puppygraph/data/
+beszel/beszel_data/
+beszel/beszel_agent_data/
+beszel/beszel_socket/
+paperless-ngx/data/
+paperless-ngx/media/
+paperless-ngx/consume/
+paperless-ngx/export/
+actual-budget/server-files/
+nextcloud/data/
+nextcloud/html/
+adventurelog/media/
+adventurelog/pgdata/
+paperless-ngx/pgdata/
+nextcloud/pgdata/
+mealie/data/
 
 # Backups
 backups/
