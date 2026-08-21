@@ -14,8 +14,6 @@ services:
     volumes:
       - ./data:/data
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
     networks:
       - frontend-net
 

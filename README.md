@@ -85,7 +85,7 @@ Tailscale Serve maps `tailnet_port` → `127.0.0.1:<host_port>` on the host, all
 
 - **Zero-Trust Networking**: Services are segmented into frontend and backend networks. Databases reside on an internal-only network (`internal: true`) with no host port mapping, preventing direct exposure even if the container is compromised.
 - **Non-Root Execution**: Containers run as a non-root user (UID 1000:1000) where possible.
-- **Privilege Reduction**: All containers drop all Linux capabilities (`cap_drop: ALL`) and gain no new privileges (`security_opt: ["no-new-privileges:true"]`).
+- **Privilege Reduction**: Application containers drop all Linux capabilities (`cap_drop: ALL`) where the image tolerates it and gain no new privileges (`security_opt: ["no-new-privileges:true"]`). Database/cache images keep their built-in users and entrypoint privilege-drop (they run on the internal-only `backend-net` with no host exposure and no internet egress).
 - **Read-Only RootFS**: Where applicable, containers run with read-only root filesystems, using temporary in-memory filesystems (`tmpfs`) for `/tmp` and `/run`.
 - **Secret Management**: Secrets are stored in gitignored `.env` files (never committed). A root `.env.example` aggregates all required variables with placeholder values.
 - **CI Security**: GitHub Actions workflow runs Gitleaks, Yamllint, and Trivy on every push and pull request to detect secrets, misconfigurations, and vulnerabilities.
