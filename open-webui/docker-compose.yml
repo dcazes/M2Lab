@@ -1,0 +1,20 @@
+name: open-webui
+
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "127.0.0.1:8084:8080"
+    environment:
+      # Connection to FreeLLMAPI (cloud free providers)
+      - OPENAI_API_BASE_URL=http://host.docker.internal:3001/v1
+      - OPENAI_API_KEY=not-needed
+      # Connection to local Ollama (GPU-accelerated local models)
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # Auth + session
+      - WEBUI_AUTH=True
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - WEBUI_NAME=Homelab Agent
+    volumes:
+      - ./data:/app/backend/data
+    restart: unless-stopped

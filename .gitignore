@@ -28,6 +28,9 @@ adventurelog/pgdata/
 paperless-ngx/pgdata/
 nextcloud/pgdata/
 mealie/data/
+ollama/data/
+open-webui/data/
+firecrawl/data/
 
 # Backups
 backups/
@@ -41,6 +44,7 @@ __pycache__/
 
 # OS
 .DS_Store
+.obsidian/
 
 # Homepage runtime logs
 homepage/config/logs/

@@ -70,6 +70,12 @@ adventurelog:
 	@$(PY) ctl/registry.py up adventurelog
 nextcloud:
 	@$(PY) ctl/registry.py up nextcloud
+ollama:
+	@$(PY) ctl/registry.py up ollama
+open-webui:
+	@$(PY) ctl/registry.py up open-webui
+firecrawl:
+	@$(PY) ctl/registry.py up firecrawl
 portainer:
 	@$(PY) ctl/registry.py up portainer
 
