@@ -49,7 +49,7 @@ python3 ctl/registry.py status   # after up: all containers running
 
 ## Repo notes
 
-- `PHASE_*.md` and `HOMEPAGE_IMPROVEMENTS.md` are historical change records, not open work.
+- Historical change records live in `docs/documentation/` (`PHASE_*.md`) — local-only, gitignored, never pushed. `HOMEPAGE_IMPROVEMENTS.md` at root is likewise a record, not open work.
 - Data dirs (bind mounts like `*/data`, `nextcloud/html`, `immich-app/library`) are gitignored — configs are tracked, runtime data never is.
 
 ## Stack review & AI-agent layer

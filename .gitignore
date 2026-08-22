@@ -46,5 +46,8 @@ __pycache__/
 .DS_Store
 .obsidian/
 
+# Local-only documentation (never pushed)
+docs/documentation/
+
 # Homepage runtime logs
 homepage/config/logs/
