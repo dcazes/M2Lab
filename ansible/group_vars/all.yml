@@ -1,0 +1,22 @@
+---
+# Central knobs for the bootstrap. Adjust before first real run.
+# Target: fresh Debian 12 / Ubuntu 22.04+ box (also safe to re-run on this host).
+
+homelab_user: dak
+repo_url: https://github.com/dcazes/homelab.git
+repo_path: /home/dak/Desktop/Programs/HomeServer
+timezone: America/New_York
+
+base_packages:
+  - curl
+  - git
+  - ca-certificates
+  - gnupg
+  - ufw
+
+docker_user: "{{ homelab_user }}"
+
+# Leave empty for a manual `sudo tailscale up` login; paste a reusable auth key
+# from https://login.tailscale.com/admin/settings/keys for unattended join.
+tailscale_authkey: ""
+tailscale_extra_args: ""

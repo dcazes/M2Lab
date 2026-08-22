@@ -1,0 +1,57 @@
+# Hardened starting point for a new service stack.
+# Copy to <newapp>/docker-compose.yml and fill in the placeholders.
+# Rules: loopback-only ports, ${VAR} secrets, shared external networks only.
+#
+# NOTE ON DATABASES: stock postgres/redis/postgis/mariadb images must NOT get
+# user:/cap_drop:/read_only overrides — their entrypoints chown and drop
+# privileges themselves. Give them backend-net ONLY and no ports section.
+
+services:
+  app:
+    image: ghcr.io/example/myapp:latest        # TODO replace
+    container_name: myapp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8123:8123"                  # TODO pick free loopback port
+    volumes:
+      - ./data:/data                           # TODO adjust mount paths
+    environment:
+      SOME_API_TOKEN: ${MYAPP_API_TOKEN}       # TODO put in <newapp>/.env
+      TZ: ${TZ}
+    security_opt:
+      - no-new-privileges:true
+    # Optional tightening — enable only if ./data is owned by uid 1000:
+    # cap_drop:
+    #   - ALL
+    # user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - frontend-net
+      # Uncomment ONLY if this app reaches a local db/redis below:
+      # - backend-net
+
+  # --- uncomment if the app needs its own database -------------------------
+  # db:
+  #   image: postgres:17
+  #   container_name: myapp-db
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./pgdata:/var/lib/postgresql/data
+  #   environment:
+  #     POSTGRES_DB: myapp
+  #     POSTGRES_USER: myapp
+  #     POSTGRES_PASSWORD: ${MYAPP_DBPASSWORD}
+  #   networks:
+  #     - backend-net
+
+networks:
+  frontend-net:
+    external: true
+    name: homelab_frontend
+  backend-net:
+    external: true
+    name: homelab_backend

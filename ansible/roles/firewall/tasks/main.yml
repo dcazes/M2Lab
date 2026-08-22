@@ -1,0 +1,25 @@
+---
+# Minimal firewall via raw `ufw` commands (avoids the community.general
+# collection dependency). All app ports bind 127.0.0.1, so only SSH and the
+# tailnet interface matter. Docker-published ports bypass UFW anyway — never
+# publish on 0.0.0.0 without thinking.
+
+- name: Default deny incoming
+  ansible.builtin.command: ufw default deny incoming
+  changed_when: false
+
+- name: Default allow outgoing
+  ansible.builtin.command: ufw default allow outgoing
+  changed_when: false
+
+- name: Allow OpenSSH
+  ansible.builtin.command: ufw allow OpenSSH
+  changed_when: false
+
+- name: Allow all traffic arriving on tailscale0
+  ansible.builtin.command: ufw allow in on tailscale0
+  changed_when: false
+
+- name: Enable UFW (non-interactive)
+  ansible.builtin.command: ufw --force enable
+  changed_when: false

@@ -1,0 +1,17 @@
+---
+- name: Bootstrap homelab host
+  hosts: homelab
+  become: true
+  gather_facts: true
+  roles:
+    - base
+    - docker
+    - tailscale
+    - firewall
+  post_tasks:
+    - name: Clone or update homelab repository
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_path }}"
+        update: true
+      become: false

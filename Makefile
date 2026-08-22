@@ -7,12 +7,14 @@ $(shell $(PY) ctl/registry.py ids)
 endef
 
 .PHONY: help $(SERVICES) $(addprefix stop-,$(SERVICES)) $(addprefix logs-,$(SERVICES)) \
-        $(addprefix pull-,$(SERVICES)) start-all stop-all status update
+        $(addprefix pull-,$(SERVICES)) start-all stop-all status update \
+        up stop restart logs pull
 
 help:
 	@echo "Usage: make <target> [SERVICE=<id>]"
+	@echo "Generic verbs: make up|stop|restart|logs|pull SERVICE=<service-id>"
 	@echo "Services:"; for s in $(SERVICES); do echo "  $$s"; done
-	@echo "Start:   make <service-id>"
+	@echo "Start:   make <service-id>  or  make up SERVICE=<service-id>"
 	@echo "Stop:    make stop-<service-id> SERVICE=<service-id>"
 	@echo "Logs:    make logs-<service-id> SERVICE=<service-id>"
 	@echo "Pull:    make pull-<service-id> SERVICE=<service-id>"
@@ -26,6 +28,20 @@ stop-$(S):
 logs-$(S):
 	@$(PY) ctl/registry.py logs $(S)
 pull-$(S):
+	@$(PY) ctl/registry.py pull $(S)
+endif
+
+# ---- generic verbs for ANY registry service (no Makefile edit needed) ------
+ifneq ($(S),)
+up:
+	@$(PY) ctl/registry.py up $(S)
+stop:
+	@$(PY) ctl/registry.py stop $(S)
+restart:
+	@$(PY) ctl/registry.py stop $(S); $(PY) ctl/registry.py up $(S)
+logs:
+	@$(PY) ctl/registry.py logs $(S)
+pull:
 	@$(PY) ctl/registry.py pull $(S)
 endif
 
