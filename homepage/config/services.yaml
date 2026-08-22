@@ -47,10 +47,11 @@
         icon: si-huggingface
         href: https://home.taile2cc7a.ts.net:8444
         description: AI research / knowledge base
-    - FreeLLMAPI:
-        icon: si-openai
-        href: https://home.taile2cc7a.ts.net:8445
-        description: OpenAI-compatible gateway
+    - LiteLLM:
+        icon: mdi-router-network
+        # /ui/ = admin dashboard; bare :8445 lands on the API swagger page
+        href: https://home.taile2cc7a.ts.net:8445/ui/
+        description: Model router / LLM gateway
     - PuppyGraph:
         icon: si-neo4j
         href: https://home.taile2cc7a.ts.net:8448

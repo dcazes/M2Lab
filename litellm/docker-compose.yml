@@ -1,0 +1,34 @@
+services:
+  litellm-proxy:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    command: ["--config", "/app/litellm_config.yaml", "--port", "4000"]
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/litellm_config.yaml:ro
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      FREE_LLMAPI_API_KEY: ${FREE_LLMAPI_API_KEY}
+    networks:
+      - frontend-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Hardening: stock image expects root fs writes at runtime (litellm writes to /app/.litellm, /tmp, etc.)
+    # so we omit user:/read_only: — cap_drop + no-new-privileges still applied.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health/liveliness"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+networks:
+  frontend-net:
+    external: true
+    name: homelab_frontend

@@ -52,23 +52,22 @@ services:
       binds:
         - library
 
-  - id: freellmapi
-    display_name: FreeLLMAPI
-    description: OpenAI-compatible gateway (8 providers)
+  - id: litellm
+    display_name: LiteLLM
+    description: LLM gateway / model router (OpenAI-compatible)
     category: ai
-    icon: "🤖"
-    dir: FreeLLMAPI
-    project: freellmapi
-    port: 3001
+    icon: "🧭"
+    dir: litellm
+    project: litellm
+    port: 4000
     tailnet_port: 8445
-    url: http://localhost:3001
+    url: http://localhost:4000
     health:
       mode: http
-      url: "http://localhost:3001/api/ping"
+      url: "http://localhost:4000/health/liveliness"
       expect: 200
     backup:
-      binds:
-        - data
+      binds: []
 
   - id: vaultwarden
     display_name: Vaultwarden
@@ -264,3 +263,59 @@ services:
     backup:
       volumes:
         - portainer_data
+
+  - id: ollama
+    display_name: Ollama
+    description: Local LLM runner (GPU accelerated)
+    category: ai
+    icon: "🦙"
+    dir: ollama
+    project: ollama
+    compose_files:
+      - docker-compose.gpu.yml
+    port: 11434
+    tailnet_port: 8457
+    url: http://localhost:11434
+    health:
+      mode: http
+      url: "http://localhost:11434/"
+      expect: 200
+    backup:
+      binds:
+        - data
+
+  - id: open-webui
+    display_name: Open WebUI
+    description: Self-hosted AI chat with agents, RAG, and tools
+    category: ai
+    icon: "🤖"
+    dir: open-webui
+    project: open-webui
+    port: 8084
+    tailnet_port: 8456
+    url: http://localhost:8084
+    health:
+      mode: http
+      url: "http://localhost:8084/health"
+      expect: 200
+    backup:
+      binds:
+        - data
+
+  - id: firecrawl
+    display_name: Firecrawl
+    description: Web scraping and crawling API (LLM-ready output)
+    category: ai
+    icon: "🕷️"
+    dir: firecrawl
+    project: firecrawl
+    port: 3002
+    tailnet_port: 8458
+    url: http://localhost:3002
+    health:
+      mode: http
+      url: "http://localhost:3002/"
+      expect: 200
+    backup:
+      binds:
+        - data

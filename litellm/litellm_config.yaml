@@ -1,0 +1,31 @@
+# LiteLLM config — model router with fallback from FreeLLMAPI to local Ollama
+# See https://docs.litellm.ai/docs/proxy/configs
+
+model_list:
+  # FreeLLMAPI gateway (OpenAI-compatible) — primary route
+  - model_name: free-auto
+    litellm_params:
+      model: openai/auto
+      api_base: http://host.docker.internal:3001/v1
+      api_key: os.environ/FREE_LLMAPI_API_KEY
+
+  # Local Ollama — wildcard catches any ollama/* model name
+  - model_name: "ollama/*"
+    litellm_params:
+      model: "ollama/*"
+      api_base: http://host.docker.internal:11434
+
+  # Explicit fallback target: a specific local model (adjust to one you have pulled)
+  - model_name: local-fallback
+    litellm_params:
+      model: ollama_chat/llama3.2
+      api_base: http://host.docker.internal:11434
+      # adjust to a model you have pulled (e.g. ollama_chat/qwen2.5, ollama_chat/mistral)
+
+router_settings:
+  # If free-auto fails, retry via local-fallback
+  fallbacks:
+    - free-auto: [local-fallback]
+
+litellm_settings:
+  num_retries: 2

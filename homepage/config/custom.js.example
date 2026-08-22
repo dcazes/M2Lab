@@ -28,7 +28,7 @@
   var NAME_TO_PROJECT = {
     "SurfSense": "surfsense",
     "Immich": "immich",
-    "FreeLLMAPI": "freellmapi",
+    "LiteLLM": "litellm",
     "Vaultwarden": "vaultwarden",
     "PuppyGraph": "puppygraph",
     "Homepage": "homepage",
