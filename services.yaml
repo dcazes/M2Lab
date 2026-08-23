@@ -61,6 +61,7 @@ services:
     project: litellm
     port: 4000
     tailnet_port: 8445
+    tailnet_path: /ui
     url: http://localhost:4000
     health:
       mode: http

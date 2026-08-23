@@ -114,7 +114,8 @@ async def list_services(request: Request):
     for s in SERVICES:
         st = svc_state(s)
         tailnet_port = s.get("tailnet_port")
-        tailnet_url = f"{tailnet_base}:{tailnet_port}/" if tailnet_base and tailnet_port else None
+        tailnet_path = s.get("tailnet_path", "")
+        tailnet_url = f"{tailnet_base}:{tailnet_port}{tailnet_path}/" if tailnet_base and tailnet_port else None
         service_data.append({
             "id": s["id"],
             "display_name": s["display_name"],
