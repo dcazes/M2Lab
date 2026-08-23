@@ -108,11 +108,16 @@ def http_health(s: dict) -> bool | None:
 async def list_services(request: Request):
     tailnet_base = SETTINGS.get("tailnet_base", "")
     src = request_source(request)
-    
-    # First pass: gather container state (live, cheap)
+    loop = asyncio.get_event_loop()
+
+    # First pass: gather container state OFF the event loop — the docker SDK
+    # does blocking socket calls, and inline execution here stalls every other
+    # request (system polls, actions) for the duration, which reads as UI stutter.
+    states = await loop.run_in_executor(None, lambda: {s["id"]: svc_state(s) for s in SERVICES})
+
     service_data = []
     for s in SERVICES:
-        st = svc_state(s)
+        st = states[s["id"]]
         tailnet_port = s.get("tailnet_port")
         tailnet_path = s.get("tailnet_path", "")
         tailnet_url = f"{tailnet_base}:{tailnet_port}{tailnet_path}/" if tailnet_base and tailnet_port else None
@@ -131,8 +136,7 @@ async def list_services(request: Request):
         })
     
     # Second pass: parallel HTTP health probes with TTL cache
-    loop = asyncio.get_event_loop()
-    
+
     async def probe_health(svc):
         s = svc["_health_probe"]
         sid = s["id"]
