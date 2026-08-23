@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import select
@@ -8,7 +9,7 @@ from pathlib import Path
 import docker
 import psutil
 import yaml
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Header
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -19,6 +20,35 @@ DLI = docker.DockerClient.from_env()
 API = DLI.api
 
 app = FastAPI(title="homelab-ctl", docs_url=None, redoc_url=None)
+
+# ---------- TTL cache for HTTP health probes ----------
+_health_cache: dict[str, tuple[bool | None, float]] = {}
+_HEALTH_TTL = 10.0  # seconds
+
+
+def _cached_http_health(sid: str, probe_fn) -> bool | None:
+    now = time.time()
+    if sid in _health_cache:
+        result, ts = _health_cache[sid]
+        if now - ts < _HEALTH_TTL:
+            return result
+    result = probe_fn()
+    _health_cache[sid] = (result, now)
+    return result
+
+
+# ---------- auth dependency ----------
+CTL_TOKEN = os.environ.get("CTL_TOKEN")
+
+
+async def require_token(authorization: str | None = Header(default=None)):
+    if CTL_TOKEN is None:
+        return  # open mode
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Missing or invalid Authorization header")
+    token = authorization.split(" ", 1)[1]
+    if token != CTL_TOKEN:
+        raise HTTPException(401, "Invalid token")
 
 
 # ---------- helpers ----------
@@ -75,27 +105,49 @@ def http_health(s: dict) -> bool | None:
 
 # ---------- API ----------
 @app.get("/api/services")
-def list_services(request: Request):
+async def list_services(request: Request):
     tailnet_base = SETTINGS.get("tailnet_base", "")
     src = request_source(request)
-    out = []
+    
+    # First pass: gather container state (live, cheap)
+    service_data = []
     for s in SERVICES:
         st = svc_state(s)
         tailnet_port = s.get("tailnet_port")
         tailnet_url = f"{tailnet_base}:{tailnet_port}/" if tailnet_base and tailnet_port else None
-        out.append({
-            "id": s["id"], "display_name": s["display_name"], "description": s.get("description"),
-            "category": s.get("category"), "icon": s.get("icon", "📦"),
-            "port": s.get("port"), "url": s.get("url"),
+        service_data.append({
+            "id": s["id"],
+            "display_name": s["display_name"],
+            "description": s.get("description"),
+            "category": s.get("category"),
+            "icon": s.get("icon", "📦"),
+            "port": s.get("port"),
+            "url": s.get("url"),
             "tailnet_url": tailnet_url,
-            "state": st["overall"], "containers": st["containers"],
-            "healthy": http_health(s),
+            "state": st["overall"],
+            "containers": st["containers"],
+            "_health_probe": s,  # keep reference for health check
         })
-    return {"services": out, "source": src}
+    
+    # Second pass: parallel HTTP health probes with TTL cache
+    loop = asyncio.get_event_loop()
+    
+    async def probe_health(svc):
+        s = svc["_health_probe"]
+        sid = s["id"]
+        def do_probe():
+            return http_health(s)
+        healthy = await loop.run_in_executor(None, lambda: _cached_http_health(sid, do_probe))
+        svc["healthy"] = healthy
+        del svc["_health_probe"]
+    
+    await asyncio.gather(*[probe_health(svc) for svc in service_data])
+    
+    return {"services": service_data, "source": src}
 
 
 # ---------- destroy (deliberate, double-confirmed in UI) ----------
-@app.post("/api/services/{sid}/destroy")
+@app.post("/api/services/{sid}/destroy", dependencies=[Depends(require_token)])
 async def destroy(sid: str, request: Request):
     body = await request.json()
     if body.get("confirm") != sid:
@@ -105,7 +157,7 @@ async def destroy(sid: str, request: Request):
     return JSONResponse({"ok": rc == 0, "output": out[-4000:]})
 
 
-@app.post("/api/services/{sid}/{action}")
+@app.post("/api/services/{sid}/{action}", dependencies=[Depends(require_token)])
 async def action(sid: str, action: str):
     s = service_by_id(sid)
     if action not in {"up", "stop", "restart", "pull", "update"}:
@@ -161,13 +213,15 @@ def system():
         "mem": psutil.virtual_memory()._asdict(),
         "disk": {"total": du.total, "used": du.used, "percent": du.percent},
         "docker_ok": bool(DLI.ping()),
+        "uptime_seconds": time.time() - psutil.boot_time(),
+        "load_avg": list(os.getloadavg()),
     }
 
 
 # ---------- static UI ----------
-web_dir = ROOT / "ctl-web"
-if web_dir.is_dir():
-    app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
+dist = ROOT / "ctl-web-next" / "dist"
+web_dir = dist if dist.is_dir() else ROOT / "ctl-web"
+app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
 
 
 def main():
