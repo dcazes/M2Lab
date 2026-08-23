@@ -28,6 +28,12 @@ export class SSEClient {
   connect(): void {
     if (this.isClosed) return
 
+    // Never stack connections: close any previous EventSource first.
+    if (this.eventSource) {
+      this.eventSource.close()
+      this.eventSource = null
+    }
+
     try {
       this.eventSource = new EventSource(this.url)
 
@@ -66,6 +72,10 @@ export class SSEClient {
 
       this.eventSource.onerror = (error) => {
         this.options.onError?.(error)
+        // EventSource reconnects natively on its own; close it here so the
+        // scheduled manual reconnect is the only path creating connections.
+        this.eventSource?.close()
+        this.eventSource = null
         this.scheduleReconnect()
       }
     } catch {

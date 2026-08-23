@@ -10,6 +10,9 @@ export interface LogEntry {
   level: 'error' | 'warn' | 'debug' | 'info'
 }
 
+// Cap the buffer so a chatty container can't grow memory without bound.
+const MAX_LOGS = 500
+
 export function useServiceLogs(serviceId: string, enabled: boolean) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [isConnected, setIsConnected] = useState(false)
@@ -65,16 +68,19 @@ export function useServiceLogs(serviceId: string, enabled: boolean) {
             ? 'debug'
             : 'info'
 
-          setLogs((prev: LogEntry[]) => [
-            ...prev,
-            {
-              id: ++logIdRef.current,
-              container,
-              line,
-              timestamp: new Date(),
-              level,
-            },
-          ])
+          setLogs((prev: LogEntry[]) => {
+            const next: LogEntry[] = [
+              ...prev,
+              {
+                id: ++logIdRef.current,
+                container,
+                line,
+                timestamp: new Date(),
+                level,
+              },
+            ]
+            return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next
+          })
         }
       },
     })
