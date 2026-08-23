@@ -7,6 +7,7 @@ services:
       - "127.0.0.1:4000:4000"
     volumes:
       - ./litellm_config.yaml:/app/litellm_config.yaml:ro
+      - ./openapi.snapshot.json:/app/openapi.snapshot.json:ro
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       FREE_LLMAPI_API_KEY: ${FREE_LLMAPI_API_KEY}
@@ -15,7 +16,6 @@ services:
     networks:
       - frontend-net
       - backend-net
-      - mcp-net
     depends_on:
       litellm-db:
         condition: service_healthy
@@ -29,7 +29,14 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: wget -q --spider http://localhost:4000/health/liveliness || exit 1
+      # image ships no wget/curl — use python
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request as u;
+          u.urlopen('http://localhost:4000/health/liveliness')
       interval: 30s
       timeout: 5s
       start_period: 15s
@@ -68,6 +75,3 @@ networks:
   backend-net:
     external: true
     name: homelab_backend
-  mcp-net:
-    external: true
-    name: homelab_mcp

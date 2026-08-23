@@ -29,3 +29,63 @@ router_settings:
 
 litellm_settings:
   num_retries: 2
+
+# Native OpenAPI->MCP gateway: exposes a curated set of READ-ONLY admin API
+# tools at /litellm_admin/mcp (consumed by the @litellm opencode subagent).
+# Tool calls are executed against the proxy itself using the master key;
+# only the operationIds listed in allowed_tools are exposed.
+# Native OpenAPI->MCP gateway: exposes a curated set of READ-ONLY admin API
+# tools at /litellm_admin/mcp (consumed by the @litellm opencode subagent).
+# spec_path points at a tracked SNAPSHOT of the proxy's own /openapi.json —
+# self-fetch over HTTP fails at boot because nothing listens on :4000 yet
+# during startup. After upgrading the litellm image, refresh the snapshot:
+#   curl -s http://localhost:4000/openapi.json > litellm/openapi.snapshot.json
+#   make restart SERVICE=litellm
+# Tool calls execute against the proxy itself using the master key; only the
+# operationIds listed in allowed_tools are exposed. The SSRF allowlist below
+# is required for those self-directed tool calls.
+general_settings:
+  user_url_allowed_hosts:
+    - localhost
+    - 127.0.0.1
+
+mcp_servers:
+  litellm_admin:
+    url: "http://127.0.0.1:4000"
+    spec_path: "/app/openapi.snapshot.json"
+    auth_type: bearer_token
+    auth_value: os.environ/LITELLM_MASTER_KEY
+    allowed_tools:
+      # models & routing
+      - model_list_v1_models_get
+      - model_info_v1_v1_model_info_get
+      - model_group_info_model_group_info_get
+      - get_router_settings_router_settings_get
+      - get_fallback_fallback__model__get
+      # keys
+      - list_keys_key_list_get
+      - info_key_fn_key_info_get
+      - key_aliases_key_aliases_get
+      # budgets / teams / users / orgs
+      - list_budget_budget_list_get
+      - team_info_team_info_get
+      - list_team_team_list_get
+      - user_info_user_info_get
+      - get_users_user_list_get
+      - info_organization_organization_info_get
+      # spend / cost
+      - ui_view_spend_logs_spend_logs_v2_get
+      - view_spend_logs_spend_logs_get
+      - get_key_spend_report_key_spend_report_get
+      - get_team_spend_report_team_spend_report_get
+      - get_user_spend_report_user_spend_report_get
+      - get_global_spend_report_global_spend_report_get
+      # health
+      - health_endpoint_health_get
+      - health_liveliness_health_liveliness_get
+      - health_readiness_health_readiness_get
+      - latest_health_checks_endpoint_health_latest_get
+      - cache_ping_cache_ping_get
+      # usage tags
+      - get_tag_summary_tag_summary_get
+      - list_tags_tag_list_get

@@ -240,3 +240,32 @@ and an always-on LangGraph router reusing the same fleet.
 - `lib-2` (opencode schema): agents `.opencode/agents/*.md`, skills
   `.opencode/skills/<name>/SKILL.md`, `mcpServers` (stdio/sse), `permission`
   scoping, `task()` delegation, no web/serve mode.
+
+## 11. Pilot outcome — litellm (2026-08-23)
+
+Native LiteLLM OpenAPI->MCP gateway adopted; the custom FastMCP sidecar
+(`litellm-mcp/`) was built, verified, then deleted in favor of first-party
+support (litellm >= Oct 2025).
+
+Final wiring:
+- `litellm/litellm_config.yaml`: `mcp_servers.litellm_admin` with curated
+  `allowed_tools` (27 read-only ops: models, keys, budgets, teams, users,
+  spend reports, health, tags). Served at `/litellm_admin/mcp`.
+- `litellm/openapi.snapshot.json`: tracked snapshot of the proxy's own spec,
+  bind-mounted read-only. Self-fetch over HTTP at startup fails (nothing
+  listens on :4000 during boot) — refresh the snapshot after image upgrades.
+- `general_settings.user_url_allowed_hosts: [localhost, 127.0.0.1]` — SSRF
+  allowlist required for self-directed tool execution.
+- Access: scoped virtual key (`object_permission.mcp_servers:
+  ["litellm_admin"]`, model-restricted), stored as `LITELLM_MCP_KEY` in
+  gitignored `litellm/.env`. Master key never leaves the server config.
+- opencode: `.opencode/agents/litellm.md` (deny bash/edit/webfetch) +
+  `opencode.json` mcpServers -> `https://home.taile2cc7a.ts.net:8445/litellm_admin/mcp`.
+
+Verified: unauth 401; VK tools/list = exactly the allowlisted 27; VK tool call
+returns live model data. Sidecar container/image/dir and services.yaml entry
+removed; `homelab_mcp` network kept for future per-service MCP sidecars.
+
+Rollout to remaining apps follows §7 phases; prefer native OpenAPI->MCP where
+the app exposes a spec (immich, mealie, actual-budget, beszel, open-webui),
+custom/mapped servers otherwise.

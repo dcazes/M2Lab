@@ -3,9 +3,9 @@
   "mcpServers": {
     "litellm": {
       "type": "sse",
-      "url": "https://home.taile2cc7a.ts.net:8462/mcp",
+      "url": "https://home.taile2cc7a.ts.net:8445/litellm_admin/mcp",
       "headers": {
-        "Authorization": "Bearer ${LITELLM_MCP_TOKEN}"
+        "Authorization": "Bearer ${LITELLM_MCP_KEY}"
       }
     }
   }
