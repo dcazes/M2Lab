@@ -70,3 +70,14 @@
 - name: Create shared backend network (internal, no egress)
   ansible.builtin.command: docker network create --internal homelab_backend
   when: back_net_check.rc != 0
+
+- name: Check whether shared mcp network exists
+  ansible.builtin.command: docker network inspect homelab_mcp
+  register: docker_mcp_net_check
+  failed_when: false
+  changed_when: false
+
+- name: Create shared mcp network (service mcp sidecars)
+  ansible.builtin.command: docker network create homelab_mcp
+  when: docker_mcp_net_check.rc != 0
+  changed_when: true
