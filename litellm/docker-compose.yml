@@ -15,6 +15,7 @@ services:
     networks:
       - frontend-net
       - backend-net
+      - mcp-net
     depends_on:
       litellm-db:
         condition: service_healthy
@@ -67,3 +68,6 @@ networks:
   backend-net:
     external: true
     name: homelab_backend
+  mcp-net:
+    external: true
+    name: homelab_mcp

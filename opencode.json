@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcpServers": {
+    "litellm": {
+      "type": "sse",
+      "url": "https://home.taile2cc7a.ts.net:8462/mcp",
+      "headers": {
+        "Authorization": "Bearer ${LITELLM_MCP_TOKEN}"
+      }
+    }
+  }
+}

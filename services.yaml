@@ -70,6 +70,23 @@ services:
     backup:
       binds: []
 
+  - id: litellm-mcp
+    display_name: LiteLLM MCP
+    description: Read-only MCP server over the LiteLLM admin API (agent access)
+    category: ai
+    icon: "🔌"
+    dir: litellm-mcp
+    project: litellm-mcp
+    port: 8462
+    tailnet_port: 8462
+    url: http://localhost:8462
+    health:
+      mode: http
+      url: "http://localhost:8462/health"
+      expect: 200
+    backup:
+      binds: []
+
   - id: vaultwarden
     display_name: Vaultwarden
     description: Password manager (Bitwarden-compatible)
