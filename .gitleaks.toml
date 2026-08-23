@@ -1,0 +1,5 @@
+# Gitleaks false-positive allowlist
+# The OpenAPI snapshot contains example curl commands with Authorization headers
+# that trigger the curl-auth-header rule — these are documentation, not secrets.
+[allowlist]
+paths = ['litellm/openapi\.snapshot\.json']

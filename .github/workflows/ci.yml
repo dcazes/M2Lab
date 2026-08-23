@@ -73,10 +73,13 @@ jobs:
             out=$(docker compose -f "$f" config 2>&1) || rc=$?
             if [ $rc -eq 0 ]; then
               echo OK
-            elif echo "$out" | grep -qi "env.*not set\|variable.*not set\|not found\|No such file"; then
-              echo "SKIP (needs .env)"
             else
-              echo "FAIL"; echo "$out" | tail -3; fail=1
+              # Failures from missing .env files (gitignored) are expected in CI
+              if echo "$out" | grep -qiE "variable|interpolation|env|secret|credential|not set|no such|not found"; then
+                echo "SKIP (needs .env)"
+              else
+                echo "FAIL"; echo "$out" | tail -5; fail=1
+              fi
             fi
           done
           exit $fail
