@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Play, Square, RotateCcw, Download, ArrowUpRight, ExternalLink, AlertTriangle } from 'lucide-react'
 import { StatusDot } from './StatusDot'
@@ -20,6 +20,11 @@ const ACTIONS: { action: ServiceAction; label: string; icon: React.ComponentType
   { action: 'update', label: 'Update', icon: ArrowUpRight, confirm: true },
 ]
 
+// Actions that bring a service up: keep the light amber until its HTTP endpoint answers.
+const UP_ACTIONS: ServiceAction[] = ['up', 'restart', 'update']
+const AWAIT_POLL_MS = 3000
+const HEALTHY_WAIT_TIMEOUT_MS = 90_000
+
 const ACTION_DETAILS: Record<ServiceAction, { title: string; description: string; confirmLabel: string }> = {
   up: { title: 'Start {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose up -d</code> to start the service.', confirmLabel: 'Start' },
   stop: { title: 'Stop {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose stop</code> to stop the service.', confirmLabel: 'Stop' },
@@ -34,6 +39,36 @@ export function ServiceCard({ service }: ServiceCardProps) {
   const [showDestroy, setShowDestroy] = useState(false)
   const [destroyConfirm, setDestroyConfirm] = useState('')
   const [confirmAction, setConfirmAction] = useState<ServiceAction | null>(null)
+  const [awaitingHealthy, setAwaitingHealthy] = useState(false)
+
+  // Clear the amber "coming up" light once reality is known:
+  // - HTTP answers (healthy) → green
+  // - no HTTP health configured but containers running → green
+  // - service went down / never came up → show actual state
+  useEffect(() => {
+    if (!awaitingHealthy) return
+    if (
+      service.healthy === true ||
+      (service.healthy === null && service.state === 'running') ||
+      service.state === 'stopped' ||
+      service.state === 'absent'
+    ) {
+      setAwaitingHealthy(false)
+    }
+  }, [awaitingHealthy, service.healthy, service.state])
+
+  // While waiting: poll services every few seconds; bail out on timeout.
+  useEffect(() => {
+    if (!awaitingHealthy) return
+    const poll = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['services'] })
+    }, AWAIT_POLL_MS)
+    const timeout = setTimeout(() => setAwaitingHealthy(false), HEALTHY_WAIT_TIMEOUT_MS)
+    return () => {
+      clearInterval(poll)
+      clearTimeout(timeout)
+    }
+  }, [awaitingHealthy, queryClient])
 
   const url = getServiceUrl(service)
   const iconUrl = getServiceIconUrl(service.id)
@@ -44,6 +79,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
       const result = await serviceAction(service.id, action)
       if (result.ok) {
         toast.success(`${service.display_name} ${action} completed`)
+        if (UP_ACTIONS.includes(action)) setAwaitingHealthy(true)
       } else {
         toast.error(`${service.display_name} ${action} failed: ${result.output}`)
       }
@@ -99,7 +135,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
           <h3 className="font-medium truncate">{service.display_name}</h3>
           <p className="text-sm text-unknown truncate">{service.description}</p>
         </div>
-        <StatusDot state={service.state} healthy={service.healthy} size="lg" pending={pendingAction !== null} />
+        <StatusDot state={service.state} healthy={service.healthy} size="lg" pending={pendingAction !== null || awaitingHealthy} />
       </div>
 
       <div className="flex items-center gap-2 text-xs text-unknown">
