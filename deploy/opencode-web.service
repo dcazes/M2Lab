@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenCode web UI (native host)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/dak/.opencode/bin/opencode web --hostname 127.0.0.1 --port 4096
+Restart=on-failure
+RestartSec=3
+Environment=HOME=/home/dak
+Environment=XDG_DATA_HOME=/home/dak/.local/share/opencode
+Environment=XDG_CONFIG_HOME=/home/dak/.config/opencode
+EnvironmentFile=-/home/dak/Desktop/Programs/HomeServer/.env
+WorkingDirectory=/home/dak/Desktop/Programs/HomeServer
+
+[Install]
+WantedBy=default.target
