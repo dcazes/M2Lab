@@ -1,15 +1,16 @@
 interface GaugeCardProps {
   label: string
   value: number
-  max: number
-  unit: string
+  max?: number
+  unit?: string
   color: string
   format: (value: number) => string
   detail?: string
 }
 
 export function GaugeCard({ label, value, max, unit, color, format, detail }: GaugeCardProps) {
-  const percentage = max > 0 ? Math.min(100, (value / max) * 100) : 0
+  const hasBar = max !== undefined && max > 0
+  const percentage = hasBar ? Math.min(100, (value / max) * 100) : 0
 
   return (
     <article className="card p-4">
@@ -19,15 +20,17 @@ export function GaugeCard({ label, value, max, unit, color, format, detail }: Ga
           {format(value)}{unit && <span className="text-sm font-normal text-unknown ml-1">{unit}</span>}
         </span>
       </div>
-      <div className="h-2 bg-surface-2 rounded-full overflow-hidden relative">
-        <div
-          className="h-full rounded-full transition-all duration-300 ease-out"
-          style={{
-            width: `${percentage}%`,
-            backgroundColor: color,
-          }}
-        />
-      </div>
+      {hasBar && (
+        <div className="h-2 bg-surface-2 rounded-full overflow-hidden relative">
+          <div
+            className="h-full rounded-full transition-all duration-300 ease-out"
+            style={{
+              width: `${percentage}%`,
+              backgroundColor: color,
+            }}
+          />
+        </div>
+      )}
       {detail && (
         <p className="mt-2 text-xs text-unknown font-mono-tabular">{detail}</p>
       )}

@@ -1,10 +1,27 @@
+import { useState, useEffect } from 'react'
 import { useSystem } from '../../hooks/useSystem'
 import { formatBytes, formatPercent, formatUptime, formatLoadAvg } from '../../lib/format'
 import { GaugeCard } from './GaugeCard'
 import { Sparkline } from './Sparkline'
 
+const MAX_POINTS = 60
+
 export function SystemTab() {
   const { data, isLoading, error } = useSystem()
+  const [history, setHistory] = useState<{ cpu: number[]; mem: number[]; disk: number[] }>({
+    cpu: [],
+    mem: [],
+    disk: [],
+  })
+
+  useEffect(() => {
+    if (!data) return
+    setHistory((prev) => ({
+      cpu: [...prev.cpu, data.cpu_percent].slice(-MAX_POINTS),
+      mem: [...prev.mem, data.mem.percent].slice(-MAX_POINTS),
+      disk: [...prev.disk, data.disk.percent].slice(-MAX_POINTS),
+    }))
+  }, [data])
 
   if (isLoading) {
     return (
@@ -57,8 +74,6 @@ export function SystemTab() {
         <GaugeCard
           label="Uptime"
           value={data.uptime_seconds}
-          max={1}
-          unit=""
           color="var(--color-unknown)"
           format={formatUptime}
         />
@@ -91,9 +106,9 @@ export function SystemTab() {
       <section className="card p-4">
         <h3 className="font-medium mb-4">Resource History (5 min)</h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Sparkline label="CPU %" color="var(--color-accent)" dataKey="cpu" />
-          <Sparkline label="Memory %" color="var(--color-ok)" dataKey="mem" />
-          <Sparkline label="Disk %" color="var(--color-warn)" dataKey="disk" />
+          <Sparkline label="CPU %" color="var(--color-accent)" data={history.cpu} />
+          <Sparkline label="Memory %" color="var(--color-ok)" data={history.mem} />
+          <Sparkline label="Disk %" color="var(--color-warn)" data={history.disk} />
         </div>
       </section>
     </div>

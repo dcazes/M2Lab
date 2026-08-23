@@ -1,16 +1,15 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect } from 'react'
 
 interface SparklineProps {
   label: string
   color: string
-  dataKey: 'cpu' | 'mem' | 'disk'
+  data: number[]
 }
 
 const MAX_POINTS = 60
 
-export function Sparkline({ label, color, dataKey }: SparklineProps) {
+export function Sparkline({ label, color, data }: SparklineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [data, setData] = useState<number[]>([])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -77,22 +76,6 @@ export function Sparkline({ label, color, dataKey }: SparklineProps) {
       window.removeEventListener('resize', resize)
     }
   }, [color, data])
-
-  // Listen for data updates from parent
-  useEffect(() => {
-    const handler = (event: CustomEvent) => {
-      if (event.detail.key === dataKey) {
-        setData((prev: number[]) => {
-          const next = [...prev, event.detail.value]
-          if (next.length > MAX_POINTS) next.shift()
-          return next
-        })
-      }
-    }
-
-    window.addEventListener('sparkline-update', handler as EventListener)
-    return () => window.removeEventListener('sparkline-update', handler as EventListener)
-  }, [dataKey])
 
   return (
     <div className="space-y-2">

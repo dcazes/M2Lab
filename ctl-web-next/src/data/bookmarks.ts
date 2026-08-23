@@ -14,7 +14,7 @@ export const bookmarks: Bookmark[] = [
   { name: 'TypeScript', url: 'https://www.typescriptlang.org', icon: '📘' },
   { name: 'Vite', url: 'https://vitejs.dev', icon: '⚡' },
   { name: 'Tailscale', url: 'https://tailscale.com', icon: '🔐' },
-  { name: 'Portainer', url: 'http://localhost:9090', icon: '🐳' },
-  { name: 'Homepage', url: 'http://localhost:8083', icon: '🏠' },
-  { name: 'Beszel', url: 'http://localhost:8090', icon: '📈' },
+  { name: 'Portainer', url: 'https://home.taile2cc7a.ts.net:9090', icon: '🐳' },
+  { name: 'Homepage', url: 'https://home.taile2cc7a.ts.net', icon: '🏠' },
+  { name: 'Beszel', url: 'https://home.taile2cc7a.ts.net:8450', icon: '📈' },
 ]

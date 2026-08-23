@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Play, Square, RotateCcw, Download, ArrowUpRight, ExternalLink } from 'lucide-react'
+import { Play, Square, RotateCcw, Download, ArrowUpRight, ExternalLink, AlertTriangle } from 'lucide-react'
 import { StatusDot } from './StatusDot'
 import { getServiceUrl, getServiceIconUrl } from '../../lib/api'
 import type { Service, ServiceAction } from '../../lib/types'
@@ -19,12 +19,21 @@ const ACTIONS: { action: ServiceAction; label: string; icon: React.ComponentType
   { action: 'update', label: 'Update', icon: ArrowUpRight, confirm: true },
 ]
 
-export function ServiceCard({ service, source }: ServiceCardProps) {
+const ACTION_DETAILS: Record<ServiceAction, { title: string; description: string; confirmLabel: string }> = {
+  up: { title: 'Start {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose up -d</code> to start the service.', confirmLabel: 'Start' },
+  stop: { title: 'Stop {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose stop</code> to stop the service.', confirmLabel: 'Stop' },
+  restart: { title: 'Restart {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose restart</code> to restart the service.', confirmLabel: 'Restart' },
+  pull: { title: 'Pull {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose pull</code> to fetch the latest images.', confirmLabel: 'Pull' },
+  update: { title: 'Update {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose pull && docker compose up -d</code> to pull the latest images and recreate containers.', confirmLabel: 'Update' },
+}
+
+export function ServiceCard({ service }: ServiceCardProps) {
   const [pendingAction, setPendingAction] = useState<ServiceAction | null>(null)
   const [showDestroy, setShowDestroy] = useState(false)
   const [destroyConfirm, setDestroyConfirm] = useState('')
+  const [confirmAction, setConfirmAction] = useState<ServiceAction | null>(null)
 
-  const url = getServiceUrl(service, source)
+  const url = getServiceUrl(service)
   const iconUrl = getServiceIconUrl(service.id)
 
   const handleAction = async (action: ServiceAction) => {
@@ -41,6 +50,13 @@ export function ServiceCard({ service, source }: ServiceCardProps) {
     } finally {
       setPendingAction(null)
     }
+  }
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return
+    const action = confirmAction
+    setConfirmAction(null)
+    await handleAction(action)
   }
 
   const handleDestroy = async () => {
@@ -108,7 +124,7 @@ export function ServiceCard({ service, source }: ServiceCardProps) {
           {ACTIONS.map(({ action, label, icon: Icon, confirm }) => (
             <button
               key={action}
-              onClick={() => confirm ? setShowDestroy(true) : handleAction(action)}
+              onClick={() => confirm ? setConfirmAction(action) : handleAction(action)}
               disabled={isPending(action) || pendingAction !== null}
               className={`p-2 rounded-btn transition-fast ${
                 isPending(action)
@@ -123,6 +139,34 @@ export function ServiceCard({ service, source }: ServiceCardProps) {
           ))}
         </div>
       </div>
+
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="card w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 fade-in duration-200">
+            <h4 className="text-lg font-semibold flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warn" />
+              {ACTION_DETAILS[confirmAction].title.replace('{name}', service.display_name)}
+            </h4>
+            <p className="text-sm text-unknown">
+              {ACTION_DETAILS[confirmAction].description}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="px-4 py-2 text-sm font-medium text-unknown bg-surface-2 rounded-btn hover:bg-surface-1 transition-fast"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmAction}
+                className="px-4 py-2 text-sm font-medium text-bg-base bg-accent rounded-btn hover:opacity-90 transition-fast"
+              >
+                {ACTION_DETAILS[confirmAction].confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDestroy && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

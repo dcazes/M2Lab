@@ -54,9 +54,8 @@ export async function fetchSystemStats(): Promise<SystemStats> {
   return fetchJson<SystemStats>(`${API_BASE}/system`)
 }
 
-export function getServiceUrl(service: Service, source: ServicesResponse['source']): string {
-  if (source === 'local') return service.url
-  return service.tailnet_url
+export function getServiceUrl(service: Service): string {
+  return service.tailnet_url ?? service.url
 }
 
 export function getServiceIconUrl(id: string): string {
