@@ -10,11 +10,13 @@
 
 - name: Resolve Docker repo distro slug
   ansible.builtin.set_fact:
-    docker_distro_slug: "{{ 'debian' if ansible_distribution == 'Debian' else 'ubuntu' }}"
+    docker_distro_slug: >-
+      {{ 'debian' if ansible_distribution == 'Debian' else 'ubuntu' }}
 
 - name: Map CPU architecture for apt
   ansible.builtin.set_fact:
-    docker_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+    docker_arch: >-
+      {{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}
 
 - name: Download Docker official GPG key
   ansible.builtin.get_url:
@@ -24,7 +26,10 @@
 
 - name: Add Docker apt repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/{{ docker_distro_slug }} {{ ansible_distribution_release }} stable"
+    repo: >-
+      deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/{{ docker_distro_slug }}
+      {{ ansible_distribution_release }} stable
     filename: docker
     state: present
 
@@ -53,23 +58,25 @@
 
 - name: Check whether shared frontend network exists
   ansible.builtin.command: docker network inspect homelab_frontend
-  register: front_net_check
+  register: docker_front_net_check
   failed_when: false
   changed_when: false
 
 - name: Create shared frontend network (internet egress allowed)
   ansible.builtin.command: docker network create homelab_frontend
-  when: front_net_check.rc != 0
+  when: docker_front_net_check.rc != 0
+  changed_when: true
 
 - name: Check whether shared backend network exists
   ansible.builtin.command: docker network inspect homelab_backend
-  register: back_net_check
+  register: docker_back_net_check
   failed_when: false
   changed_when: false
 
 - name: Create shared backend network (internal, no egress)
   ansible.builtin.command: docker network create --internal homelab_backend
-  when: back_net_check.rc != 0
+  when: docker_back_net_check.rc != 0
+  changed_when: true
 
 - name: Check whether shared mcp network exists
   ansible.builtin.command: docker network inspect homelab_mcp

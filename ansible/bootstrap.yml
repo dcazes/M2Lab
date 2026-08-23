@@ -9,7 +9,8 @@
     - tailscale
     - firewall
   post_tasks:
-    - name: Clone or update homelab repository
+    # tracks main by design; pinning would freeze rebuilds
+    - name: Clone or update homelab repository  # noqa: latest[git]
       ansible.builtin.git:
         repo: "{{ repo_url }}"
         dest: "{{ repo_path }}"
