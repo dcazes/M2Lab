@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Play, Square, RotateCcw, Download, ArrowUpRight, ExternalLink, AlertTriangle } from 'lucide-react'
+import { Play, Square, RotateCcw, Download, ArrowUpRight, ExternalLink, AlertTriangle, Trash2 } from 'lucide-react'
 import { StatusDot } from './StatusDot'
 import { getServiceUrl, getServiceIconUrl } from '../../lib/api'
 import type { Service, ServiceAction } from '../../lib/types'
@@ -26,11 +26,11 @@ const AWAIT_POLL_MS = 3000
 const HEALTHY_WAIT_TIMEOUT_MS = 90_000
 
 const ACTION_DETAILS: Record<ServiceAction, { title: string; description: string; confirmLabel: string }> = {
-  up: { title: 'Start {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose up -d</code> to start the service.', confirmLabel: 'Start' },
-  stop: { title: 'Stop {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose stop</code> to stop the service.', confirmLabel: 'Stop' },
-  restart: { title: 'Restart {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose restart</code> to restart the service.', confirmLabel: 'Restart' },
-  pull: { title: 'Pull {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose pull</code> to fetch the latest images.', confirmLabel: 'Pull' },
-  update: { title: 'Update {name}?', description: 'This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose pull && docker compose up -d</code> to pull the latest images and recreate containers.', confirmLabel: 'Update' },
+  up: { title: 'Start {name}?', description: 'This will run docker compose up -d to start the service.', confirmLabel: 'Start' },
+  stop: { title: 'Stop {name}?', description: 'This will run docker compose stop to stop the service.', confirmLabel: 'Stop' },
+  restart: { title: 'Restart {name}?', description: 'This will run docker compose restart to restart the service.', confirmLabel: 'Restart' },
+  pull: { title: 'Pull {name}?', description: 'This will run docker compose pull to fetch the latest images.', confirmLabel: 'Pull' },
+  update: { title: 'Update {name}?', description: 'This will run docker compose pull && docker compose up -d to pull the latest images and recreate containers.', confirmLabel: 'Update' },
 }
 
 export function ServiceCard({ service }: ServiceCardProps) {
@@ -176,6 +176,15 @@ export function ServiceCard({ service }: ServiceCardProps) {
               <Icon className="h-4 w-4" />
             </button>
           ))}
+          <button
+            onClick={() => setShowDestroy(true)}
+            disabled={pendingAction !== null}
+            className="p-2 rounded-btn text-unknown hover:text-err hover:bg-surface-2 transition-fast disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Destroy"
+            aria-label="Destroy"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -212,8 +221,8 @@ export function ServiceCard({ service }: ServiceCardProps) {
           <div className="card w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 fade-in duration-200">
             <h4 className="text-lg font-semibold">Destroy {service.display_name}?</h4>
             <p className="text-sm text-unknown">
-              This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose down -v</code>
-              and remove all containers, networks, and volumes for this service.
+              This will run <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">docker compose down</code>
+              and remove all containers and networks for this service.
             </p>
             <p className="text-sm text-warn">
               Type <code className="font-mono-tabular bg-surface-2 px-1.5 py-0.5 rounded">{service.id}</code> to confirm:

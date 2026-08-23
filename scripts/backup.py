@@ -11,10 +11,14 @@ DATE = datetime.now().strftime("%Y-%m-%d")
 
 os.makedirs(BACKUPS, exist_ok=True)
 
-def run(cmd, capture=False):
+def run(cmd, sid, capture=False):
     if capture:
-        return subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    return subprocess.run(cmd, shell=True)
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    else:
+        result = subprocess.run(cmd, shell=True)
+    if result.returncode != 0:
+        print(f"FAILED: {sid} — {cmd} exited with code {result.returncode}", file=sys.stderr)
+    return result
 
 def backup_service(svc):
     sid = svc["id"]
@@ -33,7 +37,13 @@ def backup_service(svc):
         dest = os.path.join(BACKUPS, f"{sid}-{db}-{DATE}.sql.gz")
         # Suppress stderr to avoid noisy warnings
         cmd = f"docker exec {container} pg_dump -U {user} {db} 2>/dev/null | gzip > {dest}"
-        run(cmd)
+        run(cmd, sid)
+        if os.path.getsize(dest) == 0:
+            print(f"FAILED: {sid} — empty dump file", file=sys.stderr)
+        else:
+            gz = subprocess.run(["gzip", "-t", dest])
+            if gz.returncode != 0:
+                print(f"FAILED: {sid} — corrupted gzip", file=sys.stderr)
         print(f"  → {os.path.basename(dest)}")
 
     # Named Volumes
@@ -41,7 +51,7 @@ def backup_service(svc):
         print(f"[{sid}] Backing up volume {vol}...")
         dest = os.path.join(BACKUPS, f"{vol}-{DATE}.tgz")
         cmd = f"docker run --rm -v {vol}:/src:ro -v {BACKUPS}:/dst alpine tar czf /dst/{os.path.basename(dest)} -C /src . 2>/dev/null"
-        run(cmd)
+        run(cmd, sid)
         print(f"  → {os.path.basename(dest)}")
 
     # Bind Mounts
@@ -51,7 +61,7 @@ def backup_service(svc):
         if os.path.exists(src_path):
             dest = os.path.join(BACKUPS, f"{sid}-{bind}-{DATE}.tgz")
             cmd = f"tar czf {dest} -C {os.path.join(ROOT, svc['dir'])} {bind} 2>/dev/null"
-            run(cmd)
+            run(cmd, sid)
             print(f"  → {os.path.basename(dest)}")
         else:
             print(f"  ! Path not found: {src_path}")
@@ -65,16 +75,23 @@ def main():
     services = config.get("services", [])
     target = sys.argv[1] if len(sys.argv) > 1 else "all"
 
+    processed = []
     if target == "all":
         for svc in services:
             backup_service(svc)
+            processed.append(svc)
     else:
         svc = next((s for s in services if s["id"] == target), None)
         if svc:
             backup_service(svc)
+            processed.append(svc)
         else:
             print(f"Unknown service: {target}")
             sys.exit(1)
+
+    retention = int(os.environ.get("BACKUP_RETENTION_DAYS", "7"))
+    for svc in processed:
+        subprocess.run(["find", BACKUPS, "-mtime", f"+{retention}", "-delete"])
 
 if __name__ == "__main__":
     main()

@@ -49,7 +49,11 @@ def main():
         print(f"Usage: registry.py {verb} <service-id>", file=sys.stderr)
         return 1
     sid = sys.argv[2]
-    s = service_by_id(sid)
+    try:
+        s = service_by_id(sid)
+    except KeyError:
+        print(f"Unknown service: {sid}. Available: {', '.join(sorted(s['id'] for s in SERVICES))}", file=sys.stderr)
+        sys.exit(1)
     match verb:
         case "up":
             return run(s, ["up", "-d"])

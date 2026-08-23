@@ -19,8 +19,11 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: response.statusText }))
-    throw new Error(error.message || `HTTP ${response.status}`)
+    const error = await response.json().catch(() => ({}))
+    const message = error.detail || error.message || response.statusText
+    // Action/destroy responses include `output` (docker compose output) — surface it.
+    const fullMessage = error.output ? `${message}\n${error.output}` : message
+    throw new Error(fullMessage || `HTTP ${response.status}`)
   }
 
   return response.json()

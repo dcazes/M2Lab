@@ -61,3 +61,35 @@ jobs:
 
       - name: Run ansible-lint on bootstrap playbooks
         run: ansible-lint ansible/
+
+  compose-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate compose configs
+        run: |
+          fail=0
+          for f in $(git ls-files '*/docker-compose.yml' 'docker-compose.yml'); do
+            echo -n "$f ... "
+            if docker compose -f "$f" config -q 2>/dev/null; then echo OK; else echo FAIL; fail=1; fi
+          done
+          exit $fail
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ctl-web-next/package-lock.json
+
+      - name: Build dashboard
+        run: npm ci && npm run build
+        working-directory: ctl-web-next

@@ -55,24 +55,36 @@ python3 ctl/registry.py status
 ```bash
 for m in \
   "8443 http://127.0.0.1:2283" \
-  "8444 http://127.0.0.1:3000" \
-  "8445 http://127.0.0.1:8000" \
-  "8446 http://127.0.0.1:8222" \
-  "8448 http://127.0.0.1:7080" \
-  "8450 http://127.0.0.1:8080" \
-  "8451 http://127.0.0.1:28981" \
+  "8444 http://127.0.0.1:3929" \
+  "8445 http://127.0.0.1:4000" \
+  "8446 http://127.0.0.1:8081" \
+  "8448 http://127.0.0.1:8082" \
+  "8450 http://127.0.0.1:8090" \
+  "8451 http://127.0.0.1:8010" \
   "8452 http://127.0.0.1:5006" \
-  "8453 http://127.0.0.1:8088" \
-  "8454 http://127.0.0.1:8005" \
-  "8455 http://127.0.0.1:9925" ; do
+  "8453 http://127.0.0.1:8020" \
+  "8454 http://127.0.0.1:8015" \
+  "8455 http://127.0.0.1:9000" ; do
   set -- $m; sudo tailscale serve --bg --https=$1 $2 || true
 done
-sudo tailscale serve --bg --https=9090 https://127.0.0.1:9443   # portainer (TLS)
+sudo tailscale serve --bg --https=9090 http://127.0.0.1:9090   # portainer
 sudo tailscale serve reset                                      # nuke if wrong
 ```
 
 (Homepage rides the root serve: `sudo tailscale serve --bg http://127.0.0.1:8083`
-— check `tailscale serve status` and adjust to match services.yaml ports.)
+ — check `tailscale serve status` and adjust to match services.yaml ports.)
+
+### Dashboard bootstrap
+
+The control plane (FastAPI dashboard + systemd unit) needs a venv, a built
+frontend, and its own tailnet door:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r ctl/requirements.txt
+cd ctl-web-next && npm ci && npm run build && cd ..
+systemctl --user enable --now homelab-ctl
+sudo tailscale serve --bg --https=8460 http://127.0.0.1:8787
+```
 
 ## 5. Verify
 

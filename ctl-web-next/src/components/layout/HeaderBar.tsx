@@ -1,7 +1,6 @@
 import { useClock } from '../../hooks/useClock'
 import { useWeather } from '../../hooks/useWeather'
 import { getWeatherIcon, getWeatherDescription } from '../../hooks/useWeather'
-import { Search } from 'lucide-react'
 
 export function HeaderBar() {
   const time = useClock()
@@ -33,15 +32,6 @@ export function HeaderBar() {
         <div className="flex-1 max-w-md mx-4" />
 
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-unknown text-sm" />
-            <input
-              type="search"
-              placeholder="Search services…"
-              className="w-64 sm:w-80 pl-9 pr-4 py-2 text-sm bg-surface-2 border border-border rounded-btn placeholder-unknown focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-fast"
-            />
-          </div>
-
           <div className="flex items-center gap-3 text-sm font-mono-tabular">
             <span className="text-unknown">{timeString}</span>
           </div>

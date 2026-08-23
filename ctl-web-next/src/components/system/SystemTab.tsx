@@ -6,21 +6,24 @@ import { Sparkline } from './Sparkline'
 
 const MAX_POINTS = 60
 
+// Module-level ring buffer so the sparkline history survives tab switches
+// (component state resets on unmount; this does not).
+const historyBuffer: { cpu: number[]; mem: number[]; disk: number[] } = {
+  cpu: [],
+  mem: [],
+  disk: [],
+}
+
 export function SystemTab() {
   const { data, isLoading, error } = useSystem()
-  const [history, setHistory] = useState<{ cpu: number[]; mem: number[]; disk: number[] }>({
-    cpu: [],
-    mem: [],
-    disk: [],
-  })
+  const [history, setHistory] = useState<{ cpu: number[]; mem: number[]; disk: number[] }>(historyBuffer)
 
   useEffect(() => {
     if (!data) return
-    setHistory((prev) => ({
-      cpu: [...prev.cpu, data.cpu_percent].slice(-MAX_POINTS),
-      mem: [...prev.mem, data.mem.percent].slice(-MAX_POINTS),
-      disk: [...prev.disk, data.disk.percent].slice(-MAX_POINTS),
-    }))
+    historyBuffer.cpu = [...historyBuffer.cpu, data.cpu_percent].slice(-MAX_POINTS)
+    historyBuffer.mem = [...historyBuffer.mem, data.mem.percent].slice(-MAX_POINTS)
+    historyBuffer.disk = [...historyBuffer.disk, data.disk.percent].slice(-MAX_POINTS)
+    setHistory({ cpu: historyBuffer.cpu, mem: historyBuffer.mem, disk: historyBuffer.disk })
   }, [data])
 
   if (isLoading) {
