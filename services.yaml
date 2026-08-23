@@ -106,23 +106,6 @@ services:
       binds:
         - data
 
-  - id: homepage
-    display_name: Homepage
-    description: Landing page / service dashboard
-    category: infra
-    icon: "🏠"
-    dir: homepage
-    project: homepage
-    port: 8083
-    tailnet_port: 443
-    url: http://localhost:8083
-    health:
-      mode: http
-      url: "http://localhost:8083/"
-      expect: 200
-    backup:
-      binds: []
-
   - id: mealie
     display_name: Mealie
     description: Recipe manager

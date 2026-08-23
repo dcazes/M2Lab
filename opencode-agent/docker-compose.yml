@@ -1,8 +1,7 @@
 services:
   opencode-agent:
-    image: ghcr.io/anomalyco/opencode@sha256:56c82ee8b5ead35406a83102ad1960030b7ab58dcd591e3ab5f44c2b5e0170cb
+    image: ghcr.io/anomalyco/opencode:latest
     container_name: opencode-agent
-    user: "1000:1000"
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -32,24 +31,8 @@ services:
       - ./config:/config:ro
       # Persistent session/state volume
       - opencode-data:/data
-      # SECRET-HIDE OVERMOUNTS — every .env file masked with /dev/null (ro)
-      # WHY: .env files hold postgres passwords, LITELLM_MASTER_KEY, cloud keys.
-      # They are owned by uid 1000 (same as this container) so overmounts are mandatory.
-      # NEW SERVICES MUST BE ADDED HERE when their .env is created.
-      - /dev/null:/workspace/.env:ro
-      - /dev/null:/workspace/adventurelog/.env:ro
-      - /dev/null:/workspace/beszel/.env:ro
-      - /dev/null:/workspace/firecrawl/.env:ro
-      - /dev/null:/workspace/FreeLLMAPI/.env:ro
-      - /dev/null:/workspace/immich-app/.env:ro
-      - /dev/null:/workspace/litellm/.env:ro
-      - /dev/null:/workspace/mealie/.env:ro
-      - /dev/null:/workspace/nextcloud/.env:ro
-      - /dev/null:/workspace/open-webui/.env:ro
-      - /dev/null:/workspace/paperless-ngx/.env:ro
-      - /dev/null:/workspace/puppygraph/.env:ro
-      - /dev/null:/workspace/surfsense/.env:ro
-      - /dev/null:/workspace/vaultwarden/.env:ro
+      # Docker socket for full container control
+      - /var/run/docker.sock:/var/run/docker.sock:rw
     networks:
       - frontend-net
     healthcheck:
@@ -58,21 +41,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
-    # Wait for LiteLLM, then start OpenCode web UI (API + web UI on same port)
     command: >
-      bash -lc '
+      sh -c '
+        mkdir -p /data/opencode &&
         echo "Waiting for LiteLLM at litellm-proxy:4000...";
-        for i in {1..60}; do
+        for i in {1..30}; do
           if (exec 3<>/dev/tcp/litellm-proxy/4000) 2>/dev/null; then
             echo "LiteLLM reachable.";
             break;
           fi;
-          sleep 3;
+          sleep 2;
         done;
         echo "Starting OpenCode web UI on 0.0.0.0:4096";
         exec opencode web --hostname 0.0.0.0 --port 4096
       '
-
 volumes:
   opencode-data:
 
