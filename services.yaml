@@ -320,3 +320,21 @@ services:
     backup:
       binds:
         - data
+
+  - id: freellmapi
+    display_name: FreeLLMAPI
+    description: Free-LLM aggregator (OpenAI-compatible, model ordering/failover)
+    category: ai
+    icon: "🔀"
+    dir: FreeLLMAPI
+    project: freellmapi
+    port: 3001
+    tailnet_port: 8459
+    url: http://localhost:3001
+    health:
+      mode: http
+      url: "http://localhost:3001/api/ping"
+      expect: 200
+    backup:
+      binds:
+        - data

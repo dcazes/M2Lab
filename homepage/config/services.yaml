@@ -60,6 +60,10 @@
         icon: si-neo4j
         href: https://home.taile2cc7a.ts.net:8448
         description: Graph view of SurfSense DB
+    - FreeLLMAPI:
+        icon: mdi-api
+        href: https://home.taile2cc7a.ts.net:8459
+        description: Free LLM aggregator / model ordering
 
 - Infrastructure:
     - Dashboard:
