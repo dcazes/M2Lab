@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HomeServer Dashboard v2 — Design Direction Mockup</title>
+<style>
+:root {
+  --bg:#0B0F14;--s1:#0F1419;--s2:#161C24;--s3:#1C2330;
+  --bd:rgba(255,255,255,0.08);
+  --ac:#14b8a6;--ac-d:rgba(20,184,166,0.12);
+  --ok:#3fb950;--ok-d:rgba(63,185,80,0.12);
+  --wn:#d29922;--wn-d:rgba(210,153,34,0.12);
+  --er:#f85149;--er-d:rgba(248,81,73,0.12);
+  --un:#8b949e;--un-d:rgba(139,148,158,0.12);
+  --bl:#58a6ff;--bl-d:rgba(88,166,255,0.12);
+  --t1:#e6edf3;--t2:#8b949e;--t3:#6e7681;
+  --f-ui:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --f-mono:ui-monospace,"SF Mono","Cascadia Code","Fira Code","JetBrains Mono","Consolas",monospace;
+  --rc:12px;--rb:8px;--rp:9999px;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+  --sh-card:0 1px 3px rgba(0,0,0,.3),0 1px 2px rgba(0,0,0,.2);
+  --sh-drawer:-8px 0 32px rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{font-family:var(--f-ui);background:var(--bg);color:var(--t1);line-height:1.5;min-height:100vh}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px;border-radius:var(--rb)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--s3);border-radius:3px}
+
+.divider{display:flex;align-items:center;gap:16px;padding:48px 32px 24px;max-width:1400px;margin:0 auto}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--bd),transparent)}
+.divider span{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);white-space:nowrap;padding:4px 12px;background:var(--s1);border:1px solid var(--bd);border-radius:var(--rp)}
+
+.hdr{position:sticky;top:0;z-index:100;backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);background:rgba(11,15,20,.78);border-bottom:1px solid var(--bd);padding:12px 24px}
+.hdr-in{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:16px}
+.hdr-title{font-size:15px;font-weight:600;white-space:nowrap;display:flex;align-items:center;gap:8px}
+.hdr-title .dot{width:8px;height:8px;border-radius:50%;background:var(--ac);box-shadow:0 0 8px var(--ac-d)}
+.hdr-clock{font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--t2);white-space:nowrap}
+.hdr-weather{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);background:var(--s1);border:1px solid var(--bd);border-radius:var(--rp);padding:4px 12px;white-space:nowrap}
+.hdr-weather .tmp{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--t1)}
+.hdr-spacer{flex:1}
+.hdr-search{position:relative;width:240px}
+.hdr-search input{width:100%;font-family:var(--f-ui);font-size:12px;color:var(--t1);background:var(--s1);border:1px solid var(--bd);border-radius:var(--rb);padding:8px 12px 8px 30px;transition:border-color 150ms var(--ease)}
+.hdr-search input::placeholder{color:var(--t3)}
+.hdr-search input:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px var(--ac-d)}
+.hdr-search svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--t3)}
+.hdr-tabs{display:flex;gap:4px}
+.hdr-tabs button{font-family:var(--f-ui);font-size:12px;font-weight:500;color:var(--t2);background:transparent;border:none;padding:4px 12px;border-radius:var(--rb);cursor:pointer;transition:all 150ms var(--ease)}
+.hdr-tabs button:hover{color:var(--t1);background:var(--s2)}
+.hdr-tabs button.on{color:var(--ac);background:var(--ac-d)}
+
+.sys-strip{max-width:1400px;margin:24px auto;padding:0 24px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.g-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.g-hdr{display:flex;justify-content:space-between;align-items:center}
+.g-lbl{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--t3)}
+.g-val{font-family:var(--f-mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--t1)}
+.g-val .u{font-size:12px;font-weight:400;color:var(--t2)}
+.g-bar{height:4px;background:var(--s3);border-radius:2px;overflow:hidden}
+.g-fill{height:100%;border-radius:2px;transition:width 300ms var(--ease)}
+.g-fill.ok{background:var(--ok)}.g-fill.ac{background:var(--ac)}
+.up-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);padding:16px 20px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.up-val{font-family:var(--f-mono);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--t1)}
+.up-sub{font-size:11px;color:var(--t2);font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.docker-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--ok);background:var(--ok-d);padding:2px 8px;border-radius:var(--rp);width:fit-content}
+.docker-badge .dot{width:5px;height:5px;border-radius:50%;background:var(--ok)}
+
+.svc-wrap{max-width:1400px;margin:0 auto;padding:0 24px 48px}
+.grp{margin-bottom:32px}
+.grp-hdr{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.grp-hdr h2{font-size:13px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.06em}
+.grp-hdr .cnt{font-size:11px;font-family:var(--f-mono);color:var(--t3);background:var(--s2);padding:1px 8px;border-radius:var(--rp)}
+.grp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+
+.stile{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);padding:20px;display:flex;flex-direction:column;gap:12px;transition:border-color 150ms var(--ease),background 150ms var(--ease),box-shadow 150ms var(--ease);cursor:pointer;position:relative;overflow:hidden}
+.stile:hover{border-color:rgba(255,255,255,.14);background:var(--s2);box-shadow:var(--sh-card)}
+.stile:hover .acts{opacity:1}
+.stile.deg{border-color:rgba(210,153,34,.25)}
+.stile.deg:hover{box-shadow:0 0 16px rgba(210,153,34,.08)}
+.stile.off{opacity:.7}.stile.off:hover{opacity:1;border-color:rgba(248,81,73,.2)}
+.stile.abs{opacity:.45}.stile.abs:hover{opacity:.65}
+.st-top{display:flex;align-items:flex-start;gap:12px}
+.st-icon{width:36px;height:36px;border-radius:var(--rb);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.st-info{flex:1;min-width:0}
+.st-name{font-size:14px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:8px}
+.st-desc{font-size:12px;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-meta{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--t3)}
+.st-meta svg{width:12px;height:12px}
+.st-meta span{display:flex;align-items:center;gap:4px}
+.cbadge{font-family:var(--f-mono);font-size:10px;color:var(--t3);background:var(--s3);padding:1px 6px;border-radius:var(--rp);font-variant-numeric:tabular-nums}
+
+.sdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.sdot.ok{background:var(--ok);box-shadow:0 0 6px rgba(63,185,80,.3)}
+.sdot.wn{background:var(--wn);box-shadow:0 0 6px rgba(210,153,34,.3)}
+.sdot.er{background:var(--er);box-shadow:0 0 6px rgba(248,81,73,.3)}
+.sdot.un{background:var(--un)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.sdot.wn{animation:pulse 2s ease-in-out infinite}
+
+.acts{display:flex;gap:4px;opacity:0;transition:opacity 150ms var(--ease)}
+.abtn{width:28px;height:28px;border-radius:var(--rb);border:1px solid var(--bd);background:var(--s2);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 150ms var(--ease)}
+.abtn:hover{background:var(--s3);color:var(--t1);border-color:rgba(255,255,255,.14)}
+.abtn.p:hover{background:var(--ac-d);color:var(--ac);border-color:rgba(20,184,166,.3)}
+.abtn.d:hover{background:var(--er-d);color:var(--er);border-color:rgba(248,81,73,.3)}
+.abtn svg{width:14px;height:14px}
+.tlink{position:absolute;top:16px;right:16px;width:24px;height:24px;border-radius:var(--rb);display:flex;align-items:center;justify-content:center;color:var(--t3);opacity:0;transition:all 150ms var(--ease)}
+.stile:hover .tlink{opacity:1}
+.tlink:hover{color:var(--ac);background:var(--ac-d)}
+
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skel{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);padding:20px;display:flex;flex-direction:column;gap:12px}
+.sbar{border-radius:4px;background:linear-gradient(90deg,var(--s2) 25%,var(--s3) 50%,var(--s2) 75%);background-size:200% 100%;animation:shimmer 1.8s ease-in-out infinite}
+
+@media(prefers-reduced-motion:reduce){.sdot.wn,.sbar{animation:none}.stile,.acts,.tlink,.stile:hover{transition:none}.divider::before,.divider::after{transition:none}}
+
+.terr{background:var(--s1);border:1px solid rgba(248,81,73,.2);border-radius:var(--rc);padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;min-height:140px}
+.terr-ic{width:32px;height:32px;border-radius:50%;background:var(--er-d);color:var(--er);display:flex;align-items:center;justify-content:center}
+.terr-msg{font-size:12px;color:var(--er);font-weight:500}
+.terr-sub{font-size:11px;color:var(--t3)}
+.terr-retry{margin-top:4px;font-family:var(--f-ui);font-size:11px;font-weight:500;color:var(--ac);background:var(--ac-d);border:1px solid rgba(20,184,166,.2);border-radius:var(--rb);padding:4px 12px;cursor:pointer;transition:all 150ms var(--ease)}
+.terr-retry:hover{background:rgba(20,184,166,.2);border-color:var(--ac)}
+
+/* DRAWER MOCKUP */
+.drawer-demo{max-width:1400px;margin:0 auto;padding:0 24px 48px;position:relative}
+.drawer-frame{position:relative;border:1px dashed rgba(255,255,255,.08);border-radius:var(--rc);overflow:hidden;min-height:560px}
+.drawer-dim{padding:24px;opacity:.15;pointer-events:none}
+.drawer-panel{position:absolute;right:0;top:0;bottom:0;width:480px;max-width:100%;background:var(--s1);border-left:1px solid var(--bd);box-shadow:var(--sh-drawer);display:flex;flex-direction:column;overflow-y:auto}
+.dp-hdr{display:flex;align-items:center;gap:12px;padding:20px 24px;border-bottom:1px solid var(--bd)}
+.dp-close{width:32px;height:32px;border-radius:var(--rb);border:1px solid var(--bd);background:var(--s2);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 150ms var(--ease)}
+.dp-close:hover{background:var(--s3);color:var(--t1)}
+.dp-title{flex:1}
+.dp-name{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dp-sub{font-size:12px;color:var(--t2);margin-top:2px}
+.dp-badge{font-size:11px;color:var(--wn);background:var(--wn-d);padding:2px 8px;border-radius:var(--rp)}
+.dp-body{padding:20px 24px;display:flex;flex-direction:column;gap:24px;flex:1}
+.dp-sec-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:12px}
+
+.ctable{width:100%;border-collapse:collapse;font-size:12px}
+.ctable th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);padding:8px 12px;border-bottom:1px solid var(--bd)}
+.ctable td{padding:8px 12px;border-bottom:1px solid var(--bd);color:var(--t2);font-family:var(--f-mono);font-size:11px}
+.ctable td:first-child{color:var(--t1);font-weight:500}
+.spill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:var(--rp);font-size:11px;font-weight:500}
+.spill.running{color:var(--ok);background:var(--ok-d)}
+.spill.stopped{color:var(--er);background:var(--er-d)}
+.spill.healthy{color:var(--ok);background:var(--ok-d)}
+
+.dp-actions{display:flex;gap:8px;flex-wrap:wrap}
+.dabtn{display:flex;align-items:center;gap:8px;font-family:var(--f-ui);font-size:12px;font-weight:500;padding:8px 12px;border-radius:var(--rb);border:1px solid var(--bd);background:var(--s2);color:var(--t2);cursor:pointer;transition:all 150ms var(--ease)}
+.dabtn:hover{background:var(--s3);color:var(--t1);border-color:rgba(255,255,255,.14)}
+.dabtn.p:hover{background:var(--ac-d);color:var(--ac);border-color:rgba(20,184,166,.3)}
+.dabtn.dng:hover{background:var(--er-d);color:var(--er);border-color:rgba(248,81,73,.3)}
+.dabtn svg{width:14px;height:14px}
+
+.dp-info-row{display:flex;gap:16px}
+.dp-info-box{flex:1;background:var(--s2);border-radius:var(--rb);padding:12px 16px}
+.dp-info-box .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--t3)}
+.dp-info-box .val{font-family:var(--f-mono);font-size:14px;font-weight:600;color:var(--t1);margin-top:2px}
+
+.destroy-zone{border:1px solid rgba(248,81,73,.2);border-radius:var(--rc);background:rgba(248,81,73,.04);padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.destroy-zone h4{font-size:12px;font-weight:600;color:var(--er);display:flex;align-items:center;gap:8px}
+.destroy-zone p{font-size:11px;color:var(--t2);line-height:1.5}
+.destroy-input{display:flex;gap:8px}
+.destroy-input input{flex:1;font-family:var(--f-mono);font-size:12px;color:var(--t1);background:var(--s2);border:1px solid rgba(248,81,73,.2);border-radius:var(--rb);padding:8px 12px}
+.destroy-input input::placeholder{color:var(--t3)}
+.destroy-input input:focus{outline:none;border-color:var(--er);box-shadow:0 0 0 2px var(--er-d)}
+.destroy-btn{font-family:var(--f-ui);font-size:12px;font-weight:600;color:#fff;background:var(--er);border:none;border-radius:var(--rb);padding:8px 16px;cursor:not-allowed;opacity:.5;transition:opacity 150ms var(--ease)}
+.destroy-btn.active{opacity:1;cursor:pointer}
+
+/* LOG VIEWER */
+.log-wrap{max-width:1400px;margin:0 auto;padding:0 24px 48px}
+.log-panel{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);overflow:hidden}
+.log-bar{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--bd);background:var(--s2);flex-wrap:wrap}
+.log-chips{display:flex;gap:4px}
+.lchip{display:flex;align-items:center;gap:4px;font-family:var(--f-ui);font-size:11px;font-weight:500;padding:3px 8px;border-radius:var(--rp);border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;transition:all 150ms var(--ease)}
+.lchip:hover{border-color:rgba(255,255,255,.14)}
+.lchip.on{border-color:transparent}
+.lchip.on.er{color:var(--er);background:var(--er-d)}
+.lchip.on.wn{color:var(--wn);background:var(--wn-d)}
+.lchip.on.in{color:var(--bl);background:var(--bl-d)}
+.lchip.on.db{color:var(--t3);background:var(--s3)}
+.lchip .ct{font-family:var(--f-mono);font-size:10px;font-variant-numeric:tabular-nums;opacity:.7}
+.log-spacer{flex:1}
+.lbtn{width:28px;height:28px;border-radius:var(--rb);border:1px solid var(--bd);background:var(--s1);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 150ms var(--ease)}
+.lbtn:hover{background:var(--s3);color:var(--t1)}
+.lbtn.on{color:var(--ac);background:var(--ac-d);border-color:rgba(20,184,166,.3)}
+.lbtn svg{width:14px;height:14px}
+.log-search{position:relative}
+.log-search input{width:180px;font-family:var(--f-ui);font-size:11px;color:var(--t1);background:var(--s1);border:1px solid var(--bd);border-radius:var(--rb);padding:4px 8px 4px 26px}
+.log-search input::placeholder{color:var(--t3)}
+.log-search input:focus{outline:none;border-color:var(--ac)}
+.log-search svg{position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--t3);width:12px;height:12px}
+
+.log-body{padding:12px 0;max-height:340px;overflow-y:auto;font-family:var(--f-mono);font-size:11.5px;line-height:1.7;font-variant-numeric:tabular-nums}
+.lline{display:flex;gap:12px;padding:1px 16px 1px 0;border-left:3px solid transparent}
+.lline:hover{background:rgba(255,255,255,.02)}
+.lline.er{border-left-color:var(--er)}
+.lline.wn{border-left-color:var(--wn)}
+.lline .ts{color:var(--t3);white-space:nowrap}
+.lline .ctag{color:var(--t3);background:var(--s3);padding:0 5px;border-radius:3px;white-space:nowrap;font-size:10px}
+.lline.er .ctag{background:var(--er-d);color:var(--er)}
+.lline.wn .ctag{background:var(--wn-d);color:var(--wn)}
+.lline .lvl{font-weight:600;width:44px;text-align:center;white-space:nowrap;border-radius:3px;font-size:10px;padding:0 2px}
+.lline.er .lvl{color:var(--er)}.lline.wn .lvl{color:var(--wn)}
+.lline.in .lvl{color:var(--bl)}.lline.db .lvl{color:var(--t3)}
+.lline .msg{color:var(--t2);flex:1;min-width:0;word-break:break-all}
+.lline.er .msg{color:var(--t1)}
+.lline .hl{background:rgba(20,184,166,.2);color:var(--ac);border-radius:2px}
+.log-asc{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;font-size:11px;color:var(--t3);border-top:1px solid var(--bd);cursor:pointer;transition:all 150ms var(--ease)}
+.log-asc:hover{color:var(--t2);background:rgba(255,255,255,.02)}
+.log-asc .dot{width:5px;height:5px;border-radius:50%;background:var(--ac)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.log-asc .dot{animation:blink 1.5s ease-in-out infinite}
+
+/* SYSTEM TAB */
+.sys-wrap{max-width:1400px;margin:0 auto;padding:0 24px 48px}
+.sys-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.sg-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);padding:24px;display:flex;flex-direction:column;gap:16px}
+.sg-hdr{display:flex;justify-content:space-between;align-items:baseline}
+.sg-lbl{font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.06em}
+.sg-val{font-family:var(--f-mono);font-size:32px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--t1);line-height:1}
+.sg-val .u{font-size:14px;font-weight:400;color:var(--t2)}
+.sg-bar{height:6px;background:var(--s3);border-radius:3px;overflow:hidden}
+.sg-fill{height:100%;border-radius:3px;transition:width 300ms var(--ease)}
+.sparkline{height:40px;width:100%}
+.sparkline svg{width:100%;height:100%}
+.sg-dets{display:flex;gap:24px}
+.sg-det{display:flex;flex-direction:column;gap:2px}
+.sg-det-l{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)}
+.sg-det-v{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums;color:var(--t2)}
+.sys-foot{margin-top:16px;display:flex;gap:16px}
+.sf-card{flex:1;background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);padding:16px 20px;display:flex;align-items:center;gap:12px}
+.sf-ic{width:36px;height:36px;border-radius:var(--rb);background:var(--s2);display:flex;align-items:center;justify-content:center;color:var(--t2)}
+.sf-ic svg{width:16px;height:16px}
+.sf-lbl{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em}
+.sf-val{font-family:var(--f-mono);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--t1)}
+
+/* TOKENS */
+.tok-wrap{max-width:1400px;margin:0 auto;padding:0 24px 64px}
+.tok-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px}
+.tok-group{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);padding:20px}
+.tok-group h3{font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px}
+.sw-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.sw{width:32px;height:32px;border-radius:var(--rb);border:1px solid var(--bd);flex-shrink:0}
+.sw-name{font-size:12px;font-weight:500;color:var(--t1)}
+.sw-val{font-family:var(--f-mono);font-size:11px;color:var(--t3)}
+.type-sample{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--bd)}
+.type-sample:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.type-lbl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:4px}
+.type-meta{font-family:var(--f-mono);font-size:10px;color:var(--t3);margin-top:2px}
+.sp-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.sp-bar{background:var(--ac);opacity:.4;border-radius:2px;height:12px}
+.sp-lbl{font-family:var(--f-mono);font-size:11px;color:var(--t3);min-width:56px}
+.sp-val{font-family:var(--f-mono);font-size:11px;color:var(--t2)}
+
+/* RESPONSIVE */
+@media(max-width:640px){
+  .sys-strip{grid-template-columns:repeat(2,1fr)}
+  .grp-grid{grid-template-columns:1fr}
+  .sys-grid{grid-template-columns:1fr}
+  .hdr-in{flex-wrap:wrap}
+  .hdr-search{width:100%;order:10}
+  .hdr-weather{display:none}
+  .drawer-panel{width:100%;max-width:100vw}
+  .tok-grid{grid-template-columns:1fr}
+  .sys-foot{flex-direction:column}
+  .log-bar{gap:8px}
+  .log-search input{width:140px}
+  .dp-info-row{flex-direction:column}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-in">
+    <div class="hdr-title"><span class="dot"></span>HomeServer</div>
+    <div class="hdr-tabs">
+      <button class="on">Services</button>
+      <button>System</button>
+      <button>Explore</button>
+    </div>
+    <div class="hdr-spacer"></div>
+    <div class="hdr-clock" id="clock">14:32:07</div>
+    <div class="hdr-weather"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg> <span class="tmp">72&deg;F</span> Partly Cloudy</div>
+    <div class="hdr-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> <input type="text" placeholder="Search services..." /></div>
+  </div>
+</header>
+
+<div class="sys-strip">
+  <div class="g-card">
+    <div class="g-hdr"><span class="g-lbl">CPU</span><span class="g-val">12.3<span class="u">%</span></span></div>
+    <div class="g-bar"><div class="g-fill ok" style="width:12.3%"></div></div>
+  </div>
+  <div class="g-card">
+    <div class="g-hdr"><span class="g-lbl">Memory</span><span class="g-val">6.2<span class="u"> / 16 GB</span></span></div>
+    <div class="g-bar"><div class="g-fill ac" style="width:38.8%"></div></div>
+  </div>
+  <div class="g-card">
+    <div class="g-hdr"><span class="g-lbl">Disk</span><span class="g-val">142<span class="u"> / 500 GB</span></span></div>
+    <div class="g-bar"><div class="g-fill ok" style="width:28.4%"></div></div>
+  </div>
+  <div class="up-card">
+    <span class="g-lbl">Uptime</span>
+    <span class="up-val">14d 7h 23m</span>
+    <span class="up-sub">Load: 0.42 / 0.38 / 0.35</span>
+    <div class="docker-badge"><span class="dot"></span>Docker OK</div>
+  </div>
+</div>
+
+<div class="divider"><span>Services</span></div>
+<div class="svc-wrap"><div class="grp"><div class="grp-hdr"><h2>Media</h2><span class="cnt">1</span></div><div class="grp-grid"><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">📷</div>
+    <div class="st-info">
+      <div class="st-name">Immich <span class="sdot ok"></span></div>
+      <div class="st-desc">Photo library & backup</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 5 containers</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :2283</span>
+    <span class="cbadge">photos</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div></div></div><div class="grp"><div class="grp-hdr"><h2>Productivity</h2><span class="cnt">5</span></div><div class="grp-grid"><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🍽️</div>
+    <div class="st-info">
+      <div class="st-name">Mealie <span class="sdot ok"></span></div>
+      <div class="st-desc">Recipe manager & meal planner</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 2 containers</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :9925</span>
+    <span class="cbadge">productivity</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">💰</div>
+    <div class="st-info">
+      <div class="st-name">Actual Budget <span class="sdot ok"></span></div>
+      <div class="st-desc">Personal budgeting & finances</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 1 container</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :5006</span>
+    <span class="cbadge">productivity</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">☁️</div>
+    <div class="st-info">
+      <div class="st-name">Nextcloud <span class="sdot ok"></span></div>
+      <div class="st-desc">File sync & sharing</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 3 containers</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :8080</span>
+    <span class="cbadge">productivity</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile abs">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🏔️</div>
+    <div class="st-info">
+      <div class="st-name">AdventureLog <span class="sdot un"></span></div>
+      <div class="st-desc">Travel journal & trip planner</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Not deployed</span>
+    <span class="cbadge">productivity</span>
+  </div>
+  <div class="acts">
+    <button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button>
+    <button class="abtn " title="Stop" disabled style="opacity:0.3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>
+    <button class="abtn " title="Restart" disabled style="opacity:0.3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+    <button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+    <button class="abtn " title="Logs" disabled style="opacity:0.3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button>
+  </div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">📄</div>
+    <div class="st-info">
+      <div class="st-name">Paperless-ngx <span class="sdot ok"></span></div>
+      <div class="st-desc">Document management & OCR</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 3 containers</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :8000</span>
+    <span class="cbadge">productivity</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="skel">
+  <div style="display:flex;gap:12px;align-items:flex-start">
+    <div class="sbar" style="width:36px;height:36px;border-radius:8px;flex-shrink:0"></div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+      <div class="sbar" style="height:14px;width:60%"></div>
+      <div class="sbar" style="height:10px;width:40%"></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <div class="sbar" style="height:10px;width:80px"></div>
+    <div class="sbar" style="height:10px;width:50px"></div>
+  </div>
+  <div style="display:flex;gap:4px">
+    <div class="sbar" style="width:28px;height:28px;border-radius:8px"></div>
+    <div class="sbar" style="width:28px;height:28px;border-radius:8px"></div>
+    <div class="sbar" style="width:28px;height:28px;border-radius:8px"></div>
+    <div class="sbar" style="width:28px;height:28px;border-radius:8px"></div>
+    <div class="sbar" style="width:28px;height:28px;border-radius:8px"></div>
+  </div>
+</div></div></div><div class="grp"><div class="grp-hdr"><h2>AI & Research</h2><span class="cnt">6</span></div><div class="grp-grid"><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🌊</div>
+    <div class="st-info">
+      <div class="st-name">SurfSense <span class="sdot ok"></span></div>
+      <div class="st-desc">AI-powered search & research</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 2 containers</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :3000</span>
+    <span class="cbadge">ai</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🤖</div>
+    <div class="st-info">
+      <div class="st-name">LiteLLM <span class="sdot ok"></span></div>
+      <div class="st-desc">LLM proxy & model management</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 2 containers</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :4000</span>
+    <span class="cbadge">ai</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile deg" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🐶</div>
+    <div class="st-info">
+      <div class="st-name">PuppyGraph <span class="sdot wn"></span></div>
+      <div class="st-desc">Graph database explorer</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 2 / 3 healthy</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :8080</span>
+    <span class="cbadge">graph</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop" disabled style="opacity:0.3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart" disabled style="opacity:0.3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🦙</div>
+    <div class="st-info">
+      <div class="st-name">Ollama <span class="sdot ok"></span></div>
+      <div class="st-desc">Local LLM inference runtime</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 1 container</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :11434</span>
+    <span class="cbadge">ai</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">💬</div>
+    <div class="st-info">
+      <div class="st-name">Open WebUI <span class="sdot ok"></span></div>
+      <div class="st-desc">Chat interface for local LLMs</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 1 container</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :8080</span>
+    <span class="cbadge">ai</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile off" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🔥</div>
+    <div class="st-info">
+      <div class="st-name">Firecrawl <span class="sdot er"></span></div>
+      <div class="st-desc">Web scraping & crawling</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Stopped</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :3002</span>
+    <span class="cbadge">research</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop" disabled style="opacity:0.3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="terr">
+  <div class="terr-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+  <div class="terr-msg">API unreachable</div>
+  <div class="terr-sub">Could not fetch service status</div>
+  <button class="terr-retry">Retry</button>
+</div></div></div><div class="grp"><div class="grp-hdr"><h2>Infrastructure</h2><span class="cnt">4</span></div><div class="grp-grid"><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🏠</div>
+    <div class="st-info">
+      <div class="st-name">Homepage <span class="sdot ok"></span></div>
+      <div class="st-desc">Dashboard & start page</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 1 container</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :8083</span>
+    <span class="cbadge">infra</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">📊</div>
+    <div class="st-info">
+      <div class="st-name">Beszel <span class="sdot ok"></span></div>
+      <div class="st-desc">Server monitoring & alerts</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 2 containers</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :8090</span>
+    <span class="cbadge">infra</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🐳</div>
+    <div class="st-info">
+      <div class="st-name">Portainer <span class="sdot ok"></span></div>
+      <div class="st-desc">Container management UI</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 1 container</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :9000</span>
+    <span class="cbadge">infra</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div><div class="stile" onclick="openDrawer()">
+  <div class="tlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
+  <div class="st-top">
+    <div class="st-icon">🔐</div>
+    <div class="st-info">
+      <div class="st-name">Vaultwarden <span class="sdot ok"></span></div>
+      <div class="st-desc">Bitwarden-compatible passwords</div>
+    </div>
+  </div>
+  <div class="st-meta">
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 1 container</span>
+    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> :8222</span>
+    <span class="cbadge">security</span>
+    
+  </div>
+  <div class="acts"><button class="abtn p" title="Start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg></button><button class="abtn " title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button><button class="abtn " title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="abtn " title="Update"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button><button class="abtn " title="Logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button></div>
+</div></div></div></div>
+<div class="divider"><span>Service Drawer</span></div>
+<div class="drawer-demo">
+  <div class="drawer-frame">
+    <div class="drawer-dim">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <div style="background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);height:120px"></div>
+        <div style="background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);height:120px"></div>
+        <div style="background:var(--s1);border:1px solid var(--bd);border-radius:var(--rc);height:120px"></div>
+      </div>
+    </div>
+    <div class="drawer-panel">
+      <div class="dp-hdr">
+        <button class="dp-close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <div class="dp-title">
+          <div class="dp-name">🐶 PuppyGraph <span class="sdot wn"></span></div>
+          <div class="dp-sub">Graph database explorer &middot; 2 / 3 containers healthy</div>
+        </div>
+        <span class="dp-badge">degraded</span>
+      </div>
+      <div class="dp-body">
+        <div>
+          <div class="dp-sec-title">Containers</div>
+          <table class="ctable">
+            <thead><tr><th>Container</th><th>State</th><th>Health</th></tr></thead>
+            <tbody>
+              <tr><td>puppygraph-app</td><td><span class="spill running">&#9679; running</span></td><td><span class="spill healthy">&#9679; healthy</span></td></tr>
+              <tr><td>puppygraph-db</td><td><span class="spill running">&#9679; running</span></td><td><span class="spill healthy">&#9679; healthy</span></td></tr>
+              <tr><td>puppygraph-worker</td><td><span class="spill running">&#9679; running</span></td><td><span style="color:var(--wn);font-size:11px;font-family:var(--f-mono)">unhealthy</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="dp-sec-title">Actions</div>
+          <div class="dp-actions">
+            <button class="dabtn p"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Start</button>
+            <button class="dabtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop</button>
+            <button class="dabtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Restart</button>
+            <button class="dabtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Update</button>
+            <button class="dabtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Logs</button>
+          </div>
+        </div>
+        <div class="dp-info-row">
+          <div class="dp-info-box"><div class="lbl">Port</div><div class="val">:8080</div></div>
+          <div class="dp-info-box"><div class="lbl">Network</div><div class="val">backend-net</div></div>
+        </div>
+        <div class="destroy-zone">
+          <h4><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Destroy Service</h4>
+          <p>This will run <code style="font-family:var(--f-mono);color:var(--er);font-size:11px">docker compose down</code> and remove all containers. Type <strong>puppygraph</strong> to confirm.</p>
+          <div class="destroy-input">
+            <input type="text" placeholder="Type service id to confirm..." id="destroyInput" />
+            <button class="destroy-btn" id="destroyBtn">Destroy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"><span>Log Viewer</span></div>
+<div class="log-wrap">
+  <div class="log-panel">
+    <div class="log-bar">
+      <div class="log-chips">
+        <button class="lchip on er">ERROR <span class="ct">2</span></button>
+        <button class="lchip on wn">WARN <span class="ct">2</span></button>
+        <button class="lchip on in">INFO <span class="ct">11</span></button>
+        <button class="lchip on db">DEBUG <span class="ct">2</span></button>
+      </div>
+      <span class="log-spacer"></span>
+      <button class="lbtn" title="Pause"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>
+      <button class="lbtn on" title="Word wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,7 4,4 20,4 20,20"/><path d="M4,12 C8,12 12,16 16,16 L20,16"/></svg></button>
+      <div class="log-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> <input type="text" placeholder="Search logs..." value="status" /></div>
+      <button class="lbtn" title="Jump to bottom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19,12 12,19 5,12"/></svg></button>
+    </div>
+    <div class="log-body">
+<div class="lline info"><span class="ts">14:32:07</span><span class="ctag">immich_server</span><span class="lvl">INFO</span><span class="msg">Server started on port 2283</span></div>
+<div class="lline info"><span class="ts">14:32:07</span><span class="ctag">immich_server</span><span class="lvl">INFO</span><span class="msg">Connected to database successfully</span></div>
+<div class="lline info"><span class="ts">14:32:08</span><span class="ctag">immich_server</span><span class="lvl">INFO</span><span class="msg">Redis connection established at cache:6379</span></div>
+<div class="lline info"><span class="ts">14:32:08</span><span class="ctag">immich_ml</span><span class="lvl">INFO</span><span class="msg">ML worker ready, loading models...</span></div>
+<div class="lline warn"><span class="ts">14:32:09</span><span class="ctag">puppygraph_worker</span><span class="lvl">WARN</span><span class="msg">Health check failed: connection refused on :7687</span></div>
+<div class="lline warn"><span class="ts">14:32:10</span><span class="ctag">puppygraph_worker</span><span class="lvl">WARN</span><span class="msg">Retrying in 5s (attempt 3/10)</span></div>
+<div class="lline info"><span class="ts">14:32:11</span><span class="ctag">ollama</span><span class="lvl">INFO</span><span class="msg">Pulling model llama3.2:latest...</span></div>
+<div class="lline debug"><span class="ts">14:32:12</span><span class="ctag">ollama</span><span class="lvl">DEBUG</span><span class="msg">Manifest layer sha256:a1b2c3... cached</span></div>
+<div class="lline info"><span class="ts">14:32:13</span><span class="ctag">litellm</span><span class="lvl">INFO</span><span class="msg">Proxy listening on :4000, 12 models loaded</span></div>
+<div class="lline info"><span class="ts">14:32:13</span><span class="ctag">litellm</span><span class="lvl">INFO</span><span class="msg">Provider openai registered: gpt-4o, gpt-4o-mini</span></div>
+<div class="lline error"><span class="ts">14:32:14</span><span class="ctag">nextcloud</span><span class="lvl">ERROR</span><span class="msg">Redis ping timeout after 2000ms</span></div>
+<div class="lline error"><span class="ts">14:32:14</span><span class="ctag">nextcloud</span><span class="lvl">ERROR</span><span class="msg">Cache initialization failed, falling back to database</span></div>
+<div class="lline info"><span class="ts">14:32:15</span><span class="ctag">beszel</span><span class="lvl">INFO</span><span class="msg">Monitoring 2 hosts, polling every 30s</span></div>
+<div class="lline info"><span class="ts">14:32:15</span><span class="ctag">vaultwarden</span><span class="lvl">INFO</span><span class="msg">Admin panel enabled at /admin</span></div>
+<div class="lline debug"><span class="ts">14:32:16</span><span class="ctag">mealie</span><span class="lvl">DEBUG</span><span class="msg">Loading recipe index: 847 entries</span></div>
+<div class="lline info"><span class="ts">14:32:17</span><span class="ctag">immich_server</span><span class="lvl">INFO</span><span class="msg">Thumbnail generation queue: 0 pending</span></div>
+<div class="lline info"><span class="ts">14:32:17</span><span class="ctag">surfsense</span><span class="lvl">INFO</span><span class="msg">Search index synced, 12,408 documents</span></div>
+
+    </div>
+    <div class="log-asc"><span class="dot"></span>Auto-scrolling &middot; Immich (follow)</div>
+  </div>
+</div>
+
+<div class="divider"><span>System Tab</span></div>
+<div class="sys-wrap">
+  <div class="sys-grid">
+    <div class="sg-card">
+      <div class="sg-hdr"><span class="sg-lbl">CPU Usage</span><span class="sg-val">12.3<span class="u">%</span></span></div>
+      <div class="sg-bar"><div class="sg-fill" style="width:12.3%;background:var(--ok)"></div></div>
+      <div class="sparkline"><svg viewBox="0 0 240 40" preserveAspectRatio="none">
+  <defs><linearGradient id="g_#3fb950" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#3fb950" stop-opacity="0.3"/>
+    <stop offset="100%" stop-color="#3fb950" stop-opacity="0"/>
+  </linearGradient></defs>
+  <path d="M0,35 L15,32 30,30 45,33 60,28 75,25 90,22 105,20 120,23 135,18 150,15 165,17 180,20 195,22 210,18 225,15 240,12 240,40 0,40 Z" fill="url(#g_#3fb950)" opacity="0.5"/>
+  <path d="M0,35 L15,32 30,30 45,33 60,28 75,25 90,22 105,20 120,23 135,18 150,15 165,17 180,20 195,22 210,18 225,15 240,12" fill="none" stroke="#3fb950" stroke-width="2" stroke-linejoin="round"/>
+</svg></div>
+      <div class="sg-dets">
+        <div class="sg-det"><span class="sg-det-l">Cores</span><span class="sg-det-v">8</span></div>
+        <div class="sg-det"><span class="sg-det-l">1 min</span><span class="sg-det-v">0.42</span></div>
+        <div class="sg-det"><span class="sg-det-l">5 min</span><span class="sg-det-v">0.38</span></div>
+        <div class="sg-det"><span class="sg-det-l">15 min</span><span class="sg-det-v">0.35</span></div>
+      </div>
+    </div>
+    <div class="sg-card">
+      <div class="sg-hdr"><span class="sg-lbl">Memory</span><span class="sg-val">6.2<span class="u"> / 16 GB</span></span></div>
+      <div class="sg-bar"><div class="sg-fill" style="width:38.8%;background:var(--ac)"></div></div>
+      <div class="sparkline"><svg viewBox="0 0 240 40" preserveAspectRatio="none">
+  <defs><linearGradient id="g_#14b8a6" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.3"/>
+    <stop offset="100%" stop-color="#14b8a6" stop-opacity="0"/>
+  </linearGradient></defs>
+  <path d="M0,28 L15,27 30,28 45,27 60,28 75,29 90,28 105,27 120,28 135,28 150,27 165,28 180,27 195,28 210,27 225,28 240,27 240,40 0,40 Z" fill="url(#g_#14b8a6)" opacity="0.5"/>
+  <path d="M0,28 L15,27 30,28 45,27 60,28 75,29 90,28 105,27 120,28 135,28 150,27 165,28 180,27 195,28 210,27 225,28 240,27" fill="none" stroke="#14b8a6" stroke-width="2" stroke-linejoin="round"/>
+</svg></div>
+      <div class="sg-dets">
+        <div class="sg-det"><span class="sg-det-l">Used</span><span class="sg-det-v">6.2 GB</span></div>
+        <div class="sg-det"><span class="sg-det-l">Available</span><span class="sg-det-v">9.8 GB</span></div>
+        <div class="sg-det"><span class="sg-det-l">Cached</span><span class="sg-det-v">2.1 GB</span></div>
+        <div class="sg-det"><span class="sg-det-l">Swap</span><span class="sg-det-v">0 / 4 GB</span></div>
+      </div>
+    </div>
+    <div class="sg-card">
+      <div class="sg-hdr"><span class="sg-lbl">Disk</span><span class="sg-val">142<span class="u"> / 500 GB</span></span></div>
+      <div class="sg-bar"><div class="sg-fill" style="width:28.4%;background:var(--ok)"></div></div>
+      <div class="sparkline"><svg viewBox="0 0 240 40" preserveAspectRatio="none">
+  <defs><linearGradient id="g_#3fb950" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#3fb950" stop-opacity="0.3"/>
+    <stop offset="100%" stop-color="#3fb950" stop-opacity="0"/>
+  </linearGradient></defs>
+  <path d="M0,30 L15,30 30,29 45,29 60,28 75,28 90,27 105,27 120,26 135,26 150,25 165,25 180,24 195,24 210,23 225,23 240,22 240,40 0,40 Z" fill="url(#g_#3fb950)" opacity="0.5"/>
+  <path d="M0,30 L15,30 30,29 45,29 60,28 75,28 90,27 105,27 120,26 135,26 150,25 165,25 180,24 195,24 210,23 225,23 240,22" fill="none" stroke="#3fb950" stroke-width="2" stroke-linejoin="round"/>
+</svg></div>
+      <div class="sg-dets">
+        <div class="sg-det"><span class="sg-det-l">Used</span><span class="sg-det-v">142 GB</span></div>
+        <div class="sg-det"><span class="sg-det-l">Free</span><span class="sg-det-v">358 GB</span></div>
+        <div class="sg-det"><span class="sg-det-l">Read</span><span class="sg-det-v">12 MB/s</span></div>
+        <div class="sg-det"><span class="sg-det-l">Write</span><span class="sg-det-v">3.2 MB/s</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="sys-foot">
+    <div class="sf-card">
+      <div class="sf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></div>
+      <div><div class="sf-lbl">Uptime</div><div class="sf-val">14d 7h 23m</div></div>
+    </div>
+    <div class="sf-card">
+      <div class="sf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <div><div class="sf-lbl">Docker</div><div class="sf-val" style="color:var(--ok)">Healthy</div></div>
+    </div>
+    <div class="sf-card">
+      <div class="sf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg></div>
+      <div><div class="sf-lbl">Services</div><div class="sf-val">14 / 16 running</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"><span>Design Tokens</span></div>
+<div class="tok-wrap">
+  <div class="tok-grid">
+    <div class="tok-group">
+      <h3>Color Palette</h3>
+      <div class="sw-row"><div class="sw" style="background:#0B0F14"></div><div><div class="sw-name">bg-base</div><div class="sw-val">#0B0F14 &mdash; page background</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#0F1419"></div><div><div class="sw-name">surface-1</div><div class="sw-val">#0F1419 &mdash; cards, panels</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#161C24"></div><div><div class="sw-name">surface-2</div><div class="sw-val">#161C24 &mdash; hover, raised</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#1C2330"></div><div><div class="sw-name">surface-3</div><div class="sw-val">#1C2330 &mdash; active, strongest</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#14b8a6"></div><div><div class="sw-name">accent</div><div class="sw-val">#14b8a6 &mdash; teal, healthy/active only</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#3fb950"></div><div><div class="sw-name">ok</div><div class="sw-val">#3fb950 &mdash; running / healthy</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#d29922"></div><div><div class="sw-name">warn</div><div class="sw-val">#d29922 &mdash; degraded</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#f85149"></div><div><div class="sw-name">error</div><div class="sw-val">#f85149 &mdash; stopped / error</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#8b949e"></div><div><div class="sw-name">unknown</div><div class="sw-val">#8b949e &mdash; absent / inactive</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:#58a6ff"></div><div><div class="sw-name">info</div><div class="sw-val">#58a6ff &mdash; info-level logs</div></div></div>
+      <div class="sw-row"><div class="sw" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15)"></div><div><div class="sw-name">border</div><div class="sw-val">rgba(255,255,255,0.08)</div></div></div>
+    </div>
+    <div class="tok-group">
+      <h3>Typography</h3>
+      <div class="type-sample">
+        <div class="type-lbl">UI Body &mdash; system-ui / Inter</div>
+        <div style="font-family:var(--f-ui);font-size:14px;color:var(--t1)">The quick brown fox jumps over the lazy dog</div>
+        <div class="type-meta">14px / 400-600 / line-height 1.5</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-lbl">Monospace &mdash; JetBrains Mono / SF Mono</div>
+        <div style="font-family:var(--f-mono);font-size:14px;color:var(--t1);font-variant-numeric:tabular-nums">0123456789 14:32:07 12.3% 6.2 GB</div>
+        <div class="type-meta">11.5-32px / tabular-nums for metrics &amp; logs</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-lbl">Section Label</div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)">SERVICES</div>
+        <div class="type-meta">11px / 600 / letter-spacing .12em / uppercase</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-lbl">Group Header</div>
+        <div style="font-size:13px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.06em">AI &amp; Research</div>
+        <div class="type-meta">13px / 600 / letter-spacing .06em / uppercase</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-lbl">Tile Name</div>
+        <div style="font-size:14px;font-weight:600;color:var(--t1)">Immich</div>
+        <div class="type-meta">14px / 600 / primary text</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-lbl">Tile Description</div>
+        <div style="font-size:12px;color:var(--t2)">Photo library &amp; backup</div>
+        <div class="type-meta">12px / 400 / secondary text</div>
+      </div>
+    </div>
+    <div class="tok-group">
+      <h3>Spacing Scale (8pt grid)</h3>
+      <div class="sp-row"><span class="sp-lbl">--sp-1</span><div class="sp-bar" style="width:4px"></div><span class="sp-val">4px</span></div>
+      <div class="sp-row"><span class="sp-lbl">--sp-2</span><div class="sp-bar" style="width:8px"></div><span class="sp-val">8px</span></div>
+      <div class="sp-row"><span class="sp-lbl">--sp-3</span><div class="sp-bar" style="width:12px"></div><span class="sp-val">12px</span></div>
+      <div class="sp-row"><span class="sp-lbl">--sp-4</span><div class="sp-bar" style="width:16px"></div><span class="sp-val">16px</span></div>
+      <div class="sp-row"><span class="sp-lbl">--sp-5</span><div class="sp-bar" style="width:20px"></div><span class="sp-val">20px</span></div>
+      <div class="sp-row"><span class="sp-lbl">--sp-6</span><div class="sp-bar" style="width:24px"></div><span class="sp-val">24px</span></div>
+      <div class="sp-row"><span class="sp-lbl">--sp-8</span><div class="sp-bar" style="width:32px"></div><span class="sp-val">32px</span></div>
+      <div class="sp-row"><span class="sp-lbl">--sp-12</span><div class="sp-bar" style="width:48px"></div><span class="sp-val">48px</span></div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--bd)">
+        <div class="type-lbl">Border Radii</div>
+        <div style="display:flex;gap:12px;margin-top:8px">
+          <div style="text-align:center"><div style="width:40px;height:40px;background:var(--s2);border:1px solid var(--bd);border-radius:12px;margin:0 auto"></div><div class="type-meta">12px card</div></div>
+          <div style="text-align:center"><div style="width:40px;height:40px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;margin:0 auto"></div><div class="type-meta">8px btn</div></div>
+          <div style="text-align:center"><div style="width:40px;height:40px;background:var(--s2);border:1px solid var(--bd);border-radius:9999px;margin:0 auto"></div><div class="type-meta">pill</div></div>
+        </div>
+      </div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--bd)">
+        <div class="type-lbl">Motion</div>
+        <div style="margin-top:8px;font-family:var(--f-mono);font-size:11px;color:var(--t2);line-height:1.8">
+          150ms &mdash; hover, focus, micro<br>
+          200ms &mdash; transitions<br>
+          300ms &mdash; gauge fills, drawers<br>
+          ease: cubic-bezier(0.4, 0, 0.2, 1)<br>
+          No springs/bounce<br>
+          Respects prefers-reduced-motion
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Live clock
+(function(){
+  var el=document.getElementById('clock');
+  if(!el)return;
+  function tick(){
+    var d=new Date();
+    el.textContent=d.toTimeString().slice(0,8);
+  }
+  tick();setInterval(tick,1000);
+})();
+
+// Drawer open/close (mock)
+function openDrawer(){}
+
+// Destroy button enable on typing
+(function(){
+  var inp=document.getElementById('destroyInput');
+  var btn=document.getElementById('destroyBtn');
+  if(!inp||!btn)return;
+  inp.addEventListener('input',function(){
+    btn.classList.toggle('active',inp.value==='puppygraph');
+  });
+})();
+
+// Log level chip toggle
+document.querySelectorAll('.lchip').forEach(function(c){
+  c.addEventListener('click',function(){c.classList.toggle('on')});
+});
+
+// Log search highlight toggle
+document.querySelectorAll('.lbtn').forEach(function(b){
+  b.addEventListener('click',function(){
+    if(b.title==='Word wrap')b.classList.toggle('on');
+  });
+});
+</script>
+</body>
+</html>
