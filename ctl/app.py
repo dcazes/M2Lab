@@ -41,18 +41,9 @@ def _cached_http_health(sid: str, probe_fn) -> bool | None:
     return result
 
 
-# ---------- auth dependency ----------
-CTL_TOKEN = os.environ.get("CTL_TOKEN")
-
-
-async def require_token(authorization: str | None = Header(default=None)):
-    if CTL_TOKEN is None:
-        return  # open mode
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
-    if not secrets.compare_digest(token, CTL_TOKEN):
-        raise HTTPException(401, "Invalid token")
+# Security model: the control plane binds to 127.0.0.1 and is exposed only via
+# Tailscale Serve — tailnet membership is the authentication boundary. No
+# application-level token by design; do not expose this port beyond localhost.
 
 
 # ---------- helpers ----------
