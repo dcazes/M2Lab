@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Play, Square, RotateCcw, Download, ArrowUpRight, ExternalLink, AlertTriangle } from 'lucide-react'
 import { StatusDot } from './StatusDot'
 import { getServiceUrl, getServiceIconUrl } from '../../lib/api'
@@ -28,6 +29,7 @@ const ACTION_DETAILS: Record<ServiceAction, { title: string; description: string
 }
 
 export function ServiceCard({ service }: ServiceCardProps) {
+  const queryClient = useQueryClient()
   const [pendingAction, setPendingAction] = useState<ServiceAction | null>(null)
   const [showDestroy, setShowDestroy] = useState(false)
   const [destroyConfirm, setDestroyConfirm] = useState('')
@@ -49,6 +51,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
       toast.error(`${service.display_name} ${action} failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setPendingAction(null)
+      queryClient.invalidateQueries({ queryKey: ['services'] })
     }
   }
 
@@ -96,7 +99,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
           <h3 className="font-medium truncate">{service.display_name}</h3>
           <p className="text-sm text-unknown truncate">{service.description}</p>
         </div>
-        <StatusDot state={service.state} healthy={service.healthy} />
+        <StatusDot state={service.state} healthy={service.healthy} size="lg" pending={pendingAction !== null} />
       </div>
 
       <div className="flex items-center gap-2 text-xs text-unknown">

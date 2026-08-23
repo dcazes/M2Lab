@@ -59,6 +59,10 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .status-pulse {
+    animation: status-pulse 1.2s var(--ease-standard) infinite;
+  }
+
   .transition-standard {
     transition: all var(--duration-normal) var(--ease-standard);
   }
@@ -83,5 +87,17 @@
   .card-hover:hover {
     background-color: var(--color-surface-2);
     border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
   }
 }
