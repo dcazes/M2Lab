@@ -19,8 +19,7 @@ services:
       XDG_DATA_HOME: /data
       OPENCODE_CONFIG_DIR: /config
       LITELLM_API_KEY: ${LITELLM_API_KEY}
-      OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME:-opencode}
-      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:?set in opencode-agent/.env}
+      # Disable auth for web UI (no password set)
       OPENCODE_DISABLE_AUTOUPDATE: "true"
       OPENCODE_DISABLE_MODELS_FETCH: "true"
       CTL_MCP_TOKEN: ${CTL_MCP_TOKEN:?set in opencode-agent/.env}
@@ -33,6 +32,7 @@ services:
       - opencode-data:/data
       # Docker socket for full container control
       - /var/run/docker.sock:/var/run/docker.sock:rw
+    entrypoint: []
     networks:
       - frontend-net
     healthcheck:
@@ -43,18 +43,10 @@ services:
       start_period: 40s
     command: >
       sh -c '
-        mkdir -p /data/opencode &&
-        echo "Waiting for LiteLLM at litellm-proxy:4000...";
-        for i in {1..30}; do
-          if (exec 3<>/dev/tcp/litellm-proxy/4000) 2>/dev/null; then
-            echo "LiteLLM reachable.";
-            break;
-          fi;
-          sleep 2;
-        done;
         echo "Starting OpenCode web UI on 0.0.0.0:4096";
         exec opencode web --hostname 0.0.0.0 --port 4096
       '
+
 volumes:
   opencode-data:
 
