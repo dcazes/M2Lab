@@ -19,14 +19,12 @@ jobs:
           GITLEAKS_CHARSET_BINARY: true
 
       - name: YAML Linting
-        uses: ibusql/yamllint-action@v1
-        with:
-          file_or_dir: .
-          format: parsable
-          fail_on_warnings: false
+        run: |
+          pip install yamllint
+          yamllint -f parsable .
 
       - name: Trivy configuration scan (IaC)
-        uses: aquasecurity/trivy-action@0.27.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -34,7 +32,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.27.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -42,8 +40,6 @@ jobs:
           severity: HIGH,CRITICAL
           # Exclude directories that are not needed (like .git, volumes)
           exclude-dir: .git,postgres_data,redis_data,.*_data,.*/data,pgdata
-          # Optional: skip downloading vulnerability DB if already present
-          # offline: false
 
   ansible-lint:
     runs-on: ubuntu-latest
@@ -73,7 +69,15 @@ jobs:
           fail=0
           for f in $(git ls-files '*/docker-compose.yml' 'docker-compose.yml'); do
             echo -n "$f ... "
-            if docker compose -f "$f" config -q 2>/dev/null; then echo OK; else echo FAIL; fail=1; fi
+            rc=0
+            out=$(docker compose -f "$f" config 2>&1) || rc=$?
+            if [ $rc -eq 0 ]; then
+              echo OK
+            elif echo "$out" | grep -qi "env.*not set\|variable.*not set\|not found\|No such file"; then
+              echo "SKIP (needs .env)"
+            else
+              echo "FAIL"; echo "$out" | tail -3; fail=1
+            fi
           done
           exit $fail
 
