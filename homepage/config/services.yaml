@@ -58,6 +58,10 @@
         description: Graph view of SurfSense DB
 
 - Infrastructure:
+    - Dashboard:
+        icon: mdi-view-dashboard
+        href: https://home.taile2cc7a.ts.net:8460
+        description: React control plane (preview)
     - Control Dashboard:
         # Portainer is the stack manager / control plane (replaces the old :8787 UI).
         icon: si-fastapi
