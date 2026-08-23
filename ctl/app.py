@@ -202,8 +202,11 @@ def system():
 
 # ---------- static UI ----------
 dist = ROOT / "ctl-web-next" / "dist"
-web_dir = dist if dist.is_dir() else ROOT / "ctl-web"
-app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
+if not dist.is_dir():
+    raise RuntimeError(
+        f"Dashboard bundle missing: {dist} — run `npm run build` in ctl-web-next/"
+    )
+app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
 
 
 def main():
