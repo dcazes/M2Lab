@@ -1,0 +1,13 @@
+[Unit]
+Description=Homelab control-plane MCP (read/manage verbs for agents)
+After=docker.service network-online.target
+
+[Service]
+WorkingDirectory=%h/Desktop/Programs/HomeServer
+ExecStart=%h/Desktop/Programs/HomeServer/.venv/bin/python -m ctl.mcp_server
+Restart=on-failure
+RestartSec=3
+EnvironmentFile=-%h/Desktop/Programs/HomeServer/.env
+
+[Install]
+WantedBy=default.target

@@ -64,6 +64,10 @@
         icon: mdi-api
         href: https://home.taile2cc7a.ts.net:8459
         description: Free LLM aggregator / model ordering
+    - OpenCode Agent:
+        icon: mdi-robot-outline
+        href: https://home.taile2cc7a.ts.net:8461
+        description: Self-hosted coding agent (edits this stack)
 
 - Infrastructure:
     - Dashboard:
@@ -84,26 +88,6 @@
         icon: vaultwarden
         href: https://home.taile2cc7a.ts.net:8446
         description: Password manager
-
-- Monitoring:
-    - System:
-        icon: si-grafana
-        href: https://home.taile2cc7a.ts.net:9090
-        description: Dashboard & Controls — Portainer
-    - Resources:
-        icon: si-amd
-        href: https://home.taile2cc7a.ts.net
-        description: Resource Overview
-
-- Logs:
-    - Log Viewer:
-        icon: si-datadog
-        href: https://home.taile2cc7a.ts.net
-        description: System Logs
-    - Debug:
-        icon: si-sentry
-        href: https://home.taile2cc7a.ts.net
-        description: Debug Tools
 
 - Links:
     - Documentation:

@@ -48,7 +48,7 @@ Pick a free `tailnet_port`. Used so far: root→8083 homepage, 8443 immich,
 8444 surfsense, 8445 litellm, 8446 vaultwarden, 8448 puppygraph,
 8450 beszel, 8451 paperless, 8452 actual, 8453 nextcloud, 8454 adventurelog,
 8455 mealie, 8456 open-webui, 8457 ollama, 8458 firecrawl, 8459 freellmapi,
-9090 portainer.
+8460 ctl dashboard, 8461 opencode-agent, 9090 portainer.
 
 ## 3. Deploy + expose
 
