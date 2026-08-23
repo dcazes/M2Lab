@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@theme {
+  --color-bg-base: #0B0F14;
+  --color-surface-1: #0F1419;
+  --color-surface-2: #161C24;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-accent: #14b8a6;
+  --color-ok: #3fb950;
+  --color-warn: #d29922;
+  --color-err: #f85149;
+  --color-unknown: #8b949e;
+
+  --font-ui: "Inter Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", monospace;
+
+  --radius-card: 12px;
+  --radius-btn: 8px;
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    font-family: var(--font-ui);
+    background-color: var(--color-bg-base);
+    color: #e6edf3;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .font-mono-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .transition-standard {
+    transition: all var(--duration-normal) var(--ease-standard);
+  }
+
+  .transition-fast {
+    transition: all var(--duration-fast) var(--ease-standard);
+  }
+
+  .card {
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+  }
+
+  .card-hover {
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    transition: all var(--duration-normal) var(--ease-standard);
+  }
+
+  .card-hover:hover {
+    background-color: var(--color-surface-2);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}

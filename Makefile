@@ -88,3 +88,13 @@ status:
 update:
 	@if [ -n "$(S)" ]; then $(PY) ctl/registry.py update $(S); \
 	else for s in $(SERVICES); do $(PY) ctl/registry.py update $$s || exit 1; done; fi
+
+# ---- Dashboard (ctl-web-next) -----------------------------------------------
+dashboard-install:
+	@cd ctl-web-next && npm ci
+
+dashboard-build:
+	@cd ctl-web-next && npm run build
+
+dashboard-dev:
+	@cd ctl-web-next && npm run dev

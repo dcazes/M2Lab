@@ -51,3 +51,6 @@ docs/documentation/
 
 # Homepage runtime logs
 homepage/config/logs/
+
+# Dashboard Next build
+ctl-web-next/node_modules/
