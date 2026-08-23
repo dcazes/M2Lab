@@ -1,6 +1,7 @@
 # Portainer — Docker management UI + REST API.
 # Replaces the old custom control backend (was on :8787).
-# The Homepage service cards call Portainer's API (see homepage/config/custom.js).
+# The Homepage service cards call Portainer's API
+# (see homepage/config/custom.js).
 #
 # Ports (host-bound to localhost; expose remotely via Tailscale):
 #   9090 -> 9000  HTTP UI + API   (we use HTTP locally to avoid self-signed-cert

@@ -35,12 +35,12 @@ layout:
           columns: 3
 header:
   - datetime:
-      format: 
+      format:
         date: YYYY-MM-DD
         time: HH:mm:ss
   - weather:
       provider: open-meteo
-      location: 
+      location:
         latitude: 40.7128
         longitude: -74.0060
       # Alternative: use weatherapi or another provider

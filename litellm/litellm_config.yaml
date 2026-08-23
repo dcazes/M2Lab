@@ -15,12 +15,14 @@ model_list:
       model: "ollama/*"
       api_base: http://host.docker.internal:11434
 
-  # Explicit fallback target: a specific local model (adjust to one you have pulled)
+  # Explicit fallback target: a specific local model
+  # (adjust to one you have pulled)
   - model_name: local-fallback
     litellm_params:
       model: ollama_chat/llama3.2
       api_base: http://host.docker.internal:11434
-      # adjust to a model you have pulled (e.g. ollama_chat/qwen2.5, ollama_chat/mistral)
+      # adjust to a model you have pulled
+      # (e.g. ollama_chat/qwen2.5, ollama_chat/mistral)
 
 router_settings:
   # If free-auto fails, retry via local-fallback

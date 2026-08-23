@@ -3,13 +3,17 @@
 # -----------------------------------------------------------------------------
 # HOW TO EDIT MANUALLY (full guide in homepage/config/HOMEPAGE_CONFIG.md):
 #   * Each "- GroupName:" is a column/tab. List services under it.
-#   * Fields: icon, href (URL opened on click), description, (optional) siteMonitor.
-#   * Service id in HomeServer/services.yaml MUST equal the Docker compose
-#     project name used by custom.js (see custom.js NAME_TO_PROJECT).
-#   * All hrefs below use the SECURE Tailscale URL https://home.taile2cc7a.ts.net
-#     (Tailscale Serve terminates TLS with a real Let's Encrypt cert — no cert
-#     files to manage). If you rename the Tailscale machine, update these host
-#     names. After editing, Homepage hot-reloads (no restart needed).
+#   * Fields: icon, href (URL opened on click), description,
+#     (optional) siteMonitor.
+#   * Service id in HomeServer/services.yaml MUST equal the
+#     Docker compose project name used by custom.js
+#     (see custom.js NAME_TO_PROJECT).
+#   * All hrefs below use the SECURE Tailscale URL
+#     https://home.taile2cc7a.ts.net
+#     (Tailscale Serve terminates TLS with a real Let's Encrypt
+#     cert — no cert files to manage). If you rename the Tailscale
+#     machine, update these host names. After editing, Homepage
+#     hot-reloads (no restart needed).
 # =============================================================================
 
 - Media:
@@ -63,7 +67,8 @@
         href: https://home.taile2cc7a.ts.net:8460
         description: React control plane (preview)
     - Control Dashboard:
-        # Portainer is the stack manager / control plane (replaces the old :8787 UI).
+        # Portainer is the stack manager / control plane
+        # (replaces the old :8787 UI).
         icon: si-fastapi
         href: https://home.taile2cc7a.ts.net:9090
         description: Stack manager (start/stop/logs) — Portainer

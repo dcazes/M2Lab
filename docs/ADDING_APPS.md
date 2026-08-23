@@ -47,7 +47,7 @@ e.g. GPU), `depends_on` (container names for status checks), `backup.binds`.
 Pick a free `tailnet_port`. Used so far: root→8083 homepage, 8443 immich,
 8444 surfsense, 8445 litellm, 8446 vaultwarden, 8448 puppygraph,
 8450 beszel, 8451 paperless, 8452 actual, 8453 nextcloud, 8454 adventurelog,
-8455 mealie, 9090 portainer.
+8455 mealie, 8456 open-webui, 8457 ollama, 8458 firecrawl, 9090 portainer.
 
 ## 3. Deploy + expose
 

@@ -1,0 +1,10 @@
+# Repo-wide yamllint policy. CI's yamllint-action picks this up automatically.
+# Everything keeps default error severity except line-length: compose files
+# legitimately carry long URLs, healthcheck one-liners and env-interpolation
+# defaults that cannot be wrapped without changing their values.
+extends: default
+
+rules:
+  line-length:
+    max: 80
+    level: warning
