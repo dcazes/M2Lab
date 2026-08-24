@@ -13,7 +13,10 @@ This repository is an **operations repo** for a self-hosted Docker Compose homel
 
 Two areas deserve extra care:
 
-- **Docker control plane:** The `ctl/` helper and `Makefile` invoke `docker compose` (and, on the host, the Docker socket) to start, stop, back up, and destroy stacks. Anyone with write access to this repo — or to the deployed control dashboard — can affect containers on the host.
+- **Docker control plane & Socket Access:** The `ctl/` helper, dashboard UI, and `Makefile` interact with `docker compose` and the host Docker daemon socket (`/var/run/docker.sock`). Granting access to `/var/run/docker.sock` provides root-equivalent capabilities on the host. To mitigate risk:
+  - Bind all exposed control endpoints to loopback (`127.0.0.1`) or access strictly via Tailscale.
+  - Avoid exposing the Docker socket or control dashboard to unauthenticated public networks.
+  - Never run arbitrary untrusted containers with socket access enabled.
 - **Secrets:** Service credentials live in gitignored `.env` files (root `.env` plus per-service `.env`). They must never be committed. CI runs Gitleaks on every push/PR to catch leaks.
 
 ## Reporting a Vulnerability

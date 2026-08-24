@@ -1,10 +1,23 @@
 # Secrets - NEVER commit
+.env
 *.env
+.env.*
+!*.env.example
 *.key
 *.pem
 *.encryption-key
 *.sqlite3*
 rsa_key.pem
+
+# Build and cache outputs
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+logs/
+data/
 
 # Data directories (bind mounts, user data) - configs stay tracked
 surfsense/opensandbox/
@@ -39,8 +52,6 @@ backups/
 
 # Python
 .venv/
-__pycache__/
-*.pyc
 
 # OS
 .DS_Store
@@ -48,9 +59,6 @@ __pycache__/
 
 # Local-only documentation (never pushed)
 docs/documentation/
-
-# Homepage runtime logs
-homepage/config/logs/
 
 # Dashboard Next build
 ctl-web-next/node_modules/
