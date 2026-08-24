@@ -100,7 +100,8 @@ export interface GroupedServices {
 export const GROUP_ORDER = [
   'Media',
   'Productivity',
-  'AI & Research',
+  'Web and Research',
+  'AI',
   'Infrastructure',
   'Other',
 ] as const
@@ -108,11 +109,9 @@ export const GROUP_ORDER = [
 export type GroupName = (typeof GROUP_ORDER)[number]
 
 export const CATEGORY_TO_GROUP: Record<string, GroupName> = {
-  photos: 'Media',
+  media: 'Media',
   productivity: 'Productivity',
-  ai: 'AI & Research',
-  research: 'AI & Research',
-  graph: 'AI & Research',
-  infra: 'Infrastructure',
-  security: 'Infrastructure',
+  'web-research': 'Web and Research',
+  ai: 'AI',
+  infrastructure: 'Infrastructure',
 }

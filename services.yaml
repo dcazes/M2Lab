@@ -8,7 +8,7 @@ services:
   - id: surfsense
     display_name: SurfSense
     description: AI research / knowledge base
-    category: research
+    category: web-research
     icon: "🧠"
     dir: surfsense
     project: surfsense
@@ -34,7 +34,7 @@ services:
   - id: immich
     display_name: Immich
     description: Photo library
-    category: photos
+    category: media
     icon: "📷"
     dir: immich-app
     project: immich
@@ -55,7 +55,7 @@ services:
   - id: litellm
     display_name: LiteLLM
     description: LLM gateway / model router (OpenAI-compatible)
-    category: ai
+    category: infrastructure
     icon: "🧭"
     dir: litellm
     project: litellm
@@ -73,7 +73,7 @@ services:
   - id: vaultwarden
     display_name: Vaultwarden
     description: Password manager (Bitwarden-compatible)
-    category: security
+    category: infrastructure
     icon: "🔐"
     dir: vaultwarden
     project: vaultwarden
@@ -91,7 +91,7 @@ services:
   - id: puppygraph
     display_name: PuppyGraph
     description: Graph visualizer for SurfSense PostgreSQL
-    category: graph
+    category: web-research
     icon: "📊"
     dir: puppygraph
     project: puppygraph
@@ -145,7 +145,7 @@ services:
   - id: beszel
     display_name: Beszel
     description: Server monitoring (hub + agent)
-    category: infra
+    category: infrastructure
     icon: "📈"
     dir: beszel
     project: beszel
@@ -165,7 +165,7 @@ services:
   - id: paperless-ngx
     display_name: Paperless-ngx
     description: Document archive / OCR
-    category: productivity
+    category: media
     icon: "📄"
     dir: paperless-ngx
     project: paperless-ngx
@@ -209,7 +209,7 @@ services:
   - id: nextcloud
     display_name: Nextcloud
     description: Files & sync
-    category: productivity
+    category: media
     icon: "☁️"
     dir: nextcloud
     project: nextcloud
@@ -233,7 +233,7 @@ services:
   - id: portainer
     display_name: Portainer
     description: Docker management UI + control API
-    category: infra
+    category: infrastructure
     icon: "🐳"
     dir: portainer
     project: portainer
@@ -289,7 +289,7 @@ services:
   - id: firecrawl
     display_name: Firecrawl
     description: Web scraping and crawling API (LLM-ready output)
-    category: ai
+    category: web-research
     icon: "🕷️"
     dir: firecrawl
     project: firecrawl
@@ -307,7 +307,7 @@ services:
   - id: freellmapi
     display_name: FreeLLMAPI
     description: Free-LLM aggregator (OpenAI-compatible, model ordering/failover)
-    category: ai
+    category: infrastructure
     icon: "🔀"
     dir: FreeLLMAPI
     project: freellmapi

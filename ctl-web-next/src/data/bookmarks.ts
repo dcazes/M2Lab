@@ -15,6 +15,5 @@ export const bookmarks: Bookmark[] = [
   { name: 'Vite', url: 'https://vitejs.dev', icon: '⚡' },
   { name: 'Tailscale', url: 'https://tailscale.com', icon: '🔐' },
   { name: 'Portainer', url: 'https://home.taile2cc7a.ts.net:9090', icon: '🐳' },
-  { name: 'Homepage', url: 'https://home.taile2cc7a.ts.net', icon: '🏠' },
   { name: 'Beszel', url: 'https://home.taile2cc7a.ts.net:8450', icon: '📈' },
 ]

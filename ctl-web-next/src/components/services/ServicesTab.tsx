@@ -33,7 +33,8 @@ export function ServicesTab() {
   const grouped: Record<GroupName, typeof data.services> = {
     Media: [],
     Productivity: [],
-    'AI & Research': [],
+    'Web and Research': [],
+    AI: [],
     Infrastructure: [],
     Other: [],
   }
