@@ -37,7 +37,12 @@
     "Beszel": "beszel",
     "Paperless-ngx": "paperless-ngx",
     "AdventureLog": "adventurelog",
-    "Nextcloud": "nextcloud"
+    "Nextcloud": "nextcloud",
+    "FreeLLMAPI": "freellmapi",
+    "OpenCode Agent": "opencode-agent",
+    "Open WebUI": "open-webui",
+    "Ollama": "ollama",
+    "Firecrawl": "firecrawl"
   };
 
   // ---- low-level API helpers (all go through the proxy, which adds auth) ----

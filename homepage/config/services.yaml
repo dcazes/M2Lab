@@ -25,6 +25,10 @@
         icon: paperless-ngx
         href: https://home.taile2cc7a.ts.net:8451
         description: Document archive
+    - Nextcloud:
+        icon: nextcloud
+        href: https://home.taile2cc7a.ts.net:8453
+        description: Files & sync
 
 - Productivity:
     - Mealie:
@@ -35,39 +39,40 @@
         icon: si-actualbudget
         href: https://home.taile2cc7a.ts.net:8452
         description: Budgeting
-    - Nextcloud:
-        icon: nextcloud
-        href: https://home.taile2cc7a.ts.net:8453
-        description: Files & sync
     - AdventureLog:
         icon: si-adventofcode
         href: https://home.taile2cc7a.ts.net:8454
         description: Travel tracker
 
-- "AI & Research":
+- "Web and Research":
     - SurfSense:
         # surfsense.svg (custom icon) doesn't render in Homepage; using a valid
         # generic AI icon instead.
         icon: si-huggingface
         href: https://home.taile2cc7a.ts.net:8444
         description: AI research / knowledge base
-    - LiteLLM:
-        icon: mdi-router-network
-        # /ui/ = admin dashboard; bare :8445 lands on the API swagger page
-        href: https://home.taile2cc7a.ts.net:8445/ui/
-        description: Model router / LLM gateway
     - PuppyGraph:
         icon: si-neo4j
         href: https://home.taile2cc7a.ts.net:8448
         description: Graph view of SurfSense DB
-    - FreeLLMAPI:
-        icon: mdi-api
-        href: https://home.taile2cc7a.ts.net:8459
-        description: Free LLM aggregator / model ordering
+    - Firecrawl:
+        icon: si-firecrawl
+        href: https://home.taile2cc7a.ts.net:8458
+        description: Web scraping / crawling API
+
+- "AI":
+    - Open WebUI:
+        icon: mdi-chat
+        href: https://home.taile2cc7a.ts.net:8456
+        description: Self-hosted AI chat (RAG, agents, tools)
     - OpenCode Agent:
         icon: mdi-robot-outline
         href: https://home.taile2cc7a.ts.net:8461
         description: Self-hosted coding agent (edits this stack)
+    - Ollama:
+        icon: si-ollama
+        href: https://home.taile2cc7a.ts.net:8457
+        description: Local LLM runner (GPU accelerated)
 
 - Infrastructure:
     - Dashboard:
@@ -88,6 +93,15 @@
         icon: vaultwarden
         href: https://home.taile2cc7a.ts.net:8446
         description: Password manager
+    - FreeLLMAPI:
+        icon: mdi-api
+        href: https://home.taile2cc7a.ts.net:8459
+        description: Free LLM aggregator / model ordering
+    - LiteLLM:
+        icon: mdi-router-network
+        # /ui/ = admin dashboard; bare :8445 lands on the API swagger page
+        href: https://home.taile2cc7a.ts.net:8445/ui/
+        description: Model router / LLM gateway
 
 - Links:
     - Documentation:
