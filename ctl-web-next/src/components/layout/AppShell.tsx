@@ -4,9 +4,10 @@ import { TabNav } from './TabNav'
 import { ServicesTab } from '../services/ServicesTab'
 import { SystemTab } from '../system/SystemTab'
 import { ExploreTab } from '../explore/ExploreTab'
+import { SetupTab } from '../setup/SetupTab'
 
 export function AppShell() {
-  const [activeTab, setActiveTab] = useState<'services' | 'system' | 'explore'>('services')
+  const [activeTab, setActiveTab] = useState<'services' | 'system' | 'explore' | 'setup'>('services')
 
   return (
     <div className="min-h-screen bg-bg-base font-ui">
@@ -16,6 +17,7 @@ export function AppShell() {
         <div className="mt-6 animate-in fade-in duration-200">
           {activeTab === 'services' && <ServicesTab />}
           {activeTab === 'system' && <SystemTab />}
+          {activeTab === 'setup' && <SetupTab />}
           {activeTab === 'explore' && <ExploreTab />}
         </div>
       </main>

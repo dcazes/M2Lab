@@ -1,13 +1,14 @@
-import { Monitor, Server, Compass } from 'lucide-react'
+import { Monitor, Server, Compass, Settings } from 'lucide-react'
 
 interface TabNavProps {
-  activeTab: 'services' | 'system' | 'explore'
-  onChange: (tab: 'services' | 'system' | 'explore') => void
+  activeTab: 'services' | 'system' | 'explore' | 'setup'
+  onChange: (tab: 'services' | 'system' | 'explore' | 'setup') => void
 }
 
 const tabs = [
   { id: 'services' as const, label: 'Services', icon: Monitor },
   { id: 'system' as const, label: 'System', icon: Server },
+  { id: 'setup' as const, label: 'Setup', icon: Settings },
   { id: 'explore' as const, label: 'Explore', icon: Compass },
 ] as const
 

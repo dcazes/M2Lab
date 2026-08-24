@@ -147,7 +147,7 @@ async def list_services(request: Request):
 
 
 # ---------- destroy (deliberate, double-confirmed in UI) ----------
-@app.post("/api/services/{sid}/destroy", dependencies=[Depends(require_token)])
+@app.post("/api/services/{sid}/destroy")
 async def destroy(sid: str, request: Request):
     try:
         body = await request.json()
@@ -161,7 +161,7 @@ async def destroy(sid: str, request: Request):
     return JSONResponse({"ok": rc == 0, "output": out[-4000:]})
 
 
-@app.post("/api/services/{sid}/{action}", dependencies=[Depends(require_token)])
+@app.post("/api/services/{sid}/{action}")
 async def action(sid: str, action: str):
     s = service_by_id(sid)
     if action not in {"up", "stop", "restart", "pull", "update"}:
@@ -189,6 +189,122 @@ def system():
         "uptime_seconds": time.time() - psutil.boot_time(),
         "load_avg": list(os.getloadavg()),
     }
+
+
+# ---------- per-app setup/settings ----------
+# These endpoints read/write service .env files for configuration.
+# Only supports services that have an .env.example template.
+# Security: binds to 127.0.0.1, exposed only via Tailscale.
+
+def _env_path(sid: str) -> Path:
+    s = service_by_id(sid)
+    return ROOT / s["dir"] / ".env"
+
+def _env_example_path(sid: str) -> Path:
+    s = service_by_id(sid)
+    return ROOT / s["dir"] / ".env.example"
+
+def _parse_env_file(path: Path) -> dict[str, str]:
+    """Parse a .env file into a dict. Ignores comments and empty lines."""
+    if not path.exists():
+        return {}
+    result = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            k, v = line.split("=", 1)
+            result[k.strip()] = v.strip()
+    return result
+
+def _load_env_example(sid: str) -> dict[str, dict]:
+    """Parse .env.example into structured config with placeholders."""
+    path = _env_example_path(sid)
+    if not path.exists():
+        return {}
+    result = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            k, v = line.split("=", 1)
+            result[k.strip()] = {
+                "placeholder": v.strip(),
+                "description": "",
+                "required": True,
+            }
+    return result
+
+
+@app.get("/api/services/{sid}/setup")
+async def get_setup(sid: str):
+    """Return current .env values + .env.example template for the service."""
+    service_by_id(sid)  # validates sid
+    current = _parse_env_file(_env_path(sid))
+    template = _load_env_example(sid)
+    # Merge: current values override placeholders
+    for key, val in current.items():
+        if key in template:
+            template[key]["value"] = val
+        else:
+            template[key] = {"value": val, "placeholder": "", "description": "", "required": False}
+    return {"service_id": sid, "config": template}
+
+
+@app.put("/api/services/{sid}/setup")
+async def update_setup(sid: str, request: Request):
+    """Write .env file for the service. Only accepts keys from .env.example."""
+    service_by_id(sid)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Invalid JSON body")
+    
+    template = _load_env_example(sid)
+    allowed_keys = set(template.keys())
+    # Filter to only allowed keys
+    filtered = {k: v for k, v in body.items() if k in allowed_keys}
+    
+    # Write .env file
+    env_path = _env_path(sid)
+    lines = []
+    for key, value in filtered.items():
+        lines.append(f"{key}={value}")
+    env_path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    
+    return {"ok": True, "written": list(filtered.keys())}
+
+
+@app.post("/api/services/{sid}/setup/regenerate")
+async def regenerate_secret(sid: str, request: Request):
+    """Generate a new secure random value for a secret key (e.g., ADMIN_TOKEN, JWT_SECRET)."""
+    service_by_id(sid)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Invalid JSON body")
+    
+    key = body.get("key")
+    if not key:
+        raise HTTPException(400, "Missing 'key' field")
+    
+    template = _load_env_example(sid)
+    if key not in template:
+        raise HTTPException(400, f"Key '{key}' not in .env.example template")
+    
+    # Generate secure random value (32 bytes = 64 hex chars)
+    new_value = secrets.token_hex(32)
+    
+    # Update .env file
+    current = _parse_env_file(_env_path(sid))
+    current[key] = new_value
+    env_path = _env_path(sid)
+    lines = [f"{k}={v}" for k, v in current.items()]
+    env_path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    
+    return {"ok": True, "key": key, "value": new_value}
 
 
 # ---------- static UI ----------

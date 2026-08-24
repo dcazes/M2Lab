@@ -115,3 +115,16 @@ export const CATEGORY_TO_GROUP: Record<string, GroupName> = {
   ai: 'AI',
   infrastructure: 'Infrastructure',
 }
+
+// ---------- Setup types ----------
+export interface SetupConfigItem {
+  placeholder: string
+  description: string
+  required: boolean
+  value?: string
+}
+
+export interface SetupResponse {
+  service_id: string
+  config: Record<string, SetupConfigItem>
+}

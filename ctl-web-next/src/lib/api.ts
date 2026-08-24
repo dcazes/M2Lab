@@ -5,6 +5,7 @@ import type {
   DestroyResult,
   SystemStats,
   ServiceAction,
+  SetupResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -55,6 +56,25 @@ export async function serviceDestroy(id: string, confirm: string): Promise<Destr
 
 export async function fetchSystemStats(): Promise<SystemStats> {
   return fetchJson<SystemStats>(`${API_BASE}/system`)
+}
+
+// ---------- Setup API ----------
+export async function fetchSetup(sid: string): Promise<SetupResponse> {
+  return fetchJson<SetupResponse>(`${API_BASE}/services/${sid}/setup`)
+}
+
+export async function updateSetup(sid: string, config: Record<string, string>): Promise<{ ok: boolean; written: string[] }> {
+  return fetchJson(`${API_BASE}/services/${sid}/setup`, {
+    method: 'PUT',
+    body: JSON.stringify(config),
+  })
+}
+
+export async function regenerateSecret(sid: string, key: string): Promise<{ ok: boolean; key: string; value: string }> {
+  return fetchJson(`${API_BASE}/services/${sid}/setup/regenerate`, {
+    method: 'POST',
+    body: JSON.stringify({ key }),
+  })
 }
 
 export function getServiceUrl(service: Service): string {
