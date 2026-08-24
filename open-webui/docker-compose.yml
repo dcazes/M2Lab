@@ -6,11 +6,9 @@ services:
     ports:
       - "127.0.0.1:8084:8080"
     environment:
-      # Connection to FreeLLMAPI (cloud free providers)
-      - OPENAI_API_BASE_URL=http://host.docker.internal:3001/v1
-      - OPENAI_API_KEY=not-needed
-      # Connection to local Ollama (GPU-accelerated local models)
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # Connection to LiteLLM (routes: FreeLLMAPI free models + paid keys + Ollama fallback)
+      - OPENAI_API_BASE_URL=http://host.docker.internal:4000/v1
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY}
       # Auth + session
       - WEBUI_AUTH=True
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}

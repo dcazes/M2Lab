@@ -1,43 +1,105 @@
-# LiteLLM config — model router with fallback from FreeLLMAPI to local Ollama
+# LiteLLM config — model router
+#
+# Architecture:
+#   All AI consumers (Open WebUI, OpenCode Agent, curl scripts) hit
+#   http://litellm:4000/v1 (or host.docker.internal:4000 from containers).
+#   LiteLLM then routes:
+#     1. Free models  → FreeLLMAPI (host:3001)   — "free-auto"
+#     2. Paid models  → provider API directly    — "openai/gpt-4o", etc.
+#     3. Local models → Ollama (host:11434)      — "ollama/*", "local-fallback"
+#
+# Free API keys (free tiers, rate-limited, etc.) live in FreeLLMAPI only.
+# Paid API keys live in litellm/.env only.
 # See https://docs.litellm.ai/docs/proxy/configs
 
 model_list:
-  # FreeLLMAPI gateway (OpenAI-compatible) — primary route
+  # ---------- Free tier (via FreeLLMAPI) ----------
   - model_name: free-auto
     litellm_params:
       model: openai/auto
       api_base: http://host.docker.internal:3001/v1
       api_key: os.environ/FREE_LLMAPI_API_KEY
 
-  # Local Ollama — wildcard catches any ollama/* model name
+  # ---------- Local models (via Ollama) ----------
+  # Wildcard catches any ollama/<model> name; pulled models route here.
   - model_name: "ollama/*"
     litellm_params:
       model: "ollama/*"
       api_base: http://host.docker.internal:11434
 
-  # Explicit fallback target: a specific local model
-  # (adjust to one you have pulled)
+  # Explicit fallback target: a specific local model.
+  # Adjust to one you have pulled (e.g. ollama_chat/qwen2.5, ollama_chat/mistral).
   - model_name: local-fallback
     litellm_params:
       model: ollama_chat/llama3.2
       api_base: http://host.docker.internal:11434
-      # adjust to a model you have pulled
-      # (e.g. ollama_chat/qwen2.5, ollama_chat/mistral)
+
+  # ---------- Paid providers (keys in litellm/.env only) ----------
+  # Uncomment entries for providers you've paid for and added to .env.
+  # The model names here are what consumers will see at /v1/models.
+
+  # OpenAI
+  # - model_name: gpt-4o
+  #   litellm_params:
+  #     model: openai/gpt-4o
+  #     api_key: os.environ/OPENAI_API_KEY
+  # - model_name: gpt-4o-mini
+  #   litellm_params:
+  #     model: openai/gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+
+  # Anthropic
+  # - model_name: claude-sonnet-4-5
+  #   litellm_params:
+  #     model: anthropic/claude-sonnet-4-5
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Google Gemini
+  # - model_name: gemini-2-5-pro
+  #   litellm_params:
+  #     model: gemini/gemini-2.5-pro
+  #     api_key: os.environ/GEMINI_API_KEY
+
+  # Mistral
+  # - model_name: mistral-large
+  #   litellm_params:
+  #     model: mistral/mistral-large-latest
+  #     api_key: os.environ/MISTRAL_API_KEY
+
+  # DeepSeek
+  # - model_name: deepseek-chat
+  #   litellm_params:
+  #     model: deepseek/deepseek-chat
+  #     api_key: os.environ/DEEPSEEK_API_KEY
+
+  # OpenRouter (one key, many providers)
+  # - model_name: openrouter/*
+  #   litellm_params:
+  #     model: openrouter/*
+  #     api_key: os.environ/OPENROUTER_API_KEY
 
 router_settings:
-  # If free-auto fails, retry via local-fallback
+  # Fallback chain: try free-auto first, fall back to local, then to a
+  # paid model if you've configured one.
   fallbacks:
     - free-auto: [local-fallback]
+    # - free-auto: [local-fallback, gpt-4o-mini]   # add paid tier if desired
+
+  # Optional routing strategies
+  # num_retries: 2
+  # timeout: 30
+  # allowed_fails: 2
+  # cooldown_time: 30
 
 litellm_settings:
   num_retries: 2
+  drop_params: true
+  set_verbose: false
 
 # Native OpenAPI->MCP gateway: exposes a curated set of READ-ONLY admin API
 # tools at /litellm_admin/mcp (consumed by the @litellm opencode subagent).
 # Tool calls are executed against the proxy itself using the master key;
 # only the operationIds listed in allowed_tools are exposed.
-# Native OpenAPI->MCP gateway: exposes a curated set of READ-ONLY admin API
-# tools at /litellm_admin/mcp (consumed by the @litellm opencode subagent).
 # spec_path points at a tracked SNAPSHOT of the proxy's own /openapi.json —
 # self-fetch over HTTP fails at boot because nothing listens on :4000 yet
 # during startup. After upgrading the litellm image, refresh the snapshot:
@@ -56,7 +118,7 @@ mcp_servers:
     url: "http://127.0.0.1:4000"
     spec_path: "/app/openapi.snapshot.json"
     auth_type: bearer_token
-    auth_value: os.environ/LITELLM_MASTER_KEY
+    auth_value: os.environ/LITELLM_MCP_KEY
     allowed_tools:
       # models & routing
       - model_list_v1_models_get
