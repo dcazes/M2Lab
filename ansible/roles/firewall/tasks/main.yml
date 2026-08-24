@@ -21,7 +21,9 @@
   changed_when: false
 
 - name: Allow homelab-ctl-mcp from Docker bridge networks (agent containers)
-  ansible.builtin.command: "ufw allow from 172.16.0.0/12 to any port 8790 proto tcp comment 'homelab-ctl-mcp: reachable only from Docker bridges'"
+  ansible.builtin.command: >-
+    ufw allow from 172.16.0.0/12 to any port 8790 proto tcp
+    comment 'homelab-ctl-mcp: reachable only from Docker bridges'
   changed_when: false
 
 - name: Enable UFW (non-interactive)
