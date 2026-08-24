@@ -56,8 +56,6 @@ vaultwarden:
 	@$(PY) ctl/registry.py up vaultwarden
 puppygraph:
 	@$(PY) ctl/registry.py up puppygraph
-homepage:
-	@$(PY) ctl/registry.py up homepage
 mealie:
 	@$(PY) ctl/registry.py up mealie
 actual-budget:

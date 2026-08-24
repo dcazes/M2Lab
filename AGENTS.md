@@ -23,12 +23,11 @@ python3 -m venv .venv && .venv/bin/pip install -r ctl/requirements.txt
 
 Follow `docs/ADDING_APPS.md`; start stacks from `docs/compose-template.yml`, register in `services.yaml`. Rules baked into the template:
 
-- Ports bind to `127.0.0.1` only. Tailscale Serve is the only public door: `sudo tailscale serve --bg --https=<tailnet_port> http://127.0.0.1:<port>`; Homepage rides root :443.
+- Ports bind to `127.0.0.1` only. Tailscale Serve is the only public door: `sudo tailscale serve --bg --https=<tailnet_port> http://127.0.0.1:<port>`.
 - Reuse the shared external networks `frontend-net` / `backend-net` (actual Docker networks `homelab_frontend` / `homelab_backend`, created by Ansible). Never define new networks — subnet exhaustion.
 - Databases/caches: backend-net only, no published ports, and never add `user:` / `cap_drop:` / `read_only:` to stock postgres/redis/postgis/mariadb images — their entrypoints need privileged boot (this broke nextcloud-db/puppygraph before).
 - Secrets only as `${VAR}` resolved from gitignored `<service>/.env`; ship an `.env.example`. Gitleaks runs in CI.
 - Pick free loopback + tailnet ports (allocation list at the bottom of ADDING_APPS.md).
-- Add a tile in `homepage/config/services.yaml` if it should appear on the landing page.
 - `ignore_containers:` in a service's entry keeps sidecars (migrations/cron/db) out of status aggregation.
 
 ## Verification (no test suite)
@@ -49,7 +48,7 @@ python3 ctl/registry.py status   # after up: all containers running
 
 ## Repo notes
 
-- Historical change records live in `docs/documentation/` (`PHASE_*.md`) — local-only, gitignored, never pushed. `HOMEPAGE_IMPROVEMENTS.md` at root is likewise a record, not open work.
+- Historical change records live in `docs/documentation/` (`PHASE_*.md`) — local-only, gitignored, never pushed.
 - Data dirs (bind mounts like `*/data`, `nextcloud/html`, `immich-app/library`) are gitignored — configs are tracked, runtime data never is.
 
 ## Stack review & AI-agent layer
