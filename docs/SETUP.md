@@ -9,8 +9,8 @@ On the box (or from any machine that can reach it over SSH):
 
 ```bash
 sudo apt install -y ansible          # or: pipx install ansible
-git clone https://github.com/dcazes/homelab.git
-cd homelab/ansible
+git clone https://github.com/dcazes/omnilab.git
+cd omnilab/ansible
 ```
 
 Edit `group_vars/all.yml` — user, repo path, timezone, and either paste a

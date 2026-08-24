@@ -92,13 +92,13 @@
 - Links:
     - Documentation:
         icon: si-gitbook
-        href: https://github.com/dcazes/homelab/wiki
+        href: https://github.com/dcazes/omnilab/wiki
         description: Homelab Documentation
     - Community:
         icon: si-github
-        href: https://github.com/dcazes/homelab/discussions
+        href: https://github.com/dcazes/omnilab/discussions
         description: Community Discussions
     - Releases:
         icon: si-git
-        href: https://github.com/dcazes/homelab/releases
+        href: https://github.com/dcazes/omnilab/releases
         description: Latest Releases

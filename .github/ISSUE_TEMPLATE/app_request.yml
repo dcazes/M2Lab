@@ -1,0 +1,31 @@
+name: "App Integration Request"
+description: "Suggest a new self-hosted application to add to the Homelab catalog"
+title: "[App Request]: "
+labels: ["enhancement", "app-catalog"]
+body:
+  - type: input
+    id: app_name
+    attributes:
+      label: "Application Name"
+      placeholder: "e.g., Immich, SurfSense, Mealie"
+    validations:
+      required: true
+  - type: textarea
+    id: app_description
+    attributes:
+      label: "What does this application do?"
+      placeholder: "Brief summary of the tool..."
+  - type: textarea
+    id: docker_compose_snippet
+    attributes:
+      label: "Sample Docker Compose Configuration"
+      description: "Paste a standard docker-compose.yml snippet. Follow docs/compose-template.yml for network/secret conventions."
+      placeholder: "Paste standard docker-compose.yml snippet..."
+    validations:
+      required: true
+  - type: textarea
+    id: integration_notes
+    attributes:
+      label: "Integration Notes"
+      description: "Env vars, secrets, networks (frontend-net/backend-net), volumes, and healthcheck expectations. See docs/ADDING_APPS.md."
+      placeholder: "List what the app needs to be registered in services.yaml..."

@@ -1,6 +1,22 @@
 # Homelab Production Setup
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![CI](https://github.com/dcazes/omnilab/actions/workflows/ci.yml/badge.svg)
+![Docker Compose](https://img.shields.io/badge/Docker-Compose-blue?logo=docker)
+![Services](https://img.shields.io/badge/services-17%2B-blue)
+
 A production-ready, security-hardened self-hosted homelab using Docker Compose, Tailscale for secure remote access, and a collection of popular self-hosted applications.
+
+## Contents
+
+- [Project Overview](#project-overview)
+- [Architecture](#architecture)
+- [Service Catalog](#service-catalog)
+- [Quick Start](#quick-start)
+- [Security & Privacy](#security--privacy-notes)
+- [CI Pipeline](#ci-pipeline)
+- [Contributing](#contributing)
+- [Security Policy](#security-policy)
 
 ## Project Overview
 
@@ -46,6 +62,10 @@ Each service's `docker-compose.yml` defines these networks and attaches containe
 
 Tailscale Serve maps `tailnet_port` → `127.0.0.1:<host_port>` on the host, allowing secure access to services over the tailnet (e.g., `https://home.taile2cc7a.ts.net:8446` → Vaultwarden).
 
+## Service Catalog
+
+The stack is defined in [`services.yaml`](services.yaml) — the single source of truth that drives the Makefile targets, the `ctl/` control plane, and the dashboard. It currently registers **17 services**, including Vaultwarden, Nextcloud, Immich, Paperless-ngx, Mealie, SurfSense, Open WebUI, and LiteLLM. To propose or add a new app, follow [docs/ADDING_APPS.md](docs/ADDING_APPS.md) (or open an [App Request](.github/ISSUE_TEMPLATE/app_request.yml)).
+
 ## Prerequisites
 
 - Docker Engine >= 20.10
@@ -57,8 +77,8 @@ Tailscale Serve maps `tailnet_port` → `127.0.0.1:<host_port>` on the host, all
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/dcazes/homelab.git
-   cd homelab
+   git clone https://github.com/dcazes/omnilab.git
+   cd omnilab
    ```
 
 2. Copy the template environment file and configure secrets:
@@ -96,6 +116,14 @@ The repository includes a GitHub Actions workflow (`.github/workflows/ci.yml`) t
 - Secret scanning via Gitleaks
 - YAML linting
 - Trivy configuration and filesystem scans
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a service or improve the stack, and [AGENTS.md](AGENTS.md) for the repo's operational conventions. Pull requests run the CI security gates described above.
+
+## Security Policy
+
+Found a vulnerability? Follow [SECURITY.md](SECURITY.md) and report it privately — do not open a public issue.
 
 ## Acknowledgments
 

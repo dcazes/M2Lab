@@ -1,0 +1,19 @@
+# Applied automatically if the "Settings" GitHub App (probot-settings) is installed.
+# Otherwise this documents the intended repository metadata.
+repository:
+  name: homelab
+  description: "Security-hardened self-hosted homelab managed with Docker Compose, Tailscale, and Ansible."
+  homepage: "https://github.com/dcazes/omnilab"
+  topics:
+    - docker
+    - docker-compose
+    - homelab
+    - self-hosted
+    - tailscale
+    - ansible
+    - infrastructure-as-code
+    - iac
+  private: false
+  has_issues: true
+  has_projects: false
+  has_wiki: false

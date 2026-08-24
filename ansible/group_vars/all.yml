@@ -4,7 +4,7 @@
 # (also safe to re-run on this host).
 
 homelab_user: dak
-repo_url: https://github.com/dcazes/homelab.git
+repo_url: https://github.com/dcazes/omnilab.git
 repo_path: /home/dak/Desktop/Programs/HomeServer
 timezone: America/New_York
 

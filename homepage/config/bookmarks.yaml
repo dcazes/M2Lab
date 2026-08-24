@@ -1,16 +1,16 @@
 - Homelab:
     - GitHub Repository:
         - abbr: GH
-          href: https://github.com/dcazes/homelab
+          href: https://github.com/dcazes/omnilab
     - Documentation:
         - abbr: Docs
-          href: https://github.com/dcazes/homelab/wiki
+          href: https://github.com/dcazes/omnilab/wiki
     - Issue Tracker:
         - abbr: Issues
-          href: https://github.com/dcazes/homelab/issues
+          href: https://github.com/dcazes/omnilab/issues
     - Releases:
         - abbr: Releases
-          href: https://github.com/dcazes/homelab/releases
+          href: https://github.com/dcazes/omnilab/releases
 - Network:
     - Tailscale Admin:
         - abbr: TS
