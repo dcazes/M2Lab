@@ -4,7 +4,9 @@
 > discovery API/MCP tools, lifecycle approvals, local audit trail, and
 > outcome-led dashboard are implemented. A resumable Initiate flow now prepares
 > Vaultwarden, LiteLLM, and self-hosted Firecrawl, with Nextcloud and SurfSense
-> as optional foundations. App-specific cross-app adapters remain
+> as optional foundations. Workspace is now a compact operations cockpit with
+> real system metrics, app selection, health, approval-gated commands, logs,
+> and an audit-backed calendar/agenda. App-specific cross-app adapters remain
 > staged. **Updated:** 2026-08-24.
 >
 > **Product thesis:** OmniLab helps people choose, install, configure, and

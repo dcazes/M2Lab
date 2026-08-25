@@ -62,7 +62,7 @@ kind, requirements, and progressively discoverable capabilities.
 ## What is working today
 
 - Registry-driven start, stop, restart, pull, update, health, and backup operations.
-- A responsive React dashboard with a resumable initiation flow, outcome profiles, catalog visuals, installed-app status, system metrics, and configuration forms.
+- A responsive React dashboard with a resumable initiation flow and a compact daily Workspace: real host metrics, searchable app dock, service health, operations calendar, selected-app commands, recent logs, and configuration forms.
 - Secret masking: saved tokens/passwords are never returned to browser clients.
 - Short-lived, action-specific lifecycle approvals and a local append-only audit trail.
 - Progressive capability matching without injecting the entire tool catalog into an agent context.
@@ -170,6 +170,7 @@ Capabilities declare a risk tier:
 - `.env` files are gitignored, agent containers cannot read them, and browser setup responses never contain stored secret values.
 - Lifecycle approvals are short-lived and bound to one service and action.
 - Audit records contain event metadata, never secret values or Compose output.
+- Recent service logs are bounded and remain inside the localhost/tailnet dashboard boundary.
 - Vaultwarden has no agent or MCP exposure.
 - Docker-socket services are treated as root-equivalent and remain read-only or outside agent routing.
 

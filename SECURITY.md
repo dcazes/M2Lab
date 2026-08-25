@@ -29,6 +29,9 @@ Two areas deserve extra care:
   action. Destroy retains typed confirmation.
 - State-changing dashboard events are written to `.state/audit.jsonl`;
   records contain metadata only, not secret values or command output.
+- Recent service logs are bounded and read-only. They remain inside the same
+  localhost/tailnet trust boundary and are never copied into audit records or
+  agent capability discovery.
 - Unknown or privileged catalog capability risks fail closed. Harness
   permissions are defense in depth, not the authority.
 - Vaultwarden is excluded from agent and MCP routing.

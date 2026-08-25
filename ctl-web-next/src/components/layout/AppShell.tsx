@@ -38,7 +38,7 @@ export function AppShell() {
         <div className="mt-6 animate-in fade-in duration-200">
           {activeTab === 'initiate' && <InitiateTab onFinish={() => setActiveTab('workspace')} onOpenSettings={openSettings} />}
           {activeTab === 'discover' && <CatalogTab onOpenSettings={openSettings} onOpenWorkspace={() => setActiveTab('workspace')} />}
-          {activeTab === 'workspace' && <ServicesTab />}
+          {activeTab === 'workspace' && <ServicesTab onOpenSettings={openSettings} />}
           {activeTab === 'system' && <SystemTab />}
           {activeTab === 'settings' && <SetupTab initialSelectedId={settingsServiceId} />}
           {activeTab === 'explore' && <ExploreTab />}

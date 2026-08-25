@@ -59,6 +59,10 @@ export async function serviceAction(id: string, action: ServiceAction, approvalT
   })
 }
 
+export async function fetchServiceLogs(id: string, tail = 120): Promise<{ ok: boolean; service_id: string; lines: string[] }> {
+  return fetchJson(`${API_BASE}/services/${id}/logs?tail=${tail}`)
+}
+
 export async function serviceDestroy(id: string, confirm: string): Promise<DestroyResult> {
   return fetchJson<DestroyResult>(`${API_BASE}/services/${id}/destroy`, {
     method: 'POST',

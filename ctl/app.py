@@ -263,6 +263,19 @@ async def action(sid: str, action: str, request: Request):
     return JSONResponse({"ok": rc == 0, "output": out[-8000:]}, status_code=200 if rc == 0 else 500)
 
 
+@app.get("/api/services/{sid}/logs")
+async def service_logs(sid: str, request: Request, tail: int = 120):
+    """Return a bounded recent log snapshot for trusted dashboard clients."""
+    require_trusted_request(request)
+    service = service_by_id(sid)
+    tail = max(20, min(tail, 500))
+    rc, output = await run_compose(service, ["logs", "--no-color", "--tail", str(tail)])
+    return JSONResponse(
+        {"ok": rc == 0, "service_id": sid, "lines": output[-40000:].splitlines()},
+        status_code=200 if rc == 0 else 500,
+    )
+
+
 @app.get("/api/system")
 def system():
     du = psutil.disk_usage(ROOT.anchor or "/")
