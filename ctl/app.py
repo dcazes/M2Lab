@@ -219,22 +219,54 @@ def _parse_env_file(path: Path) -> dict[str, str]:
     return result
 
 def _load_env_example(sid: str) -> dict[str, dict]:
-    """Parse .env.example into structured config with placeholders."""
+    """Parse .env.example into structured config with placeholders.
+
+    Honors inline `# important` / `# advanced` tags after a key line so the
+    UI can group settings. Without a tag we fall back to a heuristic:
+    names containing PASSWORD/TOKEN/SECRET/KEY/HASH -> important (auth),
+    everything else -> advanced (rarely touched).
+    """
     path = _env_example_path(sid)
     if not path.exists():
         return {}
     result = {}
-    for line in path.read_text().splitlines():
-        line = line.strip()
+    raw_lines = path.read_text().splitlines()
+    for i, raw in enumerate(raw_lines):
+        line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        if "=" in line:
-            k, v = line.split("=", 1)
-            result[k.strip()] = {
-                "placeholder": v.strip(),
-                "description": "",
-                "required": True,
-            }
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        key = k.strip()
+        # Look at the next non-blank line for a `# important` / `# advanced`
+        # comment that documents THIS key.
+        priority = None
+        for j in range(i + 1, min(i + 4, len(raw_lines))):
+            nxt = raw_lines[j].strip()
+            if not nxt:
+                continue
+            if not nxt.startswith("#"):
+                break
+            low = nxt.lower()
+            if "important" in low:
+                priority = "important"
+                break
+            if "advanced" in low:
+                priority = "advanced"
+                break
+        if priority is None:
+            up = key.upper()
+            if any(t in up for t in ("PASSWORD", "TOKEN", "SECRET", "KEY", "HASH")):
+                priority = "important"
+            else:
+                priority = "advanced"
+        result[key] = {
+            "placeholder": v.strip(),
+            "description": "",
+            "required": True,
+            "priority": priority,
+        }
     return result
 
 
@@ -249,7 +281,9 @@ async def get_setup(sid: str):
         if key in template:
             template[key]["value"] = val
         else:
-            template[key] = {"value": val, "placeholder": "", "description": "", "required": False}
+            up = key.upper()
+            priority = "important" if any(t in up for t in ("PASSWORD", "TOKEN", "SECRET", "KEY", "HASH")) else "advanced"
+            template[key] = {"value": val, "placeholder": "", "description": "", "required": False, "priority": priority}
     return {"service_id": sid, "config": template}
 
 

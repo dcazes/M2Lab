@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { type SetupConfigItem } from '../../lib/types'
 
@@ -13,6 +14,7 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState<Record<string, boolean>>({})
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false)
 
   useEffect(() => {
     loadSetup()
@@ -126,6 +128,10 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
 
   const entries = Object.entries(config) as [string, SetupConfigItem][]
 
+  // Split into important (shown by default) and advanced (collapsible)
+  const importantEntries = entries.filter(([, item]) => item.priority === 'important')
+  const advancedEntries = entries.filter(([, item]) => item.priority === 'advanced')
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -150,90 +156,193 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
         </div>
       </div>
 
-      <div className="space-y-4">
-        {entries.map(([key, item]) => (
-          <div key={key} className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <span className="flex-1">{key}</span>
-              {item.required && (
-                <span className="px-2 py-0.5 rounded-btn bg-err/20 text-err text-xs">
-                  required
-                </span>
-              )}
-            </label>
-            <p className="text-xs text-unknown">{item.description}</p>
-            <div className="flex items-center gap-2">
-              {isSecretField(item) ? (
-                <>
-                  <input
-                    type="password"
-                    value={item.value ?? ''}
-                    onChange={(e) => {
-                      setConfig(prev => {
-                        if (!prev) return prev
-                        return {
-                          ...prev,
-                          [key]: {
-                            ...prev[key],
-                            value: e.target.value,
-                          },
-                        }
-                      })
-                    }}
-                    className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
-                      regenerating[key] ? 'opacity-50' : ''
-                    }`}
-                    placeholder={item.placeholder}
-                    disabled={regenerating[key]}
-                  />
-                  {regenerating[key] && (
-                    <span className="animate-spin h-4 w-4" />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleRegenerate(key)}
-                    disabled={regenerating[key]}
-                    className={`ml-2 px-3 py-1 rounded-btn text-xs transition-fast ${
-                      regenerating[key]
-                        ? 'opacity-50 cursor-not-allowed'
-                        : 'text-unknown hover:text-white hover:bg-surface-2'
-                    }`}
-                  >
-                    {regenerating[key] ? 'Generating' : '🔑'}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    value={item.value ?? ''}
-                    onChange={(e) => {
-                      setConfig(prev => {
-                        if (!prev) return prev
-                        return {
-                          ...prev,
-                          [key]: {
-                            ...prev[key],
-                            value: e.target.value,
-                          },
-                        }
-                      })
-                    }}
-                    className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
-                      regenerating[key] ? 'opacity-50' : ''
-                    }`}
-                    placeholder={item.placeholder}
-                    disabled={regenerating[key]}
-                  />
-                  {regenerating[key] && (
-                    <span className="animate-spin h-4 w-4" />
-                  )}
-                </>
-              )}
+      {/* Important settings - always visible */}
+      {importantEntries.length > 0 && (
+        <div className="space-y-4">
+          {importantEntries.map(([key, item]) => (
+            <div key={key} className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <span className="flex-1">{key}</span>
+                {item.required && (
+                  <span className="px-2 py-0.5 rounded-btn bg-err/20 text-err text-xs">
+                    required
+                  </span>
+                )}
+              </label>
+              <p className="text-xs text-unknown">{item.description}</p>
+              <div className="flex items-center gap-2">
+                {isSecretField(item) ? (
+                  <>
+                    <input
+                      type="password"
+                      value={item.value ?? ''}
+                      onChange={(e) => {
+                        setConfig(prev => {
+                          if (!prev) return prev
+                          return {
+                            ...prev,
+                            [key]: {
+                              ...prev[key],
+                              value: e.target.value,
+                            },
+                          }
+                        })
+                      }}
+                      className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
+                        regenerating[key] ? 'opacity-50' : ''
+                      }`}
+                      placeholder={item.placeholder}
+                      disabled={regenerating[key]}
+                    />
+                    {regenerating[key] && (
+                      <span className="animate-spin h-4 w-4" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRegenerate(key)}
+                      disabled={regenerating[key]}
+                      className={`ml-2 px-3 py-1 rounded-btn text-xs transition-fast ${
+                        regenerating[key]
+                          ? 'opacity-50 cursor-not-allowed'
+                          : 'text-unknown hover:text-white hover:bg-surface-2'
+                      }`}
+                    >
+                      {regenerating[key] ? 'Generating' : '🔑'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      value={item.value ?? ''}
+                      onChange={(e) => {
+                        setConfig(prev => {
+                          if (!prev) return prev
+                          return {
+                            ...prev,
+                            [key]: {
+                              ...prev[key],
+                              value: e.target.value,
+                            },
+                          }
+                        })
+                      }}
+                      className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
+                        regenerating[key] ? 'opacity-50' : ''
+                      }`}
+                      placeholder={item.placeholder}
+                      disabled={regenerating[key]}
+                    />
+                    {regenerating[key] && (
+                      <span className="animate-spin h-4 w-4" />
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* Advanced settings - collapsible */}
+      {advancedEntries.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-2 mt-6 mb-2 px-3 py-2 text-sm font-medium text-unknown hover:text-white bg-surface-2 hover:bg-surface-1 rounded-btn transition-fast w-full"
+          >
+            {showAdvanced ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span>Advanced settings ({advancedEntries.length})</span>
+          </button>
+          {showAdvanced && (
+            <div className="space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
+              {advancedEntries.map(([key, item]) => (
+                <div key={key} className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <span className="flex-1">{key}</span>
+                    {item.required && (
+                      <span className="px-2 py-0.5 rounded-btn bg-err/20 text-err text-xs">
+                        required
+                      </span>
+                    )}
+                  </label>
+                  <p className="text-xs text-unknown">{item.description}</p>
+                  <div className="flex items-center gap-2">
+                    {isSecretField(item) ? (
+                      <>
+                        <input
+                          type="password"
+                          value={item.value ?? ''}
+                          onChange={(e) => {
+                            setConfig(prev => {
+                              if (!prev) return prev
+                              return {
+                                ...prev,
+                                [key]: {
+                                  ...prev[key],
+                                  value: e.target.value,
+                                },
+                              }
+                            })
+                          }}
+                          className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
+                            regenerating[key] ? 'opacity-50' : ''
+                          }`}
+                          placeholder={item.placeholder}
+                          disabled={regenerating[key]}
+                        />
+                        {regenerating[key] && (
+                          <span className="animate-spin h-4 w-4" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRegenerate(key)}
+                          disabled={regenerating[key]}
+                          className={`ml-2 px-3 py-1 rounded-btn text-xs transition-fast ${
+                            regenerating[key]
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'text-unknown hover:text-white hover:bg-surface-2'
+                          }`}
+                        >
+                          {regenerating[key] ? 'Generating' : '🔑'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          value={item.value ?? ''}
+                          onChange={(e) => {
+                            setConfig(prev => {
+                              if (!prev) return prev
+                              return {
+                                ...prev,
+                                [key]: {
+                                  ...prev[key],
+                                  value: e.target.value,
+                                },
+                              }
+                            })
+                          }}
+                          className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
+                            regenerating[key] ? 'opacity-50' : ''
+                          }`}
+                          placeholder={item.placeholder}
+                          disabled={regenerating[key]}
+                        />
+                        {regenerating[key] && (
+                          <span className="animate-spin h-4 w-4" />
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       <div className="border-t pt-4 mt-6 text-xs text-unknown">
         <p>
