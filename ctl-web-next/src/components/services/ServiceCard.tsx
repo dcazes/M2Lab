@@ -4,7 +4,7 @@ import { Play, Square, RotateCcw, Download, ArrowUpRight, ExternalLink, AlertTri
 import { StatusDot } from './StatusDot'
 import { getServiceUrl, getServiceIconUrl } from '../../lib/api'
 import type { Service, ServiceAction } from '../../lib/types'
-import { serviceAction, serviceDestroy } from '../../lib/api'
+import { createApproval, serviceAction, serviceDestroy } from '../../lib/api'
 import { toast } from 'sonner'
 
 interface ServiceCardProps {
@@ -13,10 +13,10 @@ interface ServiceCardProps {
 }
 
 const ACTIONS: { action: ServiceAction; label: string; icon: React.ComponentType<{ className?: string }>; confirm?: boolean }[] = [
-  { action: 'up', label: 'Start', icon: Play },
-  { action: 'stop', label: 'Stop', icon: Square },
-  { action: 'restart', label: 'Restart', icon: RotateCcw },
-  { action: 'pull', label: 'Pull', icon: Download },
+  { action: 'up', label: 'Start', icon: Play, confirm: true },
+  { action: 'stop', label: 'Stop', icon: Square, confirm: true },
+  { action: 'restart', label: 'Restart', icon: RotateCcw, confirm: true },
+  { action: 'pull', label: 'Pull images', icon: Download, confirm: true },
   { action: 'update', label: 'Update', icon: ArrowUpRight, confirm: true },
 ]
 
@@ -76,7 +76,8 @@ export function ServiceCard({ service }: ServiceCardProps) {
   const handleAction = async (action: ServiceAction) => {
     setPendingAction(action)
     try {
-      const result = await serviceAction(service.id, action)
+      const approval = await createApproval(service.id, action)
+      const result = await serviceAction(service.id, action, approval)
       if (result.ok) {
         toast.success(`${service.display_name} ${action} completed`)
         if (UP_ACTIONS.includes(action)) setAwaitingHealthy(true)

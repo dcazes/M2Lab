@@ -86,9 +86,18 @@ systemctl --user enable --now homelab-ctl
 sudo tailscale serve --bg --https=8460 http://127.0.0.1:8787
 ```
 
+Open `https://<your-tailnet-host>:8460` and use **Initiate**. It safely prepares
+and starts Vaultwarden, LiteLLM, and the self-hosted Firecrawl stack, then
+offers Nextcloud and SurfSense as optional foundations. Vaultwarden account
+creation remains a direct user step because its master password must never pass
+through OmniLab. Provider credentials are optional and are configured after
+LiteLLM is online. App lifecycle actions require a fresh, short-lived approval.
+
 ## 5. Verify
 
 ```bash
+.venv/bin/python -m unittest discover -s tests -v
+cd ctl-web-next && npm run build && cd ..
 python3 ctl/registry.py status     # all healthy, no crash-loops
 docker ps --format '{{.Names}}'    # expected container list
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:<port>/   # spot-check

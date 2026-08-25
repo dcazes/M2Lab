@@ -5,16 +5,19 @@ import secrets
 import select
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 import docker
 import psutil
 import yaml
-from fastapi import Depends, FastAPI, HTTPException, Request, Header
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .compose import run_compose
+from .catalog import discover_capabilities, load_catalog, policy_decision
+from .initiate import AUTOMATED_SERVICES, prepare_environment
 from .registry import ROOT, SERVICES, service_by_id, SETTINGS
 
 DLI = docker.DockerClient.from_env()
@@ -24,6 +27,11 @@ app = FastAPI(title="homelab-ctl", docs_url=None, redoc_url=None)
 
 # ---------- per-service action mutex ----------
 _action_locks: dict[str, asyncio.Lock] = {}
+_audit_lock = asyncio.Lock()
+_approvals: dict[str, dict] = {}
+_APPROVAL_TTL = 120
+_STATE_DIR = ROOT / ".state"
+_AUDIT_PATH = _STATE_DIR / "audit.jsonl"
 
 # ---------- TTL cache for HTTP health probes ----------
 _health_cache: dict[str, tuple[bool | None, float]] = {}
@@ -87,6 +95,34 @@ def request_source(request: Request) -> str:
     return f"other:{ip}"
 
 
+def require_trusted_request(request: Request) -> None:
+    """Reject control-plane mutations from outside loopback/Tailscale."""
+    if request_source(request).startswith("other:"):
+        raise HTTPException(403, "Control actions are restricted to localhost or the tailnet")
+
+
+async def audit_event(request: Request, event: str, **fields) -> None:
+    """Append a secret-free, local audit record for state-changing actions."""
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": event,
+        "source": request_source(request),
+        **fields,
+    }
+    async with _audit_lock:
+        _STATE_DIR.mkdir(mode=0o700, exist_ok=True)
+        with _AUDIT_PATH.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(record, separators=(",", ":")) + "\n")
+
+
+def _consume_approval(token: str | None, sid: str, action: str) -> None:
+    approval = _approvals.pop(token, None) if token else None
+    if not approval or approval["expires_at"] < time.time():
+        raise HTTPException(403, "A fresh explicit approval is required")
+    if approval["service_id"] != sid or approval["action"] != action:
+        raise HTTPException(403, "Approval does not match this action")
+
+
 def http_health(s: dict) -> bool | None:
     h = s.get("health") or {}
     if h.get("mode") != "http":
@@ -99,6 +135,50 @@ def http_health(s: dict) -> bool | None:
 
 
 # ---------- API ----------
+@app.get("/api/catalog")
+async def get_catalog():
+    return load_catalog()
+
+
+@app.get("/api/capabilities")
+async def get_capabilities(query: str = ""):
+    return {"query": query, "matches": discover_capabilities(query)}
+
+
+@app.post("/api/policy/evaluate")
+async def evaluate_policy(request: Request):
+    body = await request.json()
+    risk = str(body.get("risk", "privileged"))
+    return {"risk": risk, **policy_decision(risk)}
+
+
+@app.post("/api/approvals")
+async def create_approval(request: Request):
+    require_trusted_request(request)
+    body = await request.json()
+    sid = str(body.get("service_id", ""))
+    action = str(body.get("action", ""))
+    if action not in {"up", "stop", "restart", "pull", "update"}:
+        raise HTTPException(400, "Unknown approval action")
+    service_by_id(sid)
+    if body.get("confirm") != f"{action}:{sid}":
+        raise HTTPException(400, "Approval confirmation does not match")
+    token = secrets.token_urlsafe(24)
+    _approvals[token] = {"service_id": sid, "action": action, "expires_at": time.time() + _APPROVAL_TTL}
+    await audit_event(request, "approval.granted", service_id=sid, action=action)
+    return {"token": token, "expires_in": _APPROVAL_TTL}
+
+
+@app.get("/api/audit")
+async def list_audit(limit: int = 50):
+    limit = max(1, min(limit, 200))
+    if not _AUDIT_PATH.exists():
+        return {"events": []}
+    lines = _AUDIT_PATH.read_text(encoding="utf-8").splitlines()[-limit:]
+    events = [json.loads(line) for line in reversed(lines) if line.strip()]
+    return {"events": events}
+
+
 @app.get("/api/services")
 async def list_services(request: Request):
     tailnet_base = SETTINGS.get("tailnet_base", "")
@@ -149,6 +229,7 @@ async def list_services(request: Request):
 # ---------- destroy (deliberate, double-confirmed in UI) ----------
 @app.post("/api/services/{sid}/destroy")
 async def destroy(sid: str, request: Request):
+    require_trusted_request(request)
     try:
         body = await request.json()
     except json.JSONDecodeError:
@@ -158,14 +239,17 @@ async def destroy(sid: str, request: Request):
     s = service_by_id(sid)
     async with _action_locks.setdefault(sid, asyncio.Lock()):
         rc, out = await run_compose(s, ["down"])
+    await audit_event(request, "service.destroy", service_id=sid, ok=rc == 0)
     return JSONResponse({"ok": rc == 0, "output": out[-4000:]})
 
 
 @app.post("/api/services/{sid}/{action}")
-async def action(sid: str, action: str):
+async def action(sid: str, action: str, request: Request):
+    require_trusted_request(request)
     s = service_by_id(sid)
     if action not in {"up", "stop", "restart", "pull", "update"}:
         raise HTTPException(400, f"unknown action {action!r}")
+    _consume_approval(request.headers.get("X-OmniLab-Approval"), sid, action)
     async with _action_locks.setdefault(sid, asyncio.Lock()):
         if action == "restart":
             rc, out = await run_compose(s, ["restart"])
@@ -175,6 +259,7 @@ async def action(sid: str, action: str):
             rc, out = (rc1 or rc2), o1 + "\n" + o2
         else:
             rc, out = await run_compose(s, [action] if action != "up" else ["up", "-d"])
+    await audit_event(request, "service.action", service_id=sid, action=action, ok=rc == 0)
     return JSONResponse({"ok": rc == 0, "output": out[-8000:]}, status_code=200 if rc == 0 else 500)
 
 
@@ -218,6 +303,25 @@ def _parse_env_file(path: Path) -> dict[str, str]:
             result[k.strip()] = v.strip()
     return result
 
+
+def _is_secret_key(key: str) -> bool:
+    """Whether a setting must never be returned to a browser client."""
+    upper = key.upper()
+    explicit = {"DATABASE_URL", "DB_URL", "CONNECTION_STRING", "DSN"}
+    return upper in explicit or any(
+        token in upper for token in ("PASSWORD", "TOKEN", "SECRET", "KEY", "HASH", "CREDENTIAL")
+    )
+
+
+def _write_env_file(path: Path, values: dict[str, str]) -> None:
+    """Atomically write a host-only env file with restrictive permissions."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.tmp")
+    lines = [f"{key}={value}" for key, value in values.items()]
+    temporary.write_text("\n".join(lines) + ("\n" if lines else ""))
+    temporary.chmod(0o600)
+    os.replace(temporary, path)
+
 def _load_env_example(sid: str) -> dict[str, dict]:
     """Parse .env.example into structured config with placeholders.
 
@@ -256,8 +360,7 @@ def _load_env_example(sid: str) -> dict[str, dict]:
                 priority = "advanced"
                 break
         if priority is None:
-            up = key.upper()
-            if any(t in up for t in ("PASSWORD", "TOKEN", "SECRET", "KEY", "HASH")):
+            if _is_secret_key(key):
                 priority = "important"
             else:
                 priority = "advanced"
@@ -266,30 +369,45 @@ def _load_env_example(sid: str) -> dict[str, dict]:
             "description": "",
             "required": True,
             "priority": priority,
+            "secret": _is_secret_key(key),
         }
     return result
 
 
 @app.get("/api/services/{sid}/setup")
-async def get_setup(sid: str):
+async def get_setup(sid: str, request: Request):
     """Return current .env values + .env.example template for the service."""
+    require_trusted_request(request)
     service_by_id(sid)  # validates sid
     current = _parse_env_file(_env_path(sid))
     template = _load_env_example(sid)
-    # Merge: current values override placeholders
+    # Never send a stored secret back to the browser. A configured flag lets the
+    # UI show progress while preserving the secret in the host-only .env file.
     for key, val in current.items():
         if key in template:
-            template[key]["value"] = val
+            if template[key]["secret"]:
+                template[key]["configured"] = bool(val)
+            else:
+                template[key]["value"] = val
         else:
-            up = key.upper()
-            priority = "important" if any(t in up for t in ("PASSWORD", "TOKEN", "SECRET", "KEY", "HASH")) else "advanced"
-            template[key] = {"value": val, "placeholder": "", "description": "", "required": False, "priority": priority}
+            secret = _is_secret_key(key)
+            priority = "important" if secret else "advanced"
+            template[key] = {
+                "placeholder": "",
+                "description": "",
+                "required": False,
+                "priority": priority,
+                "secret": secret,
+                "configured": bool(val) if secret else False,
+                **({} if secret else {"value": val}),
+            }
     return {"service_id": sid, "config": template}
 
 
 @app.put("/api/services/{sid}/setup")
 async def update_setup(sid: str, request: Request):
     """Write .env file for the service. Only accepts keys from .env.example."""
+    require_trusted_request(request)
     service_by_id(sid)
     try:
         body = await request.json()
@@ -298,22 +416,32 @@ async def update_setup(sid: str, request: Request):
     
     template = _load_env_example(sid)
     allowed_keys = set(template.keys())
-    # Filter to only allowed keys
-    filtered = {k: v for k, v in body.items() if k in allowed_keys}
+    # Filter to only allowed keys. Merge with the current file so a browser
+    # saving one setting cannot erase other settings or masked secret values.
+    if not isinstance(body, dict):
+        raise HTTPException(400, "JSON body must be an object")
+    filtered = {}
+    for key, value in body.items():
+        if key not in allowed_keys:
+            continue
+        if not isinstance(value, str):
+            raise HTTPException(400, f"Setting '{key}' must be a string")
+        if "\n" in value or "\r" in value:
+            raise HTTPException(400, f"Setting '{key}' cannot contain a newline")
+        filtered[key] = value
+    current = _parse_env_file(_env_path(sid))
+    current.update(filtered)
     
-    # Write .env file
     env_path = _env_path(sid)
-    lines = []
-    for key, value in filtered.items():
-        lines.append(f"{key}={value}")
-    env_path.write_text("\n".join(lines) + ("\n" if lines else ""))
-    
+    _write_env_file(env_path, current)
+    await audit_event(request, "service.settings", service_id=sid, keys=sorted(filtered))
     return {"ok": True, "written": list(filtered.keys())}
 
 
 @app.post("/api/services/{sid}/setup/regenerate")
 async def regenerate_secret(sid: str, request: Request):
     """Generate a new secure random value for a secret key (e.g., ADMIN_TOKEN, JWT_SECRET)."""
+    require_trusted_request(request)
     service_by_id(sid)
     try:
         body = await request.json()
@@ -335,10 +463,34 @@ async def regenerate_secret(sid: str, request: Request):
     current = _parse_env_file(_env_path(sid))
     current[key] = new_value
     env_path = _env_path(sid)
-    lines = [f"{k}={v}" for k, v in current.items()]
-    env_path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    _write_env_file(env_path, current)
+    await audit_event(request, "service.secret_regenerated", service_id=sid, key=key)
     
-    return {"ok": True, "key": key, "value": new_value}
+    # Deliberately do not return the secret. It is written directly to the
+    # host's .env file and can be used by the service after a restart.
+    return {"ok": True, "key": key, "configured": True}
+
+
+@app.post("/api/initiate/{sid}/prepare")
+async def prepare_initiate_service(sid: str, request: Request):
+    """Prepare a supported service without returning generated credentials."""
+    require_trusted_request(request)
+    service = service_by_id(sid)
+    if sid not in AUTOMATED_SERVICES:
+        raise HTTPException(400, f"Service '{sid}' is not available in automated initiation")
+
+    current = _parse_env_file(_env_path(sid))
+    example = _parse_env_file(_env_example_path(sid))
+    containers_exist = svc_state(service)["overall"] != "absent"
+    prepared, changed = prepare_environment(
+        sid,
+        current,
+        example,
+        replace_placeholders=not containers_exist,
+    )
+    _write_env_file(_env_path(sid), prepared)
+    await audit_event(request, "initiate.service_prepared", service_id=sid, keys=sorted(changed))
+    return {"ok": True, "service_id": sid, "prepared": sorted(changed), "configured": True}
 
 
 # ---------- static UI ----------

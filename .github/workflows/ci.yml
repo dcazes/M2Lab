@@ -84,6 +84,23 @@ jobs:
           done
           exit $fail
 
+  control-plane-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install control-plane dependencies
+        run: pip install -r ctl/requirements.txt
+
+      - name: Validate catalog and policy rules
+        run: python -m unittest discover -s tests -v
+
   frontend-build:
     runs-on: ubuntu-latest
     steps:

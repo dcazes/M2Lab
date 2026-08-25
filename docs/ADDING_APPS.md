@@ -21,7 +21,7 @@ Hardening rules baked into the template (keep them):
   — their entrypoints need privileged boot (see nextcloud-db/puppygraph history).
 - Do NOT create new networks; reuse the shared external ones (subnet exhaustion).
 
-## 2. Register it
+## 2. Register the deployed service
 
 Add an entry to `services.yaml` (copy the shape of an existing one):
 
@@ -48,9 +48,25 @@ Pick a free `tailnet_port`. Used so far: root→8083 homepage, 8443 immich,
 8444 surfsense, 8445 litellm, 8446 vaultwarden, 8448 puppygraph,
 8450 beszel, 8451 paperless, 8452 actual, 8453 nextcloud, 8454 adventurelog,
 8455 mealie, 8456 open-webui, 8457 ollama, 8458 firecrawl, 8459 freellmapi,
-8460 ctl dashboard, 8461 opencode-agent, 9090 portainer.
+8460 ctl dashboard, 9090 portainer.
 
-## 3. Deploy + expose
+## 3. Add the catalog manifest
+
+`services.yaml` describes how a deployed service runs. `catalog.yaml`
+describes why a person would want it and which capabilities an agent may
+discover. Add a catalog entry with:
+
+- `kind`: `service`, `companion`, `harness`, or `infrastructure`;
+- honest availability—use `evaluation` until deployment and backup review pass;
+- outcome profiles and human-readable requirements;
+- a local visual identity (`icon` + `accent`);
+- narrow capabilities with `read`, `draft`, `write`, `operational`,
+  `destructive`, or `privileged` risk.
+
+Never advertise tools that are only planned. Companion apps do not belong in
+`services.yaml`; give them a verified local/homepage link in `catalog.yaml`.
+
+## 4. Deploy + expose
 
 ```bash
 make up SERVICE=myapp                 # generic verb — works for any id
@@ -60,7 +76,7 @@ python3 ctl/registry.py status        # confirm healthy
 
 Other generic verbs: `stop`, `restart`, `logs`, `pull`, `update`.
 
-## 4. Ship it
+## 5. Ship it
 
 ```bash
 git add myapp services.yaml && git commit -m "add myapp" && git push
@@ -77,3 +93,5 @@ CI runs Gitleaks/Yamllint/Trivy automatically. Homepage cards come from
 - [ ] Port bound to 127.0.0.1
 - [ ] Reuses frontend-net/backend-net, defines no new networks
 - [ ] services.yaml entry added; `make up SERVICE=<id>` works
+- [ ] catalog entry validates and capability risks are least-privilege
+- [ ] `python3 -m unittest discover -s tests -v` passes

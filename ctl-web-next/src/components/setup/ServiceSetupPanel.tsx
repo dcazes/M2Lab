@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Rocket } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { type SetupConfigItem } from '../../lib/types'
+import { createApproval, serviceAction } from '../../lib/api'
+import { toast } from 'sonner'
 
 interface ServiceSetupPanelProps {
   service: import('../../lib/types').Service
@@ -15,6 +17,8 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
   const [success, setSuccess] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState<Record<string, boolean>>({})
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false)
+  const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set())
+  const [starting, setStarting] = useState(false)
 
   useEffect(() => {
     loadSetup()
@@ -34,6 +38,7 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
         }
       }
       setConfig(processed)
+      setDirtyKeys(new Set())
     } catch (err) {
       setError(`Failed to load setup: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -41,23 +46,41 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
     }
   }
 
-  async function handleSave() {
-    if (!config) return
+  async function handleSave(): Promise<boolean> {
+    if (!config) return false
     setError(null)
     setSuccess(null)
     try {
-      // Build payload: only include items that have a value (or we want to save empty?)
+      // Submit only fields the operator changed. This is essential because
+      // secrets are intentionally masked by the API and must not be blanked.
       const payload: Record<string, string> = {}
       for (const [key, item] of Object.entries(config)) {
-        // We'll save even if empty string (to clear)
-        payload[key] = item.value ?? ''
+        if (dirtyKeys.has(key)) payload[key] = item.value ?? ''
       }
+      if (Object.keys(payload).length === 0) return true
       const res = await updateSetup(service.id, payload)
       setSuccess(`Saved ${res.written.length} fields`)
       // Reload to reflect any server-side normalization
       await loadSetup()
+      return true
     } catch (err) {
       setError(`Failed to save: ${err instanceof Error ? err.message : String(err)}`)
+      return false
+    }
+  }
+
+  async function handleSaveAndStart() {
+    setStarting(true)
+    try {
+      if (!(await handleSave())) return
+      const approval = await createApproval(service.id, 'up')
+      const result = await serviceAction(service.id, 'up', approval)
+      if (!result.ok) throw new Error(result.output)
+      toast.success(`${service.display_name} is starting`)
+    } catch (err) {
+      setError(`Failed to start: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -65,15 +88,16 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
     if (!config || !(key in config)) return
     setRegenerating(prev => ({ ...prev, [key]: true }))
     try {
-      const res = await regenerateSecret(service.id, key)
-      // Update the specific item's value
+      await regenerateSecret(service.id, key)
+      // The server never returns generated secrets; mark it configured only.
       setConfig(prev => {
         if (!prev) return prev
         return {
           ...prev,
           [key]: {
             ...prev[key],
-            value: res.value,
+            value: '',
+            configured: true,
           },
         }
       })
@@ -84,16 +108,13 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
     }
   }
 
-  // Heuristic: if placeholder contains "secret", "token", "key", "password", show as password input
   function isSecretField(item: SetupConfigItem): boolean {
-    const placeholder = item.placeholder.toLowerCase()
-    return (
-      placeholder.includes('secret') ||
-      placeholder.includes('token') ||
-      placeholder.includes('key') ||
-      placeholder.includes('password') ||
-      placeholder.includes('hash')
-    )
+    return item.secret
+  }
+
+  function updateValue(key: string, value: string) {
+    setDirtyKeys(prev => new Set(prev).add(key))
+    setConfig(prev => !prev ? prev : { ...prev, [key]: { ...prev[key], value } })
   }
 
   if (isLoading) {
@@ -144,14 +165,17 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
           )}
           <button
             onClick={handleSave}
-            disabled={Object.values(config).every(item => item.value === '')}
+            disabled={dirtyKeys.size === 0}
             className={`px-4 py-2 rounded-btn font-medium transition-fast ${
-              Object.values(config).some(item => item.value !== '')
+              dirtyKeys.size > 0
                 ? 'bg-accent text-bg-base hover:opacity-90'
                 : 'bg-surface-2 text-unknown hover:bg-surface-1 hover:text-white'
             }`}
           >
             Save Changes
+          </button>
+          <button onClick={handleSaveAndStart} disabled={starting} className="button-primary">
+            <Rocket className="h-4 w-4" /> {starting ? 'Starting…' : service.state === 'absent' ? 'Save & install' : 'Save & start'}
           </button>
         </div>
       </div>
@@ -169,29 +193,18 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
                   </span>
                 )}
               </label>
-              <p className="text-xs text-unknown">{item.description}</p>
+              <p className="text-xs text-unknown">{item.description || (item.secret && item.configured ? 'Configured — enter a replacement only if you want to rotate it.' : '')}</p>
               <div className="flex items-center gap-2">
                 {isSecretField(item) ? (
                   <>
                     <input
                       type="password"
                       value={item.value ?? ''}
-                      onChange={(e) => {
-                        setConfig(prev => {
-                          if (!prev) return prev
-                          return {
-                            ...prev,
-                            [key]: {
-                              ...prev[key],
-                              value: e.target.value,
-                            },
-                          }
-                        })
-                      }}
+                      onChange={(e) => updateValue(key, e.target.value)}
                       className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
                         regenerating[key] ? 'opacity-50' : ''
                       }`}
-                      placeholder={item.placeholder}
+                      placeholder={item.configured ? 'Configured — paste a replacement to rotate' : item.placeholder}
                       disabled={regenerating[key]}
                     />
                     {regenerating[key] && (
@@ -215,18 +228,7 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
                     <input
                       type="text"
                       value={item.value ?? ''}
-                      onChange={(e) => {
-                        setConfig(prev => {
-                          if (!prev) return prev
-                          return {
-                            ...prev,
-                            [key]: {
-                              ...prev[key],
-                              value: e.target.value,
-                            },
-                          }
-                        })
-                      }}
+                      onChange={(e) => updateValue(key, e.target.value)}
                       className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
                         regenerating[key] ? 'opacity-50' : ''
                       }`}
@@ -267,29 +269,18 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
                       </span>
                     )}
                   </label>
-                  <p className="text-xs text-unknown">{item.description}</p>
+                  <p className="text-xs text-unknown">{item.description || (item.secret && item.configured ? 'Configured — enter a replacement only if you want to rotate it.' : '')}</p>
                   <div className="flex items-center gap-2">
                     {isSecretField(item) ? (
                       <>
                         <input
                           type="password"
                           value={item.value ?? ''}
-                          onChange={(e) => {
-                            setConfig(prev => {
-                              if (!prev) return prev
-                              return {
-                                ...prev,
-                                [key]: {
-                                  ...prev[key],
-                                  value: e.target.value,
-                                },
-                              }
-                            })
-                          }}
+                          onChange={(e) => updateValue(key, e.target.value)}
                           className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
                             regenerating[key] ? 'opacity-50' : ''
                           }`}
-                          placeholder={item.placeholder}
+                          placeholder={item.configured ? 'Configured — paste a replacement to rotate' : item.placeholder}
                           disabled={regenerating[key]}
                         />
                         {regenerating[key] && (
@@ -313,18 +304,7 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
                         <input
                           type="text"
                           value={item.value ?? ''}
-                          onChange={(e) => {
-                            setConfig(prev => {
-                              if (!prev) return prev
-                              return {
-                                ...prev,
-                                [key]: {
-                                  ...prev[key],
-                                  value: e.target.value,
-                                },
-                              }
-                            })
-                          }}
+                          onChange={(e) => updateValue(key, e.target.value)}
                           className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
                             regenerating[key] ? 'opacity-50' : ''
                           }`}

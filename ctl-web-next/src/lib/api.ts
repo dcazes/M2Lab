@@ -6,6 +6,9 @@ import type {
   SystemStats,
   ServiceAction,
   SetupResponse,
+  CatalogResponse,
+  AuditEvent,
+  CapabilityMatch,
 } from './types'
 
 const API_BASE = '/api'
@@ -41,9 +44,18 @@ export async function fetchService(id: string): Promise<Service> {
   return service
 }
 
-export async function serviceAction(id: string, action: ServiceAction): Promise<ActionResult> {
+export async function createApproval(id: string, action: ServiceAction): Promise<string> {
+  const result = await fetchJson<{ token: string }>(`${API_BASE}/approvals`, {
+    method: 'POST',
+    body: JSON.stringify({ service_id: id, action, confirm: `${action}:${id}` }),
+  })
+  return result.token
+}
+
+export async function serviceAction(id: string, action: ServiceAction, approvalToken: string): Promise<ActionResult> {
   return fetchJson<ActionResult>(`${API_BASE}/services/${id}/${action}`, {
     method: 'POST',
+    headers: { 'X-OmniLab-Approval': approvalToken },
   })
 }
 
@@ -56,6 +68,22 @@ export async function serviceDestroy(id: string, confirm: string): Promise<Destr
 
 export async function fetchSystemStats(): Promise<SystemStats> {
   return fetchJson<SystemStats>(`${API_BASE}/system`)
+}
+
+export async function fetchCatalog(): Promise<CatalogResponse> {
+  return fetchJson<CatalogResponse>(`${API_BASE}/catalog`)
+}
+
+export async function fetchAudit(): Promise<{ events: AuditEvent[] }> {
+  return fetchJson<{ events: AuditEvent[] }>(`${API_BASE}/audit?limit=30`)
+}
+
+export async function discoverCapabilities(query: string): Promise<{ query: string; matches: CapabilityMatch[] }> {
+  return fetchJson(`${API_BASE}/capabilities?query=${encodeURIComponent(query)}`)
+}
+
+export async function prepareInitiateService(id: string): Promise<{ ok: boolean; service_id: string; prepared: string[]; configured: boolean }> {
+  return fetchJson(`${API_BASE}/initiate/${id}/prepare`, { method: 'POST' })
 }
 
 // ---------- Setup API ----------

@@ -3,6 +3,7 @@ import { useSystem } from '../../hooks/useSystem'
 import { formatBytes, formatPercent, formatUptime, formatLoadAvg } from '../../lib/format'
 import { GaugeCard } from './GaugeCard'
 import { Sparkline } from './Sparkline'
+import { TrustPanel } from './TrustPanel'
 
 const MAX_POINTS = 60
 
@@ -52,7 +53,6 @@ export function SystemTab() {
           label="CPU"
           value={data.cpu_percent}
           max={100}
-          unit="%"
           color="var(--color-accent)"
           format={formatPercent}
         />
@@ -60,7 +60,6 @@ export function SystemTab() {
           label="Memory"
           value={data.mem.percent}
           max={100}
-          unit="%"
           color="var(--color-ok)"
           format={formatPercent}
           detail={`${formatBytes(data.mem.used)} / ${formatBytes(data.mem.total)}`}
@@ -69,7 +68,6 @@ export function SystemTab() {
           label="Disk"
           value={data.disk.percent}
           max={100}
-          unit="%"
           color="var(--color-warn)"
           format={formatPercent}
           detail={`${formatBytes(data.disk.used)} / ${formatBytes(data.disk.total)}`}
@@ -114,6 +112,8 @@ export function SystemTab() {
           <Sparkline label="Disk %" color="var(--color-warn)" data={history.disk} />
         </div>
       </section>
+
+      <TrustPanel />
     </div>
   )
 }

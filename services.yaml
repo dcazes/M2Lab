@@ -321,20 +321,3 @@ services:
     backup:
       binds:
         - data
-
-  - id: opencode-agent
-    display_name: OpenCode Agent
-    description: Self-hosted coding agent (views/edits this stack)
-    category: ai
-    icon: "🧩"
-    dir: opencode-agent
-    project: opencode-agent
-    port: 4096
-    tailnet_port: 8461
-    url: http://localhost:4096
-    health:
-      mode: tcp
-      port: 4096
-    backup:
-      volumes:
-        - opencode-agent_opencode-data

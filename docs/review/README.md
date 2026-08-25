@@ -12,6 +12,8 @@ configured, where it is weak, and a grounded proposal for an AI agent layer
 | 02 | `02-critique.md` | ⏳ pending (exp-1) | Findings on setup, networking, and security with severity ratings and concrete fixes. |
 | 03 | `03-ai-agent-architecture.md` | 📝 draft from research | MCP-per-service + subagent + master-router design, grounded in current tooling. Actionable build plan. |
 | 04 | `04-research-notes.md` | ✅ complete | Raw grounded web research: existing MCP servers, OpenAPI→MCP autogen, orchestration patterns, security, precedents. Source of truth for §03. |
+| 05–06 | `05-dashboard-react-rewrite-plan.md`, `06-subagent-fleet-plan.md` | 📝 working plans | Dashboard implementation and service-focused agent-fleet planning. |
+| 07 | `07-product-plan.md` | ✅ proposed direction | Product thesis, first-run catalog, harness-agnostic MCP gateway, policy model, initial app catalog, and staged workflows. |
 
 ## How to search this set
 

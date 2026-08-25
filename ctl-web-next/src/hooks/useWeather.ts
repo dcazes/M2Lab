@@ -8,7 +8,7 @@ export interface WeatherData {
   isDay: boolean
 }
 
-export function useWeather(lat = 40.7128, lon = -74.006) {
+export function useWeather(lat = 43.6532, lon = -79.3832) {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -23,7 +23,13 @@ export function useWeather(lat = 40.7128, lon = -74.006) {
         if (!response.ok) throw new Error('Failed to fetch weather')
         const data = await response.json()
         if (!cancelled) {
-          setWeather(data.current)
+          setWeather({
+            temperature: data.current.temperature_2m,
+            weatherCode: data.current.weather_code,
+            windSpeed: data.current.wind_speed_10m,
+            humidity: data.current.relative_humidity_2m,
+            isDay: Boolean(data.current.is_day),
+          })
           setError(null)
         }
       } catch (err) {

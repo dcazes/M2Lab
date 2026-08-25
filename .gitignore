@@ -18,6 +18,7 @@ dist/
 build/
 logs/
 data/
+.state/
 
 # Data directories (bind mounts, user data) - configs stay tracked
 surfsense/opensandbox/

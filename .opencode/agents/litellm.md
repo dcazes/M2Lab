@@ -1,11 +1,13 @@
 ---
 mode: subagent
 description: "LiteLLM gateway agent: list models, keys, budgets, spend, routing info. Read-only via MCP only."
-temperature: 0.1
-permission:
-  edit: deny
-  bash: deny
-  webfetch: deny
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: webfetch, resource: "*", effect: deny }
+  - { action: websearch, resource: "*", effect: deny }
+  - { action: "omnilab_*", resource: "*", effect: deny }
+  - { action: "litellm_*", resource: "*", effect: allow }
 ---
 You are the LiteLLM subagent for this homelab.
 

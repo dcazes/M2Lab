@@ -14,8 +14,8 @@ Deployment:
 
 Security:
   - Dirty-repo gate blocks mutating verbs when `git status --porcelain` != ""
-  - opencode-agent is a denied sid for mutating verbs (self-lockout protection)
   - Per-sid asyncio locks serialize concurrent operations on the same service
+  - Capability discovery exposes a compact catalog without app credentials
 """
 
 import os
@@ -49,12 +49,13 @@ PORT = int(os.environ.get("CTL_MCP_PORT", "8790"))
 # Import registry (loads services.yaml at import time)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ctl import registry
+from ctl.catalog import discover_capabilities as match_capabilities, discover_workflows as match_workflows, policy_decision
 
 # Per-sid locks for serialization
 _locks: dict[str, asyncio.Lock] = {}
 
 MUTATING_VERBS = {"up", "stop", "restart", "pull", "update"}
-DENIED_SIDS = {"opencode-agent"}  # self-lockout protection
+DENIED_SIDS: set[str] = set()
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
@@ -110,6 +111,30 @@ async def _run_verb(sid: str, args: list[str], timeout: int) -> tuple[int, str]:
 
 # FastMCP server
 mcp = FastMCP("homelab-ctl")
+
+
+@mcp.tool()
+async def discover_app_capabilities(task: str) -> str:
+    """Return a compact, risk-labelled app capability shortlist for a task.
+
+    Call this before selecting an app MCP server. It intentionally returns
+    capability names and narrow tool identifiers rather than every tool schema.
+    """
+    matches = match_capabilities(task)
+    return json.dumps({"task": task, "matches": matches}, separators=(",", ":"))
+
+
+@mcp.tool()
+async def discover_app_workflows(task: str) -> str:
+    """Return a compact shortlist of cross-app workflow designs for a task."""
+    matches = match_workflows(task)
+    return json.dumps({"task": task, "matches": matches}, separators=(",", ":"))
+
+
+@mcp.tool()
+async def evaluate_capability_risk(risk: str) -> str:
+    """Evaluate OmniLab's portable default policy for a capability risk tier."""
+    return json.dumps({"risk": risk, **policy_decision(risk)}, separators=(",", ":"))
 
 
 @mcp.tool()

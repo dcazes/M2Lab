@@ -1,0 +1,323 @@
+schema_version: 1
+
+profiles:
+  - id: research
+    name: Research and learn
+    description: Capture the web, build a private research library, and turn findings into useful plans.
+    icon: "🔭"
+    apps: [surfsense, firecrawl, openwhisper, freemind]
+  - id: money
+    name: Money
+    description: Keep documents and receipts organized, then prepare reviewed budget entries.
+    icon: "◎"
+    apps: [actual-budget, paperless-ngx, immich]
+  - id: travel
+    name: Plan trips
+    description: Research destinations, preserve documents and photos, and maintain living itineraries.
+    icon: "↗"
+    apps: [adventurelog, surfsense, firecrawl, immich, paperless-ngx]
+  - id: wellness
+    name: Health and activity
+    description: Own your activity history and use read-only trends to plan realistic adventures.
+    icon: "♥"
+    apps: [endurain, adventurelog]
+  - id: creative
+    name: Create and capture
+    description: Capture spoken ideas, map them, and turn them into local visual work.
+    icon: "✦"
+    apps: [openwhisper, freemind, graphite, immich]
+  - id: local-ai
+    name: Run local AI
+    description: Choose a chat or coding harness and route models through one private gateway.
+    icon: "⌁"
+    apps: [open-webui, opencode-agent, litellm, ollama, freellmapi]
+
+workflows:
+  - id: trip-research
+    name: Research a trip
+    description: Collect selected sources, build cited research, then prepare an itinerary for review.
+    apps: [firecrawl, surfsense, adventurelog]
+    status: design
+  - id: receipt-to-budget
+    name: Process receipts
+    description: Extract selected receipts and prepare budget transactions without committing them automatically.
+    apps: [paperless-ngx, actual-budget]
+    status: design
+  - id: photo-receipt-to-budget
+    name: Archive receipt photos
+    description: Select receipt photos, archive searchable copies, then prepare reviewed budget entries.
+    apps: [immich, paperless-ngx, actual-budget]
+    status: design
+  - id: memory-to-trip
+    name: Turn memories into a trip log
+    description: Select travel media and documents, enrich approved places, then draft an AdventureLog entry.
+    apps: [immich, paperless-ngx, firecrawl, adventurelog]
+    status: design
+
+apps:
+  - id: surfsense
+    service_id: surfsense
+    name: SurfSense
+    tagline: Your private research library
+    description: Save, search, and discuss web pages and documents without scattering research across browser tabs.
+    category: research
+    kind: service
+    availability: available
+    icon: "🧠"
+    accent: "#7c5cff"
+    setup_minutes: 12
+    ai_optional: false
+    outcomes: [research, travel]
+    requirements: [Docker, 8 GB RAM recommended]
+    capabilities:
+      - {id: research.retrieve, title: Retrieve cited research, risk: read, tools: [surfsense.search]}
+  - id: firecrawl
+    service_id: firecrawl
+    name: Firecrawl
+    tagline: Turn the live web into clean data
+    description: Crawl user-selected sites and produce LLM-ready content for research workflows.
+    category: research
+    kind: service
+    availability: available
+    icon: "🔥"
+    accent: "#ff7043"
+    setup_minutes: 8
+    ai_optional: true
+    outcomes: [research, travel]
+    requirements: [Docker, 4 GB RAM recommended]
+    capabilities:
+      - {id: web.acquire, title: Fetch a user-selected web source, risk: read, tools: [firecrawl.scrape, firecrawl.search]}
+  - id: actual-budget
+    service_id: actual-budget
+    name: Actual Budget
+    tagline: Local-first personal finance
+    description: Keep budgets private and prepare reviewed transactions from receipts and documents.
+    category: productivity
+    kind: service
+    availability: available
+    icon: "◎"
+    accent: "#7c6cf2"
+    setup_minutes: 5
+    ai_optional: true
+    outcomes: [money]
+    requirements: [Docker]
+    capabilities:
+      - {id: finance.read, title: Read budget summaries and categories, risk: read, tools: [actual.accounts, actual.categories, actual.transactions]}
+      - {id: finance.transaction-draft, title: Prepare transaction drafts, risk: draft, tools: [actual.prepare_transaction]}
+      - {id: finance.transaction-write, title: Commit approved transactions, risk: write, tools: [actual.create_transaction]}
+  - id: adventurelog
+    service_id: adventurelog
+    name: AdventureLog
+    tagline: Trips, places, and memories
+    description: Plan travel, keep itineraries, and preserve the story of each adventure.
+    category: productivity
+    kind: service
+    availability: available
+    icon: "🧭"
+    accent: "#f5a524"
+    setup_minutes: 8
+    ai_optional: true
+    outcomes: [travel, wellness]
+    requirements: [Docker]
+    capabilities:
+      - {id: travel.read, title: Read trips and places, risk: read, tools: [adventurelog.search]}
+      - {id: travel.draft, title: Prepare an itinerary draft, risk: draft, tools: [adventurelog.prepare_trip]}
+      - {id: travel.write, title: Save an approved itinerary, risk: write, tools: [adventurelog.create_trip]}
+  - id: paperless-ngx
+    service_id: paperless-ngx
+    name: Paperless-ngx
+    tagline: Searchable documents and receipts
+    description: OCR, tag, and archive household documents while keeping the originals under your control.
+    category: productivity
+    kind: service
+    availability: available
+    icon: "📄"
+    accent: "#49a078"
+    setup_minutes: 10
+    ai_optional: true
+    outcomes: [money, travel]
+    requirements: [Docker, persistent storage]
+    capabilities:
+      - {id: documents.read, title: Search documents and receipt metadata, risk: read, tools: [paperless.search, paperless.document]}
+      - {id: documents.ingest, title: Ingest a selected document, risk: write, tools: [paperless.upload]}
+  - id: immich
+    service_id: immich
+    name: Immich
+    tagline: A private home for photos
+    description: Back up, search, and organize personal media with explicit selection for cross-app workflows.
+    category: media
+    kind: service
+    availability: available
+    icon: "✺"
+    accent: "#4250d8"
+    setup_minutes: 15
+    ai_optional: true
+    outcomes: [money, travel, creative]
+    requirements: [Docker, substantial storage]
+    capabilities:
+      - {id: media.read, title: Search photos and albums, risk: read, tools: [immich.search]}
+      - {id: media.export-selected, title: Export explicitly selected assets, risk: write, tools: [immich.download_asset]}
+  - id: endurain
+    name: Endurain
+    tagline: Self-hosted activity tracking
+    description: A privacy-focused fitness history with Garmin Connect, Strava, and GPX, TCX, or FIT imports.
+    category: wellness
+    kind: service
+    availability: evaluation
+    icon: "♥"
+    accent: "#ef476f"
+    setup_minutes: 12
+    ai_optional: true
+    outcomes: [wellness]
+    requirements: [Docker, PostgreSQL, wearable vendor account for sync]
+    links:
+      homepage: https://docs.endurain.com/
+      source: https://codeberg.org/endurain-project/endurain
+    capabilities:
+      - {id: fitness.read, title: Summarize activity trends, risk: read, tools: [endurain.activities, endurain.summary]}
+  - id: openwhisper
+    name: OpenWhisper
+    tagline: Local voice-to-text everywhere
+    description: Transcribe microphone, meetings, and selected audio locally with Faster-Whisper models.
+    category: capture
+    kind: companion
+    availability: available
+    icon: "◉"
+    accent: "#2dd4bf"
+    setup_minutes: 8
+    ai_optional: true
+    outcomes: [research, creative]
+    requirements: [Windows, macOS, or Linux, microphone permission]
+    links:
+      homepage: https://openwhisper.io/
+      source: https://github.com/Knuckles92/OpenWhisper
+    capabilities:
+      - {id: audio.transcribe-selected, title: Transcribe explicitly selected audio, risk: read, tools: []}
+  - id: graphite
+    name: Graphite Editor
+    tagline: Nondestructive vector design
+    description: Create procedural vector graphics locally in the browser and export SVG, PNG, or JPG.
+    category: creative
+    kind: companion
+    availability: available
+    icon: "◆"
+    accent: "#f26bff"
+    setup_minutes: 1
+    ai_optional: true
+    outcomes: [creative]
+    requirements: [Modern browser with WebAssembly]
+    links:
+      homepage: https://editor.graphite.art/
+      source: https://github.com/GraphiteEditor/Graphite
+    capabilities: []
+  - id: freemind
+    name: FreeMind
+    tagline: Fast, local mind mapping
+    description: Organize ideas as portable mind maps and keep the creative editing loop human-operated.
+    category: creative
+    kind: companion
+    availability: available
+    icon: "⌘"
+    accent: "#46a6ff"
+    setup_minutes: 5
+    ai_optional: true
+    outcomes: [research, creative]
+    requirements: [Desktop Java runtime]
+    links:
+      homepage: https://freemind.sourceforge.io/
+      source: https://sourceforge.net/projects/freemind/
+    capabilities: []
+  - id: open-webui
+    service_id: open-webui
+    name: Open WebUI
+    tagline: Friendly self-hosted AI chat
+    description: A general-user chat surface for local and routed models, knowledge, and admin-approved tools.
+    category: harness
+    kind: harness
+    availability: available
+    icon: "◌"
+    accent: "#f4f4f5"
+    setup_minutes: 8
+    ai_optional: false
+    outcomes: [local-ai]
+    requirements: [LiteLLM or Ollama recommended]
+    capabilities: []
+  - id: opencode-agent
+    name: OpenCode
+    tagline: Agent harness for power users
+    description: Run focused subagents with scoped permissions and progressively discovered MCP tools.
+    category: harness
+    kind: harness
+    availability: available
+    icon: "⌘"
+    accent: "#8bff6a"
+    setup_minutes: 10
+    ai_optional: false
+    outcomes: [local-ai]
+    requirements: [LiteLLM or another model provider]
+    links:
+      homepage: https://opencode.ai/
+      source: https://github.com/anomalyco/opencode
+    capabilities: []
+  - id: litellm
+    service_id: litellm
+    name: LiteLLM
+    tagline: One private model gateway
+    description: Give every app an OpenAI-compatible endpoint with model routing, budgets, and provider fallbacks.
+    category: infrastructure
+    kind: infrastructure
+    availability: available
+    icon: "⌁"
+    accent: "#4f8cff"
+    setup_minutes: 10
+    ai_optional: false
+    outcomes: [local-ai]
+    requirements: [At least one model provider or Ollama]
+    capabilities:
+      - {id: models.read, title: Inspect model availability and health, risk: read, tools: [litellm.models, litellm.health]}
+  - id: freellmapi
+    service_id: freellmapi
+    name: FreeLLMAPI
+    tagline: Optional free-tier aggregation
+    description: Route legitimate provider free tiers behind one OpenAI-compatible adapter with ordering and failover.
+    category: infrastructure
+    kind: infrastructure
+    availability: available
+    icon: "⇄"
+    accent: "#11b981"
+    setup_minutes: 8
+    ai_optional: false
+    outcomes: [local-ai]
+    requirements: [Provider API keys, LiteLLM recommended]
+    capabilities: []
+  - id: ollama
+    service_id: ollama
+    name: Ollama
+    tagline: Private models on your own hardware
+    description: Run local language models as a private fallback or primary inference path.
+    category: infrastructure
+    kind: infrastructure
+    availability: available
+    icon: "◒"
+    accent: "#d4d4d8"
+    setup_minutes: 10
+    ai_optional: false
+    outcomes: [local-ai]
+    requirements: [8 GB RAM minimum, NVIDIA GPU optional]
+    capabilities:
+      - {id: models.local-read, title: Inspect installed local models, risk: read, tools: [ollama.list]}
+  - id: vaultwarden
+    service_id: vaultwarden
+    name: Vaultwarden
+    tagline: Human-controlled credentials
+    description: Store personal credentials without exposing vault contents to agents or MCP tools.
+    category: infrastructure
+    kind: infrastructure
+    availability: available
+    icon: "▣"
+    accent: "#175ddc"
+    setup_minutes: 10
+    ai_optional: true
+    outcomes: []
+    requirements: [Docker, TLS access]
+    capabilities: []

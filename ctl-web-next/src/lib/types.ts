@@ -122,10 +122,80 @@ export interface SetupConfigItem {
   description: string
   required: boolean
   value?: string
+  secret: boolean
+  configured?: boolean
   priority: 'important' | 'advanced'
 }
 
 export interface SetupResponse {
   service_id: string
   config: Record<string, SetupConfigItem>
+}
+
+export type CatalogKind = 'service' | 'companion' | 'infrastructure' | 'harness'
+export type CatalogAvailability = 'available' | 'evaluation' | 'planned'
+export type CapabilityRisk = 'read' | 'draft' | 'write' | 'operational' | 'destructive' | 'privileged'
+
+export interface CatalogCapability {
+  id: string
+  title: string
+  risk: CapabilityRisk
+  tools: string[]
+}
+
+export interface CapabilityMatch extends CatalogCapability {
+  app_id: string
+  app_name: string
+}
+
+export interface CatalogApp {
+  id: string
+  service_id?: string
+  name: string
+  tagline: string
+  description: string
+  category: string
+  kind: CatalogKind
+  availability: CatalogAvailability
+  icon: string
+  accent: string
+  setup_minutes: number
+  ai_optional: boolean
+  outcomes: string[]
+  requirements: string[]
+  links?: { homepage?: string; source?: string }
+  capabilities: CatalogCapability[]
+}
+
+export interface CatalogProfile {
+  id: string
+  name: string
+  description: string
+  icon: string
+  apps: string[]
+}
+
+export interface CatalogWorkflow {
+  id: string
+  name: string
+  description: string
+  apps: string[]
+  status: 'design' | 'pilot' | 'available'
+}
+
+export interface CatalogResponse {
+  schema_version: number
+  profiles: CatalogProfile[]
+  workflows: CatalogWorkflow[]
+  apps: CatalogApp[]
+}
+
+export interface AuditEvent {
+  timestamp: string
+  event: string
+  source: string
+  service_id?: string
+  action?: string
+  ok?: boolean
+  keys?: string[]
 }

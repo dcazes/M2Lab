@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Ops repo for a Docker Compose homelab (~16 self-hosted services, one top-level dir each). No application code, no test suite — verification means valid compose config plus the CI security scans.
+Ops repo for a Docker Compose homelab (~16 self-hosted services, one top-level dir each) with a FastAPI/React control plane. Verification means catalog unit tests, a production UI build, valid compose config, and the CI security scans.
 
 ## Control plane
 
@@ -8,7 +8,7 @@ Ops repo for a Docker Compose homelab (~16 self-hosted services, one top-level d
 - The Makefile is a thin wrapper over `ctl/registry.py`. Generic verbs work for any registered id with no Makefile edit: `make up|stop|restart|logs|pull|update SERVICE=<id>`. Bare targets like `make vaultwarden` are just aliases for `up`.
 - Make targets are generated from `services.yaml` at parse time (`ctl/registry.py ids`) — broken YAML there breaks every make target.
 - Some services define overlay compose files (`compose_files:`, e.g. `docker-compose.gpu.yml` for surfsense/ollama). Use `make ... SERVICE=<id>` / `registry.py` rather than raw `docker compose` inside a service dir, or you'll silently miss overlays.
-- Dashboard: `.venv/bin/python -m ctl.app` → FastAPI on 127.0.0.1:8787 serving `ctl-web/`; deployed as systemd user unit `deploy/homelab-ctl.service`. `POST /api/services/{id}/destroy` runs `compose down` and requires body `{"confirm":"<service-id>"}`.
+- Dashboard: `.venv/bin/python -m ctl.app` → FastAPI on 127.0.0.1:8787 serving `ctl-web-next/dist/`; deployed as systemd user unit `deploy/homelab-ctl.service`. Mutations require short-lived approval tokens; destroy also requires body `{"confirm":"<service-id>"}`.
 - Backups: `./scripts/backup.sh [service-id|all]`, driven by each service's `backup:` block in services.yaml (postgres dumps by container name, named volumes, binds).
 
 ## Python venv
@@ -30,11 +30,13 @@ Follow `docs/ADDING_APPS.md`; start stacks from `docs/compose-template.yml`, reg
 - Pick free loopback + tailnet ports (allocation list at the bottom of ADDING_APPS.md).
 - `ignore_containers:` in a service's entry keeps sidecars (migrations/cron/db) out of status aggregation.
 
-## Verification (no test suite)
+## Verification
 
 CI (`.github/workflows/ci.yml`) gates pushes/PRs to main: Gitleaks, yamllint over the whole repo, Trivy config+fs scans (HIGH/CRITICAL), ansible-lint on `ansible/`. Local equivalents before pushing:
 
 ```bash
+.venv/bin/python -m unittest discover -s tests -v
+cd ctl-web-next && npm run build
 yamllint .
 gitleaks detect --no-banner
 ansible-lint ansible/            # when touching ansible/

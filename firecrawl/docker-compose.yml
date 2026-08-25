@@ -154,4 +154,5 @@ services:
 
 networks:
   backend:
-    driver: bridge
+    external: true
+    name: homelab_backend

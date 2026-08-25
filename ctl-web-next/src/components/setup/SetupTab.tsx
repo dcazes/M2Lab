@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useServices } from '../../hooks/useServices'
 import { ServiceSetupPanel } from './ServiceSetupPanel'
+import { AIConnectionGuide } from './AIConnectionGuide'
 
-export function SetupTab() {
+export function SetupTab({ initialSelectedId = null }: { initialSelectedId?: string | null }) {
   const { data, isLoading } = useServices()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId)
 
   if (isLoading) {
     return (
@@ -21,11 +22,13 @@ export function SetupTab() {
   const activeService = data.services.find((s) => s.id === activeId)
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+    <>
+      <AIConnectionGuide freeLlmApi={data.services.find(service => service.id === 'freellmapi')} />
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
       {/* Service selector sidebar */}
       <aside className="card p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-unknown px-2 py-2">
-          Apps
+          App settings
         </h2>
         <nav className="flex flex-col gap-1" role="listbox" aria-label="Apps">
           {data.services.map((s) => (
@@ -57,6 +60,7 @@ export function SetupTab() {
           </div>
         )}
       </section>
-    </div>
+      </div>
+    </>
   )
 }
