@@ -234,3 +234,45 @@ export interface UpdateStatus {
   update_available: boolean | null
   images: Array<{ image: string; current_digest: string | null; remote_digest: string | null; update_available: boolean | null }>
 }
+
+export type McpState = 'unavailable' | 'installing' | 'authentication_required' | 'verifying' | 'live' | 'degraded' | 'disabled'
+export type McpKind = 'native' | 'community' | 'omnilab-adapter' | 'unsupported'
+
+export interface McpTool {
+  id: string
+  title?: string
+  label: string
+  risk: CapabilityRisk
+  effective_risk: CapabilityRisk
+  enabled: boolean
+  context: string
+}
+
+export interface McpServer {
+  id: string
+  app_id: string
+  service_id?: string
+  name: string
+  icon: string
+  app_state: ServiceState | 'unknown'
+  kind: McpKind
+  transport: 'streamable-http' | 'stdio' | 'none'
+  endpoint?: string
+  source?: string
+  maintainer?: string
+  pin?: string
+  trust: string
+  auth: { type: string; configured: boolean; scopes: string[]; env_ref?: string }
+  enabled: boolean
+  state: McpState
+  error?: string
+  context: string
+  harnesses: Array<'opencode' | 'open-webui'>
+  tools: McpTool[]
+  last_verified?: number
+}
+
+export interface McpRegistryResponse {
+  servers: McpServer[]
+  summary: Record<'live' | 'degraded' | 'authentication_required' | 'disabled' | 'unavailable', number>
+}

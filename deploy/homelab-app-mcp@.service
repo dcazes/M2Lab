@@ -1,0 +1,13 @@
+[Unit]
+Description=OmniLab isolated MCP adapter for %i
+After=network-online.target docker.service
+
+[Service]
+WorkingDirectory=%h/Desktop/Programs/HomeServer
+ExecStart=%h/Desktop/Programs/HomeServer/.venv/bin/python -m ctl.app_mcp %i
+Restart=on-failure
+RestartSec=3
+EnvironmentFile=-%h/Desktop/Programs/HomeServer/.env
+
+[Install]
+WantedBy=default.target

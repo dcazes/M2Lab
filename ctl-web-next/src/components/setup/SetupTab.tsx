@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Network,
   PackageCheck,
+  PlugZap,
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -21,9 +22,11 @@ import { useCatalog } from "../../hooks/useCatalog";
 import { useServices } from "../../hooks/useServices";
 import {
   createApproval,
+  createMcpApproval,
   fetchBootstrapIdentity,
   fetchCalendarConnection,
   fetchSetup,
+  fetchMcpServers,
   fetchUpdateStatus,
   getServiceIconUrl,
   getServiceUrl,
@@ -31,12 +34,15 @@ import {
   saveBootstrapIdentity,
   saveCalendarConnection,
   serviceAction,
+  syncMcpHarnesses,
+  updateMcpServer,
   updateSetup,
+  verifyMcpServer,
 } from "../../lib/api";
-import type { CatalogApp, Service, SetupConfigItem } from "../../lib/types";
+import type { CatalogApp, McpServer, Service, SetupConfigItem } from "../../lib/types";
 import { ServiceSetupPanel } from "./ServiceSetupPanel";
 
-type SettingsSection = "apps" | "models" | "connections";
+type SettingsSection = "apps" | "models" | "connections" | "mcp";
 const PROVIDERS = [
   [
     "FREE_LLMAPI_API_KEY",
@@ -249,6 +255,17 @@ function InstallPlan({
         const result = await serviceAction(id, "up", approval);
         if (!result.ok) throw new Error(result.output);
       }
+      // MCP completion is deliberately best-effort: a failed adapter must not
+      // roll back an otherwise healthy application install.
+      const mcpRegistry = await fetchMcpServers(false);
+      for (const id of installIds) {
+        const server = mcpRegistry.servers.find((item) => item.service_id === id && item.kind !== "unsupported");
+        if (!server) continue;
+        const approval = await createMcpApproval(server.id, "mcp-verify");
+        await verifyMcpServer(server.id, approval);
+      }
+      const syncApproval = await createMcpApproval("registry", "mcp-sync");
+      await syncMcpHarnesses(syncApproval);
       toast.success(`${app.name} install started`);
       onInstalled();
     } catch (error) {
@@ -425,6 +442,10 @@ function AppsSettings({
     return <div className="empty-state">App settings could not be loaded.</div>;
   const services = servicesQuery.data.services;
   const installed = services.filter((service) => service.state !== "absent");
+  const roster = [...services].sort((a, b) => {
+    const order = { running: 0, degraded: 1, stopped: 2, absent: 3 };
+    return order[a.state] - order[b.state] || a.display_name.localeCompare(b.display_name);
+  });
   const catalogApps = catalogQuery.data.apps.filter(
     (app) => app.service_id && app.availability !== "planned",
   );
@@ -472,20 +493,23 @@ function AppsSettings({
               <span>Installed apps</span>
               <small>Settings remain available while offline.</small>
             </div>
-            {installed.map((service) => (
-              <button
-                key={service.id}
-                className={activeId === service.id ? "active" : ""}
-                onClick={() => setSelectedId(service.id)}
-              >
-                <ServiceMark service={service} />
-                <span>
-                  <strong>{service.display_name}</strong>
-                  <small>{stateLabel(service)}</small>
-                </span>
-                <i className={`workspace-dot workspace-dot-${service.state}`} />
-              </button>
-            ))}
+            {roster.map((service, index) => {
+              const previous = roster[index - 1];
+              const section = service.state === "absent" ? "Not installed" : service.state === "stopped" ? "Installed · offline" : "Running";
+              const previousSection = previous ? (previous.state === "absent" ? "Not installed" : previous.state === "stopped" ? "Installed · offline" : "Running") : null;
+              return <div className="settings-roster-entry" key={service.id}>
+                {section !== previousSection && <div className="settings-roster-divider"><span>{section}</span></div>}
+                <button
+                  className={`${activeId === service.id ? "active" : ""} ${service.state === "absent" ? "unavailable" : ""}`}
+                  onClick={() => service.state !== "absent" && setSelectedId(service.id)}
+                  disabled={service.state === "absent"}
+                >
+                  <ServiceMark service={service} />
+                  <span><strong>{service.display_name}</strong><small>{stateLabel(service)}</small></span>
+                  <i className={`workspace-dot workspace-dot-${service.state}`} />
+                </button>
+              </div>;
+            })}
           </aside>
           <section className="settings-active-panel">
             {activeService ? (
@@ -577,6 +601,86 @@ function AppsSettings({
       )}
     </div>
   );
+}
+
+function McpSettings() {
+  const queryClient = useQueryClient();
+  const registry = useQuery({ queryKey: ["mcp-servers"], queryFn: () => fetchMcpServers(true), refetchInterval: 30000 });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [context, setContext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const servers = registry.data?.servers || [];
+  const sorted = [...servers].sort((a, b) => {
+    const appOrder = (state: McpServer["app_state"]) => state === "running" ? 0 : state === "degraded" ? 1 : state === "stopped" ? 2 : 3;
+    return appOrder(a.app_state) - appOrder(b.app_state) || a.name.localeCompare(b.name);
+  });
+  const selected = servers.find((server) => server.id === selectedId) || sorted.find((server) => server.app_state !== "absent") || sorted[0];
+  useEffect(() => setContext(selected?.context || ""), [selected?.id, selected?.context]);
+  const mutate = async (patch: Record<string, unknown>) => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const approval = await createMcpApproval(selected.id, "mcp-edit");
+      await updateMcpServer(selected.id, patch, approval);
+      await queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
+      toast.success("MCP policy saved");
+    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+  const verify = async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const approval = await createMcpApproval(selected.id, "mcp-verify");
+      await verifyMcpServer(selected.id, approval);
+      await queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
+      toast.success("MCP verification finished");
+    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+  const sync = async () => {
+    setBusy(true);
+    try {
+      const approval = await createMcpApproval("registry", "mcp-sync");
+      const result = await syncMcpHarnesses(approval);
+      toast.success(result.note);
+    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+  if (registry.isLoading) return <div className="loading-stage"><span /></div>;
+  if (!registry.data) return <div className="empty-state">MCP registry could not be loaded.</div>;
+  return <div className="mcp-settings">
+    <section className="mcp-summary">
+      {(["live", "degraded", "authentication_required", "disabled", "unavailable"] as const).map(state => <div key={state}><strong>{registry.data.summary[state]}</strong><span>{state.replace("_", " ")}</span></div>)}
+      <button className="button-secondary" disabled={busy} onClick={sync}><RefreshCcw /> Sync harnesses</button>
+    </section>
+    <div className="settings-installed-grid">
+      <aside className="settings-app-list mcp-app-list">
+        <div className="settings-list-heading"><span>Federated servers</span><small>Running apps first · unavailable apps are locked.</small></div>
+        {sorted.map((server, index) => {
+          const group = server.app_state === "absent" ? "Not installed" : server.app_state === "stopped" ? "Installed · offline" : "Running";
+          const previous = sorted[index - 1];
+          const previousGroup = previous ? (previous.app_state === "absent" ? "Not installed" : previous.app_state === "stopped" ? "Installed · offline" : "Running") : null;
+          return <Fragment key={server.id}>{group !== previousGroup && <div className="settings-roster-divider"><span>{group}</span></div>}<button className={selected?.id === server.id ? "active" : ""} disabled={server.app_state === "absent"} onClick={() => setSelectedId(server.id)}>
+            <span className="settings-app-mark"><span>{server.icon}</span></span>
+            <span><strong>{server.name}</strong><small>{server.state.replace("_", " ")}</small></span>
+            <i className={`mcp-state-dot mcp-state-${server.state}`} />
+          </button></Fragment>;
+        })}
+      </aside>
+      <section className="settings-active-panel mcp-detail">
+        {selected && <>
+          <div className="settings-active-heading"><div><span className="eyebrow">{selected.kind} · {selected.trust}</span><h2>{selected.name} MCP</h2><p>{selected.source || selected.error || "No reviewed implementation"}</p></div><div className="settings-active-actions"><button className="button-secondary" disabled={busy || selected.kind === "unsupported"} onClick={verify}><RefreshCcw /> Verify</button></div></div>
+          <div className="mcp-facts"><div><span>Application</span><strong>{selected.app_state}</strong></div><div><span>MCP</span><strong>{selected.state.replace("_", " ")}</strong></div><div><span>Authentication</span><strong>{selected.auth.configured ? selected.auth.type : "required"}</strong></div><div><span>Transport</span><strong>{selected.transport}</strong></div></div>
+          {selected.error && <p className="mcp-warning">{selected.error}</p>}
+          {selected.kind === "community" && <p className="mcp-warning">Community integration · {selected.maintainer || "unknown maintainer"} · pinned {selected.pin || "version missing"}. Review its tools before enabling.</p>}
+          <div className="mcp-controls"><label><input type="checkbox" checked={selected.enabled} disabled={selected.kind === "unsupported" || selected.app_state === "absent" || busy} onChange={event => mutate({ enabled: event.target.checked })} /> Enabled</label><label><input type="checkbox" checked={selected.harnesses.includes("opencode")} onChange={event => mutate({ harnesses: event.target.checked ? [...new Set([...selected.harnesses, "opencode"])] : selected.harnesses.filter(item => item !== "opencode") })} /> OpenCode</label><label><input type="checkbox" checked={selected.harnesses.includes("open-webui")} onChange={event => mutate({ harnesses: event.target.checked ? [...new Set([...selected.harnesses, "open-webui"])] : selected.harnesses.filter(item => item !== "open-webui") })} /> Open WebUI</label></div>
+          <label className="mcp-context">Operating context<textarea value={context} maxLength={2000} onChange={event => setContext(event.target.value)} placeholder="Data boundaries and guidance for agents using this app." /><button className="button-primary" disabled={busy || context === selected.context} onClick={() => mutate({ context })}>Save context</button></label>
+          <div className="mcp-tools"><h3>Actions</h3>{selected.tools.length ? selected.tools.map(tool => <div key={tool.id}><label><input type="checkbox" checked={tool.enabled} onChange={event => mutate({ tools: { [tool.id]: { enabled: event.target.checked } } })} /><span><strong>{tool.label}</strong><small>{tool.id}</small></span></label><span className={`mcp-risk mcp-risk-${tool.effective_risk}`}>{tool.effective_risk}</span></div>) : <p>No callable tools have been verified for this server.</p>}</div>
+        </>}
+      </section>
+    </div>
+  </div>;
 }
 
 function ModelAccess() {
@@ -849,7 +953,7 @@ export function SetupTab({
           <Layers3 />
           <span>
             <strong>One setup surface</strong>
-            <small>Apps · models · connections</small>
+            <small>Apps · models · connections · MCP</small>
           </span>
         </div>
       </header>
@@ -859,6 +963,7 @@ export function SetupTab({
             { id: "apps", label: "Apps", icon: PackageCheck },
             { id: "models", label: "Model access", icon: Sparkles },
             { id: "connections", label: "Connections", icon: Network },
+            { id: "mcp", label: "MCP", icon: PlugZap },
           ] as const
         ).map(({ id, label, icon: Icon }) => (
           <button
@@ -876,6 +981,7 @@ export function SetupTab({
       )}
       {section === "models" && <ModelAccess />}
       {section === "connections" && <Connections />}
+      {section === "mcp" && <McpSettings />}
     </div>
   );
 }

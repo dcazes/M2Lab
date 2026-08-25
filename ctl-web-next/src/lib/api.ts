@@ -13,6 +13,7 @@ import type {
   CalendarConnection,
   CalendarEvent,
   UpdateStatus,
+  McpRegistryResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -54,6 +55,36 @@ export async function createApproval(id: string, action: ServiceAction): Promise
     body: JSON.stringify({ service_id: id, action, confirm: `${action}:${id}` }),
   })
   return result.token
+}
+
+export async function createMcpApproval(id: string, action: 'mcp-edit' | 'mcp-verify' | 'mcp-sync'): Promise<string> {
+  const result = await fetchJson<{ token: string }>(`${API_BASE}/approvals`, {
+    method: 'POST',
+    body: JSON.stringify({ service_id: id, action, confirm: `${action}:${id}` }),
+  })
+  return result.token
+}
+
+export async function fetchMcpServers(verify = false): Promise<McpRegistryResponse> {
+  return fetchJson(`${API_BASE}/mcp/servers?verify=${verify}`)
+}
+
+export async function updateMcpServer(id: string, patch: Record<string, unknown>, approval: string): Promise<{ ok: boolean }> {
+  return fetchJson(`${API_BASE}/mcp/servers/${id}`, {
+    method: 'PUT', headers: { 'X-OmniLab-Approval': approval }, body: JSON.stringify(patch),
+  })
+}
+
+export async function verifyMcpServer(id: string, approval: string) {
+  return fetchJson(`${API_BASE}/mcp/servers/${id}/verify`, {
+    method: 'POST', headers: { 'X-OmniLab-Approval': approval },
+  })
+}
+
+export async function syncMcpHarnesses(approval: string): Promise<{ ok: boolean; note: string }> {
+  return fetchJson(`${API_BASE}/mcp/harnesses/sync`, {
+    method: 'POST', headers: { 'X-OmniLab-Approval': approval },
+  })
 }
 
 export async function serviceAction(id: string, action: ServiceAction, approvalToken: string): Promise<ActionResult> {

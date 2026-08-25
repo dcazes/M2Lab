@@ -28,12 +28,9 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from starlette.applications import Starlette
-from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Mount
 
 from mcp.server.fastmcp import FastMCP
 
@@ -50,6 +47,7 @@ PORT = int(os.environ.get("CTL_MCP_PORT", "8790"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ctl import registry
 from ctl.catalog import discover_capabilities as match_capabilities, discover_workflows as match_workflows, policy_decision
+from ctl.mcp_registry import registry_snapshot
 
 # Per-sid locks for serialization
 _locks: dict[str, asyncio.Lock] = {}
@@ -121,7 +119,14 @@ async def discover_app_capabilities(task: str) -> str:
     capability names and narrow tool identifiers rather than every tool schema.
     """
     matches = match_capabilities(task)
-    return json.dumps({"task": task, "matches": matches}, separators=(",", ":"))
+    live = {server["app_id"]: server for server in registry_snapshot(verify=True)["servers"]
+            if server["state"] == "live"}
+    available = []
+    for match in matches:
+        server = live.get(match["app_id"])
+        if server:
+            available.append({**match, "mcp_server": server["id"], "mcp_state": "live"})
+    return json.dumps({"task": task, "matches": available}, separators=(",", ":"))
 
 
 @mcp.tool()
@@ -205,8 +210,10 @@ async def svc_logs(service_id: str, tail: int = 100) -> str:
     return f"rc={rc}\n{out}"
 
 
-# Wrap with auth middleware
-app = Starlette(routes=[Mount("/", mcp.streamable_http_app())], middleware=[Middleware(BearerAuthMiddleware)])
+# Preserve FastMCP's lifespan; mounting it below another Starlette app leaves
+# its streamable HTTP task group uninitialized.
+app = mcp.streamable_http_app()
+app.add_middleware(BearerAuthMiddleware)
 
 
 if __name__ == "__main__":

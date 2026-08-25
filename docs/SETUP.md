@@ -82,16 +82,20 @@ frontend, and its own tailnet door:
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r ctl/requirements.txt
 cd ctl-web-next && npm ci && npm run build && cd ..
-systemctl --user enable --now homelab-ctl
+install -Dm644 deploy/homelab-ctl.service ~/.config/systemd/user/homelab-ctl.service
+install -Dm644 deploy/homelab-ctl-mcp.service ~/.config/systemd/user/homelab-ctl-mcp.service
+install -Dm644 deploy/homelab-app-mcp@.service ~/.config/systemd/user/homelab-app-mcp@.service
+systemctl --user daemon-reload
+systemctl --user enable --now homelab-ctl homelab-ctl-mcp
 sudo tailscale serve --bg --https=8460 http://127.0.0.1:8787
 ```
 
-Open `https://<your-tailnet-host>:8460` and use **Initiate**. It safely prepares
-and starts Vaultwarden, LiteLLM, and the self-hosted Firecrawl stack, then
-offers Nextcloud and SurfSense as optional foundations. Vaultwarden account
-creation remains a direct user step because its master password must never pass
-through OmniLab. Provider credentials are optional and are configured after
-LiteLLM is online. App lifecycle actions require a fresh, short-lived approval.
+Open `https://<your-tailnet-host>:8460` and use **Settings → Apps** to review
+and install stacks. **Settings → MCP** verifies isolated app adapters, records
+dedicated credential requirements, and generates OpenCode/Open WebUI profiles.
+Vaultwarden account creation remains a direct user step because its master
+password must never pass through OmniLab. All lifecycle and MCP mutations
+require a fresh, short-lived approval.
 
 ## 5. Verify
 

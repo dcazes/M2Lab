@@ -1,5 +1,34 @@
 schema_version: 1
 
+# MCP declarations are reviewed configuration, not proof that a server is live.
+# Runtime verification in ctl/mcp_registry.py is the source of live state.
+mcp_servers:
+  surfsense:
+    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8811/mcp", source: "OmniLab SurfSense API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: surfsense, env: SURFSENSE_API_KEY, scopes: [search]}, tools: [{id: surfsense.search, title: Search research, risk: read}], harnesses: [opencode, open-webui]}
+  firecrawl:
+    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8812/mcp", source: "OmniLab Firecrawl API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: firecrawl, env: TEST_API_KEY, scopes: [scrape, search]}, tools: [{id: firecrawl.scrape, title: Scrape a selected URL, risk: read}, {id: firecrawl.search, title: Search the web, risk: read}], harnesses: [opencode, open-webui]}
+  actual-budget:
+    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8813/mcp", source: "OmniLab Actual Budget API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: service-token, service_dir: actual-budget, env: ACTUAL_PASSWORD, scopes: [budget-read]}, tools: [{id: actual.accounts, title: Read accounts, risk: read}, {id: actual.categories, title: Read categories, risk: read}, {id: actual.transactions, title: Read transactions, risk: read}], harnesses: [opencode, open-webui]}
+  adventurelog:
+    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8814/mcp", source: "OmniLab AdventureLog API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: adventurelog, env: ADVENTURELOG_API_TOKEN, scopes: [travel-read]}, tools: [{id: adventurelog.search, title: Read trips and places, risk: read}], harnesses: [opencode, open-webui]}
+  paperless-ngx:
+    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8815/mcp", source: "OmniLab Paperless REST adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: paperless-ngx, env: PAPERLESS_API_TOKEN, scopes: [documents-read]}, tools: [{id: paperless.search, title: Search documents, risk: read}, {id: paperless.document, title: Read document metadata, risk: read}, {id: paperless.upload, title: Upload a reviewed document, risk: write}], harnesses: [opencode, open-webui]}
+  immich:
+    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8816/mcp", source: "OmniLab Immich API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: api-key, service_dir: immich-app, env: IMMICH_API_KEY, scopes: [asset-read]}, tools: [{id: immich.search, title: Search photos and albums, risk: read}], harnesses: [opencode, open-webui]}
+  nextcloud:
+    {kind: native, transport: streamable-http, endpoint: "http://127.0.0.1:8020/index.php/apps/app_api/proxy/context_agent/mcp/", source: "Nextcloud Context Agent", maintainer: Nextcloud, trust: official, default_enabled: true, auth: {type: app-password, service_dir: nextcloud, env: OMNILAB_MCP_APP_PASSWORD, scopes: [context-agent]}, tools: [], harnesses: [opencode, open-webui]}
+  litellm:
+    {kind: native, transport: streamable-http, endpoint: "http://127.0.0.1:4000/litellm_admin/mcp", public_endpoint: "https://home.taile2cc7a.ts.net:8445/litellm_admin/mcp", source: "LiteLLM OpenAPI MCP gateway", maintainer: LiteLLM, trust: official, default_enabled: true, auth: {type: bearer, service_dir: litellm, env: LITELLM_MCP_KEY, scopes: [models-read]}, tools: [{id: litellm.models, title: Inspect available models, risk: read}, {id: litellm.health, title: Inspect model health, risk: read}], harnesses: [opencode, open-webui]}
+  open-webui: {kind: unsupported, transport: none, reason: "Open WebUI consumes MCP servers; no reviewed server exposing its own data is registered."}
+  opencode-agent: {kind: unsupported, transport: none, reason: "OpenCode consumes MCP servers; lifecycle is exposed by the OmniLab control MCP."}
+  vaultwarden: {kind: unsupported, transport: none, reason: "Vault contents are intentionally excluded from agent and MCP access."}
+  freellmapi: {kind: unsupported, transport: none, reason: "No reviewed native or community MCP server is pinned."}
+  ollama: {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8817/mcp", source: "OmniLab Ollama read adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: none, scopes: [models-read]}, tools: [{id: ollama.list, title: List local models, risk: read}], harnesses: [opencode, open-webui]}
+  endurain: {kind: unsupported, transport: none, reason: "Evaluation app; no reviewed MCP server is registered."}
+  openwhisper: {kind: unsupported, transport: none, reason: "Desktop companion has no remotely managed API in OmniLab."}
+  graphite: {kind: unsupported, transport: none, reason: "Browser editor has no safe automation interface."}
+  freemind: {kind: unsupported, transport: none, reason: "Desktop editor has no safe automation interface."}
+
 profiles:
   - id: research
     name: Research and learn

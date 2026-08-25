@@ -32,6 +32,17 @@ def load_catalog() -> dict[str, Any]:
         raise ValueError("every catalog app needs a non-empty id")
     if len(ids) != len(set(ids)):
         raise ValueError("catalog app ids must be unique")
+    manifests = raw.get("mcp_servers", {})
+    if not isinstance(manifests, dict):
+        raise ValueError("catalog.yaml mcp_servers must be a mapping")
+    unknown_manifests = set(manifests) - set(ids)
+    if unknown_manifests:
+        raise ValueError(f"MCP manifests reference unknown apps: {sorted(unknown_manifests)}")
+    for app in apps:
+        app["mcp"] = manifests.get(app["id"], {
+            "kind": "unsupported", "transport": "none",
+            "reason": "No reviewed MCP implementation is registered",
+        })
     app_ids = set(ids)
     for app in apps:
         missing = REQUIRED_APP_FIELDS - set(app)

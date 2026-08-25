@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import select
+import subprocess
 import time
 import urllib.request
 import urllib.error
@@ -23,6 +24,10 @@ from fastapi.staticfiles import StaticFiles
 from .compose import run_compose
 from .catalog import discover_capabilities, load_catalog, policy_decision
 from .initiate import AUTOMATED_SERVICES, prepare_environment
+from .mcp_registry import (
+    harness_preview, mark_verified, registry_snapshot, update_server,
+    write_harness_exports,
+)
 from .registry import ROOT, SERVICES, service_by_id, SETTINGS
 
 DLI = docker.DockerClient.from_env()
@@ -165,9 +170,14 @@ async def create_approval(request: Request):
     body = await request.json()
     sid = str(body.get("service_id", ""))
     action = str(body.get("action", ""))
-    if action not in {"up", "stop", "restart", "pull", "update"}:
+    if action not in {"up", "stop", "restart", "pull", "update", "mcp-edit", "mcp-verify", "mcp-sync"}:
         raise HTTPException(400, "Unknown approval action")
-    service_by_id(sid)
+    if action.startswith("mcp-"):
+        known = {item["id"] for item in registry_snapshot()["servers"]} | {"registry"}
+        if sid not in known:
+            raise HTTPException(404, "Unknown MCP server")
+    else:
+        service_by_id(sid)
     if body.get("confirm") != f"{action}:{sid}":
         raise HTTPException(400, "Approval confirmation does not match")
     token = secrets.token_urlsafe(24)
@@ -231,6 +241,83 @@ async def list_services(request: Request):
     await asyncio.gather(*[probe_health(svc) for svc in service_data])
     
     return {"services": service_data, "source": src}
+
+
+def _service_state_map() -> dict[str, str]:
+    return {service["id"]: svc_state(service)["overall"] for service in SERVICES}
+
+
+@app.get("/api/mcp/servers")
+async def list_mcp_servers(request: Request, verify: bool = False):
+    require_trusted_request(request)
+    loop = asyncio.get_event_loop()
+    states = await loop.run_in_executor(None, _service_state_map)
+    return await loop.run_in_executor(None, lambda: registry_snapshot(states, verify=verify))
+
+
+@app.get("/api/mcp/servers/{server_id}/tools")
+async def list_mcp_tools(server_id: str, request: Request):
+    require_trusted_request(request)
+    snapshot = registry_snapshot(_service_state_map(), verify=False)
+    server = next((item for item in snapshot["servers"] if item["id"] == server_id), None)
+    if not server:
+        raise HTTPException(404, "Unknown MCP server")
+    return {"server_id": server_id, "state": server["state"], "tools": server["tools"]}
+
+
+@app.put("/api/mcp/servers/{server_id}")
+async def put_mcp_server(server_id: str, request: Request):
+    require_trusted_request(request)
+    _consume_approval(request.headers.get("X-OmniLab-Approval"), server_id, "mcp-edit")
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "JSON body must be an object")
+    try:
+        update_server(server_id, body)
+    except KeyError:
+        raise HTTPException(404, "Unknown MCP server") from None
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from None
+    await audit_event(request, "mcp.settings", service_id=server_id,
+                      keys=sorted(key for key in body if key in {"enabled", "context", "harnesses", "tools"}))
+    return {"ok": True, "server_id": server_id}
+
+
+@app.post("/api/mcp/servers/{server_id}/verify")
+async def verify_mcp_server(server_id: str, request: Request):
+    require_trusted_request(request)
+    _consume_approval(request.headers.get("X-OmniLab-Approval"), server_id, "mcp-verify")
+    initial = registry_snapshot(_service_state_map(), verify=False)
+    candidate = next((item for item in initial["servers"] if item["id"] == server_id), None)
+    if candidate and server_id in {"firecrawl", "paperless-ngx", "immich", "ollama"} and candidate["app_state"] == "running":
+        # Units are isolated per app; failure is reflected by the subsequent
+        # endpoint probe and never rolls back the application itself.
+        await asyncio.to_thread(subprocess.run,
+            ["systemctl", "--user", "start", f"homelab-app-mcp@{server_id}.service"],
+            capture_output=True, text=True, timeout=20)
+    snapshot = registry_snapshot(_service_state_map(), verify=True)
+    server = next((item for item in snapshot["servers"] if item["id"] == server_id), None)
+    if not server:
+        raise HTTPException(404, "Unknown MCP server")
+    mark_verified(server_id)
+    await audit_event(request, "mcp.verify", service_id=server_id, ok=server["state"] == "live")
+    return server
+
+
+@app.get("/api/mcp/harnesses/preview")
+async def preview_mcp_harnesses(request: Request):
+    require_trusted_request(request)
+    return harness_preview(registry_snapshot(_service_state_map(), verify=False))
+
+
+@app.post("/api/mcp/harnesses/sync")
+async def sync_mcp_harnesses(request: Request):
+    require_trusted_request(request)
+    _consume_approval(request.headers.get("X-OmniLab-Approval"), "registry", "mcp-sync")
+    paths = write_harness_exports()
+    await audit_event(request, "mcp.harness_sync", keys=sorted(paths))
+    return {"ok": True, "exports": paths,
+            "note": "Managed profiles were generated without overwriting user-owned harness configuration."}
 
 
 # ---------- destroy (deliberate, double-confirmed in UI) ----------
