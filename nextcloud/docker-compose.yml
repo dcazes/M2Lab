@@ -17,6 +17,10 @@ services:
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: ${NEXTCLOUD_DBPASSWORD}
       REDIS_HOST: redis
+      # First-run admin bootstrap. OmniLab supplies these before the first
+      # container start; the image ignores them once Nextcloud is installed.
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:-}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD:-}
       # Hosts Nextcloud accepts. Include localhost (direct) and the secure
       # Tailscale URL. Update the tailnet host if you rename the machine.
       NEXTCLOUD_TRUSTED_DOMAINS: localhost:8020 home.taile2cc7a.ts.net:8453

@@ -34,6 +34,33 @@ model_list:
       model: ollama_chat/llama3.2
       api_base: http://host.docker.internal:11434
 
+  # ---------- Provider routes configured from OmniLab ----------
+  - model_name: "nvidia/*"
+    litellm_params:
+      model: "nvidia_nim/*"
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_NIM_API_KEY
+
+  - model_name: "gemini/*"
+    litellm_params:
+      model: "gemini/*"
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: "huggingface/*"
+    litellm_params:
+      model: "huggingface/*"
+      api_key: os.environ/HUGGINGFACE_API_KEY
+
+  - model_name: "mistral/*"
+    litellm_params:
+      model: "mistral/*"
+      api_key: os.environ/MISTRAL_API_KEY
+
+  - model_name: "openai/*"
+    litellm_params:
+      model: "openai/*"
+      api_key: os.environ/OPENAI_API_KEY
+
   # ---------- Paid providers (keys in litellm/.env only) ----------
   # Uncomment entries for providers you've paid for and added to .env.
   # The model names here are what consumers will see at /v1/models.

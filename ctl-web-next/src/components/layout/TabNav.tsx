@@ -1,4 +1,4 @@
-import { Grid2X2, Monitor, Server, Compass, Settings, WandSparkles } from 'lucide-react'
+import { Monitor, Server, Settings } from 'lucide-react'
 import type { AppTab } from './AppShell'
 
 interface TabNavProps {
@@ -7,12 +7,9 @@ interface TabNavProps {
 }
 
 const tabs = [
-  { id: 'initiate' as const, label: 'Initiate', icon: WandSparkles },
   { id: 'workspace' as const, label: 'Workspace', icon: Monitor },
-  { id: 'discover' as const, label: 'Catalog', icon: Grid2X2 },
-  { id: 'system' as const, label: 'System', icon: Server },
   { id: 'settings' as const, label: 'Settings', icon: Settings },
-  { id: 'explore' as const, label: 'Explore', icon: Compass },
+  { id: 'system' as const, label: 'System', icon: Server },
 ] as const
 
 export function TabNav({ activeTab, onChange }: TabNavProps) {

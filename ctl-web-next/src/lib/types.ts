@@ -163,6 +163,13 @@ export interface CatalogApp {
   ai_optional: boolean
   outcomes: string[]
   requirements: string[]
+  dependencies?: string[]
+  setup?: {
+    bootstrap: 'automatic' | 'first_login' | 'none'
+    identity?: boolean
+    model_route?: 'litellm' | 'ollama' | 'none'
+    notes?: string[]
+  }
   links?: { homepage?: string; source?: string }
   capabilities: CatalogCapability[]
 }
@@ -198,4 +205,32 @@ export interface AuditEvent {
   action?: string
   ok?: boolean
   keys?: string[]
+}
+
+export interface BootstrapIdentityStatus {
+  configured: boolean
+  email: string | null
+}
+
+export interface CalendarConnection {
+  configured: boolean
+  username: string | null
+  calendar: string | null
+  nextcloud_running: boolean
+}
+
+export interface CalendarEvent {
+  uid: string
+  title: string
+  start: string
+  end?: string
+  all_day: boolean
+  calendar: string
+}
+
+export interface UpdateStatus {
+  service_id: string
+  checked: boolean
+  update_available: boolean | null
+  images: Array<{ image: string; current_digest: string | null; remote_digest: string | null; update_available: boolean | null }>
 }

@@ -69,6 +69,8 @@ apps:
     ai_optional: false
     outcomes: [research, travel]
     requirements: [Docker, 8 GB RAM recommended]
+    dependencies: [litellm, ollama]
+    setup: {bootstrap: first_login, model_route: ollama, notes: [Create the first SurfSense user after the stack is online; chat models remain user-selected inside SurfSense.]}
     capabilities:
       - {id: research.retrieve, title: Retrieve cited research, risk: read, tools: [surfsense.search]}
   - id: firecrawl
@@ -85,6 +87,7 @@ apps:
     ai_optional: true
     outcomes: [research, travel]
     requirements: [Docker, 4 GB RAM recommended]
+    setup: {bootstrap: automatic, model_route: none}
     capabilities:
       - {id: web.acquire, title: Fetch a user-selected web source, risk: read, tools: [firecrawl.scrape, firecrawl.search]}
   - id: actual-budget
@@ -101,6 +104,7 @@ apps:
     ai_optional: true
     outcomes: [money]
     requirements: [Docker]
+    setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: finance.read, title: Read budget summaries and categories, risk: read, tools: [actual.accounts, actual.categories, actual.transactions]}
       - {id: finance.transaction-draft, title: Prepare transaction drafts, risk: draft, tools: [actual.prepare_transaction]}
@@ -119,6 +123,7 @@ apps:
     ai_optional: true
     outcomes: [travel, wellness]
     requirements: [Docker]
+    setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: travel.read, title: Read trips and places, risk: read, tools: [adventurelog.search]}
       - {id: travel.draft, title: Prepare an itinerary draft, risk: draft, tools: [adventurelog.prepare_trip]}
@@ -137,6 +142,7 @@ apps:
     ai_optional: true
     outcomes: [money, travel]
     requirements: [Docker, persistent storage]
+    setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: documents.read, title: Search documents and receipt metadata, risk: read, tools: [paperless.search, paperless.document]}
       - {id: documents.ingest, title: Ingest a selected document, risk: write, tools: [paperless.upload]}
@@ -154,6 +160,7 @@ apps:
     ai_optional: true
     outcomes: [money, travel, creative]
     requirements: [Docker, substantial storage]
+    setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: media.read, title: Search photos and albums, risk: read, tools: [immich.search]}
       - {id: media.export-selected, title: Export explicitly selected assets, risk: write, tools: [immich.download_asset]}
@@ -241,6 +248,8 @@ apps:
     ai_optional: false
     outcomes: [local-ai]
     requirements: [LiteLLM or Ollama recommended]
+    dependencies: [litellm]
+    setup: {bootstrap: first_login, model_route: litellm, notes: [The first registered Open WebUI user becomes its administrator.]}
     capabilities: []
   - id: opencode-agent
     name: OpenCode
@@ -273,6 +282,8 @@ apps:
     ai_optional: false
     outcomes: [local-ai]
     requirements: [At least one model provider or Ollama]
+    dependencies: [freellmapi, ollama]
+    setup: {bootstrap: automatic, model_route: none}
     capabilities:
       - {id: models.read, title: Inspect model availability and health, risk: read, tools: [litellm.models, litellm.health]}
   - id: freellmapi
@@ -289,6 +300,7 @@ apps:
     ai_optional: false
     outcomes: [local-ai]
     requirements: [Provider API keys, LiteLLM recommended]
+    setup: {bootstrap: first_login, model_route: none, notes: [Add legitimate provider credentials in FreeLLMAPI and copy its local gateway key into Model access.]}
     capabilities: []
   - id: ollama
     service_id: ollama
@@ -304,6 +316,7 @@ apps:
     ai_optional: false
     outcomes: [local-ai]
     requirements: [8 GB RAM minimum, NVIDIA GPU optional]
+    setup: {bootstrap: automatic, model_route: none, notes: [OmniLab pulls nomic-embed-text as the default local embedding model.]}
     capabilities:
       - {id: models.local-read, title: Inspect installed local models, risk: read, tools: [ollama.list]}
   - id: vaultwarden
@@ -320,4 +333,22 @@ apps:
     ai_optional: true
     outcomes: []
     requirements: [Docker, TLS access]
+    setup: {bootstrap: first_login, model_route: none, notes: [Create the master account directly in Vaultwarden; OmniLab never receives that password.]}
+    capabilities: []
+
+  - id: nextcloud
+    service_id: nextcloud
+    name: Nextcloud
+    tagline: Files and calendar you control
+    description: Keep files, calendars, and personal collaboration data on your own server.
+    category: productivity
+    kind: service
+    availability: available
+    icon: "☁️"
+    accent: "#0082c9"
+    setup_minutes: 10
+    ai_optional: true
+    outcomes: [money, travel]
+    requirements: [Docker, persistent storage]
+    setup: {bootstrap: automatic, identity: true, model_route: none, notes: [The shared app login becomes the initial Nextcloud administrator.]}
     capabilities: []

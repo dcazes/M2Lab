@@ -3,30 +3,18 @@ import { HeaderBar } from './HeaderBar'
 import { TabNav } from './TabNav'
 import { ServicesTab } from '../services/ServicesTab'
 import { SystemTab } from '../system/SystemTab'
-import { ExploreTab } from '../explore/ExploreTab'
 import { SetupTab } from '../setup/SetupTab'
-import { CatalogTab } from '../catalog/CatalogTab'
-import { InitiateTab } from '../initiate/InitiateTab'
 
-export type AppTab = 'initiate' | 'discover' | 'workspace' | 'system' | 'settings' | 'explore'
-
-const INITIATE_STORAGE_KEY = 'omnilab.initiate.v1'
-
-function initialTab(): AppTab {
-  try {
-    const progress = JSON.parse(localStorage.getItem(INITIATE_STORAGE_KEY) || '{}')
-    return progress.finished ? 'workspace' : 'initiate'
-  } catch {
-    return 'initiate'
-  }
-}
+export type AppTab = 'workspace' | 'system' | 'settings'
 
 export function AppShell() {
-  const [activeTab, setActiveTab] = useState<AppTab>(initialTab)
+  const [activeTab, setActiveTab] = useState<AppTab>('workspace')
   const [settingsServiceId, setSettingsServiceId] = useState<string | null>(null)
+  const [settingsSection, setSettingsSection] = useState<'apps' | 'models' | 'connections'>('apps')
 
   const openSettings = (serviceId: string) => {
     setSettingsServiceId(serviceId)
+    setSettingsSection(serviceId === 'litellm' ? 'models' : 'apps')
     setActiveTab('settings')
   }
 
@@ -36,12 +24,9 @@ export function AppShell() {
       <main className="mx-auto max-w-[1500px] p-4 md:p-6 lg:p-8">
         <TabNav activeTab={activeTab} onChange={setActiveTab} />
         <div className="mt-6 animate-in fade-in duration-200">
-          {activeTab === 'initiate' && <InitiateTab onFinish={() => setActiveTab('workspace')} onOpenSettings={openSettings} />}
-          {activeTab === 'discover' && <CatalogTab onOpenSettings={openSettings} onOpenWorkspace={() => setActiveTab('workspace')} />}
           {activeTab === 'workspace' && <ServicesTab onOpenSettings={openSettings} />}
           {activeTab === 'system' && <SystemTab />}
-          {activeTab === 'settings' && <SetupTab initialSelectedId={settingsServiceId} />}
-          {activeTab === 'explore' && <ExploreTab />}
+          {activeTab === 'settings' && <SetupTab initialSelectedId={settingsServiceId} initialSection={settingsSection} />}
         </div>
       </main>
     </div>

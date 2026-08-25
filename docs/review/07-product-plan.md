@@ -2,12 +2,12 @@
 
 > **Status:** active implementation direction. The catalog, progressive
 > discovery API/MCP tools, lifecycle approvals, local audit trail, and
-> outcome-led dashboard are implemented. A resumable Initiate flow now prepares
-> Vaultwarden, LiteLLM, and self-hosted Firecrawl, with Nextcloud and SurfSense
-> as optional foundations. Workspace is now a compact operations cockpit with
-> real system metrics, app selection, health, approval-gated commands, logs,
-> and an audit-backed calendar/agenda. App-specific cross-app adapters remain
-> staged. **Updated:** 2026-08-24.
+> outcome-led dashboard are implemented. Settings now unifies installed apps,
+> install plans, model access, and private connections. Workspace is a compact
+> operations cockpit with real system metrics, status-sorted apps,
+> approval-gated commands, logs, and a user-only Nextcloud calendar. System owns
+> core-service health and the audit trail. App-specific cross-app adapters
+> remain staged. **Updated:** 2026-08-25.
 >
 > **Product thesis:** OmniLab helps people choose, install, configure, and
 > safely use privacy-respecting productivity apps through the AI harness of
@@ -20,7 +20,7 @@ general-purpose agent runtime. It is the layer that makes a curated collection
 of useful apps coherent:
 
 ```text
-Catalog and first-run setup
+Settings: apps, model access, connections
        │ selects/configures/deploys
        ▼
 OmniLab capability gateway
@@ -40,27 +40,25 @@ The durable integration boundary is **MCP**. OpenCode is the preferred first
 power-user harness; Open WebUI is the preferred general-user chat harness.
 Neither is a required dependency of the catalog or the policy boundary.
 
-## 2. First-run experience
+## 2. Settings-first setup
 
-The implemented **Initiate** tab is a repeatable vertical sequence. It detects
-existing service state, preserves configured values, generates only
-service-internal secrets, requests an action-specific approval, and starts each
-Compose stack. Vaultwarden master-account creation is an explicit handoff;
-OmniLab never handles that password. FreeLLMAPI is deferred from initiation.
+There are only three top-level destinations: **Workspace**, **Settings**, and
+**System**. The former Initiate and Catalog pages are consolidated into
+Settings so installation and configuration cannot disagree about service
+state.
 
-The first page describes outcomes rather than Docker components:
+Settings opens on installed apps. Stopped apps remain configurable; never-
+installed apps appear only under **Add apps**. Before any download, an install
+plan lists dependencies, generated secrets, required user input, hardware, and
+the official first-login fallback. Dependency stacks are added automatically
+and one deliberate action performs the displayed plan.
 
-```text
-What would you like your personal AI workspace to help with?
+Vaultwarden is first. The user creates its master account directly in the app;
+OmniLab never receives that password. The user may then create a shared app
+email/password for supported admin bootstrap, acknowledging the larger breach
+impact of credential reuse and saving a recovery copy in Vaultwarden.
 
-[ Research & learn ] [ Money ] [ Plan trips ] [ Health & activity ]
-[ Create visuals ]   [ Capture ideas ] [ Run local AI ]
-```
-
-Selecting an outcome preselects a profile of apps. Each card must show a
-license-reviewed visual, plain-English purpose, setup time, storage/hardware
-requirements, whether it works without AI, and required credentials. Cards use
-one of three explicit actions:
+Each app uses one of three explicit actions:
 
 | App kind | Dashboard action | Meaning |
 |---|---|---|
@@ -68,8 +66,7 @@ one of three explicit actions:
 | Local/browser companion | **Open locally** | User runs it on their own device; OmniLab does not pretend to host it. |
 | Infrastructure | **Configure** | A supporting service, not an end-user destination. |
 
-While images are downloading, the user can optionally connect AI providers.
-Provider choice must never block installing a normal productivity app.
+Provider choice never blocks installing a normal productivity app.
 
 ## 3. Model-provider setup
 
@@ -81,15 +78,24 @@ be used to evade provider quotas or terms.
 ```text
 Choose model access: [ Local Ollama ] [ Provider key ] [ Later ]
 Provider: NVIDIA | Google | Hugging Face | Mistral | other supported provider
-Key:      paste once; test connection; store only in a gitignored secret file
+Key:      paste once; store only in a gitignored secret file
 ```
 
-The UI reports configuration status and test failures, but never returns saved
-secret values to a browser or an agent. Paid-provider keys remain separate from
-FreeLLMAPI. Vaultwarden stores user credentials but is never exposed to agents
-or MCP tools.
+The UI reports configuration status but never returns saved secret values to a
+browser or an agent. Direct provider keys remain separate from FreeLLMAPI.
+Vaultwarden stores user credentials but is never exposed to agents or MCP
+tools. Ollama automatically pulls a small local embedding model for compatible
+apps.
 
-## 4. Context and progressive capability discovery
+## 4. Workspace calendar and connections
+
+Workspace never treats service actions as calendar events. Its agenda reads a
+single user-selected Nextcloud calendar over CalDAV using a scoped app password
+stored in local control-plane state. Lifecycle activity and approvals remain
+visible only in System. Other user-owned connections may follow this explicit,
+scoped pattern.
+
+## 5. Context and progressive capability discovery
 
 Do **not** build a standalone vector/RAG "context engine" in v1. Instead build
 a small, harness-agnostic task-context broker:
@@ -114,7 +120,7 @@ the policy authority, credential manager, or universal memory system. A future
 context engine is justified only if progressive discovery plus structured app
 data proves insufficient.
 
-## 5. Policy and trust model
+## 6. Policy and trust model
 
 The agent harness may have its own permissions, but OmniLab must enforce the
 portable policy boundary. Every MCP integration declares a risk tier:
@@ -129,10 +135,11 @@ portable policy boundary. Every MCP integration declares a risk tier:
 | Privileged | Docker host/socket, Vaultwarden | Never autonomous |
 
 Every write must produce an audit record: requesting user, harness, app/tool,
-sanitized parameters, source IDs, approval, result, and time. Credentials are
-scoped, dedicated, revocable, and never placed in agent-readable files.
+sanitized parameters, source IDs, approval, result, and time. Provider and
+agent credentials are scoped and revocable. The optional shared app login is a
+user-acknowledged exception and is never placed in agent-readable files.
 
-## 6. Initial catalog
+## 7. Initial catalog
 
 ### End-user apps
 
@@ -170,7 +177,7 @@ silently reads a user's maps.
 It is categorized as Creative and receives an **Open locally** card; no Docker
 service or autonomous design MCP is planned initially.
 
-## 7. Demonstration workflows
+## 8. Demonstration workflows
 
 ### A. Research to approved trip
 
@@ -202,24 +209,23 @@ the photo library.
 Summarize activity trends read-only, research a suitable trip, and prepare an
 AdventureLog draft. This is planning support, not medical advice.
 
-## 8. Delivery sequence
+## 9. Delivery sequence
 
 1. **Foundation:** finish the existing security hardening review, define the
    manifest schema, and add manifest validation/testing.
-2. **First-run catalog:** build outcome-led cards, visuals, dependency display,
-   configuration status, and safe install/retry/rollback states.
-3. **AI connection:** add optional LiteLLM/Ollama/provider setup with secret
-   masking, connection tests, and clear provider-status feedback.
+2. **Settings control center:** installed/add-app views, dependency plans,
+   shared bootstrap identity, configuration status, and explicit updates.
+3. **AI connection:** LiteLLM/FreeLLMAPI/Ollama setup with secret masking,
+   provider status, local embeddings, and downstream app wiring.
 4. **Gateway:** implement capability registry, MCP adapters, scoped credentials,
    approval API, and append-only audit records.
 5. **Pilot:** ship workflow A plus one harness adapter, then workflow B.
 6. **Expand:** add Immich workflow C, evaluate Endurain/OpenWhisper, and add the
    second harness adapter. Keep creative/local companions non-autonomous.
 
-## 9. Acceptance criteria before public promotion
+## 10. Acceptance criteria before public promotion
 
-- A new user can choose a profile and understand every selected app before
-  deployment.
+- A new user can review every dependency and human step before deployment.
 - The dashboard never exposes stored secrets; agents cannot read `.env` files.
 - A harness receives only task-matched tool schemas.
 - Each write has an approval and audit event; destructive/privileged actions

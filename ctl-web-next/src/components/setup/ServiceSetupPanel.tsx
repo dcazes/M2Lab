@@ -73,8 +73,9 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
     setStarting(true)
     try {
       if (!(await handleSave())) return
-      const approval = await createApproval(service.id, 'up')
-      const result = await serviceAction(service.id, 'up', approval)
+      const action = service.state === 'running' ? 'restart' : 'up'
+      const approval = await createApproval(service.id, action)
+      const result = await serviceAction(service.id, action, approval)
       if (!result.ok) throw new Error(result.output)
       toast.success(`${service.display_name} is starting`)
     } catch (err) {
@@ -147,7 +148,8 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
     )
   }
 
-  const entries = Object.entries(config) as [string, SetupConfigItem][]
+  const providerKeys = new Set(['FREE_LLMAPI_API_KEY', 'NVIDIA_NIM_API_KEY', 'GEMINI_API_KEY', 'HUGGINGFACE_API_KEY', 'MISTRAL_API_KEY', 'OPENAI_API_KEY'])
+  const entries = (Object.entries(config) as [string, SetupConfigItem][]).filter(([key]) => service.id !== 'litellm' || !providerKeys.has(key))
 
   // Split into important (shown by default) and advanced (collapsible)
   const importantEntries = entries.filter(([, item]) => item.priority === 'important')
@@ -175,7 +177,7 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
             Save Changes
           </button>
           <button onClick={handleSaveAndStart} disabled={starting} className="button-primary">
-            <Rocket className="h-4 w-4" /> {starting ? 'Starting…' : service.state === 'absent' ? 'Save & install' : 'Save & start'}
+            <Rocket className="h-4 w-4" /> {starting ? (service.state === 'running' ? 'Restarting…' : 'Starting…') : service.state === 'absent' ? 'Save & install' : service.state === 'running' ? 'Save & restart' : 'Save & start'}
           </button>
         </div>
       </div>

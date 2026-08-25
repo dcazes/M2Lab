@@ -23,6 +23,11 @@ class CatalogTests(unittest.TestCase):
             if app.get("service_id"):
                 self.assertIn(app["service_id"], registered, app["id"])
 
+    def test_install_dependencies_resolve_to_registered_apps(self):
+        app_ids = {app["id"] for app in self.catalog["apps"] if app.get("service_id")}
+        for app in self.catalog["apps"]:
+            self.assertTrue(set(app.get("dependencies", [])).issubset(app_ids), app["id"])
+
     def test_workflow_references_resolve(self):
         app_ids = {app["id"] for app in self.catalog["apps"]}
         for workflow in self.catalog["workflows"]:

@@ -5,8 +5,8 @@ from __future__ import annotations
 import secrets
 from typing import Callable
 
-CORE_SERVICES = ("vaultwarden", "litellm", "firecrawl")
-FOUNDATION_SERVICES = ("nextcloud", "surfsense")
+CORE_SERVICES = ("vaultwarden", "freellmapi", "litellm", "ollama", "firecrawl")
+FOUNDATION_SERVICES = ("nextcloud", "surfsense", "open-webui")
 AUTOMATED_SERVICES = set(CORE_SERVICES + FOUNDATION_SERVICES)
 
 
@@ -21,6 +21,7 @@ def prepare_environment(
     *,
     replace_placeholders: bool = True,
     token_factory: Callable[[int], str] = secrets.token_hex,
+    identity: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """Return a prepared env mapping and the keys OmniLab changed.
 
@@ -54,12 +55,29 @@ def prepare_environment(
         if not database_url or (replace_placeholders and "change_me" in database_url):
             values["DATABASE_URL"] = f"postgresql://litellm:{postgres_password}@litellm-db:5432/litellm"
             changed.append("DATABASE_URL")
+    elif service_id == "freellmapi":
+        ensure("ENCRYPTION_KEY", placeholders={"your_64_char_hex_key", "change_me", "changeme"})
+    elif service_id == "ollama":
+        pass
     elif service_id == "firecrawl":
         ensure("TEST_API_KEY")
         ensure("POSTGRES_PASSWORD", 24, {"postgres", "change_me", "changeme"})
     elif service_id == "nextcloud":
         ensure("NEXTCLOUD_DBPASSWORD", 24)
+        if identity:
+            values["NEXTCLOUD_ADMIN_USER"] = identity["email"]
+            values["NEXTCLOUD_ADMIN_PASSWORD"] = identity["password"]
+            changed.extend(["NEXTCLOUD_ADMIN_USER", "NEXTCLOUD_ADMIN_PASSWORD"])
     elif service_id == "surfsense":
         ensure("SECRET_KEY")
+        if "EMBEDDING_MODEL" not in current:
+            values["EMBEDDING_MODEL"] = "litellm://ollama/nomic-embed-text"
+            values["EMBEDDING_BASE_URL"] = "http://host.docker.internal:11434"
+            changed.extend(["EMBEDDING_MODEL", "EMBEDDING_BASE_URL"])
+        if identity:
+            values["ZERO_ADMIN_PASSWORD"] = identity["password"]
+            changed.append("ZERO_ADMIN_PASSWORD")
+    elif service_id == "open-webui":
+        ensure("WEBUI_SECRET_KEY", placeholders={"your_generated_secret_key_here", "change_me", "changeme"})
 
     return values, changed

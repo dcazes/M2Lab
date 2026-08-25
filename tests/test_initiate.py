@@ -46,6 +46,45 @@ class InitiateTests(unittest.TestCase):
         self.assertEqual(values["TEST_API_KEY"], "generated-32")
         self.assertEqual(changed, ["TEST_API_KEY"])
 
+    def test_nextcloud_bootstraps_shared_identity(self):
+        values, changed = prepare_environment(
+            "nextcloud",
+            {},
+            {"NEXTCLOUD_DBPASSWORD": "changeme"},
+            identity={"email": "omnilab@example.invalid", "password": "shared-password"},
+            token_factory=self.token,
+        )
+        self.assertEqual(values["NEXTCLOUD_ADMIN_USER"], "omnilab@example.invalid")
+        self.assertEqual(values["NEXTCLOUD_ADMIN_PASSWORD"], "shared-password")
+        self.assertIn("NEXTCLOUD_DBPASSWORD", changed)
+
+    def test_surfsense_receives_password_without_exposing_identity_email(self):
+        values, _ = prepare_environment(
+            "surfsense",
+            {},
+            {"SECRET_KEY": "change_me"},
+            identity={"email": "omnilab@example.invalid", "password": "shared-password"},
+            token_factory=self.token,
+        )
+        self.assertEqual(values["ZERO_ADMIN_PASSWORD"], "shared-password")
+        self.assertNotIn("OMNILAB_IDENTITY_EMAIL", values)
+
+    def test_new_core_placeholders_are_replaced(self):
+        freellm, _ = prepare_environment(
+            "freellmapi",
+            {},
+            {"ENCRYPTION_KEY": "your_64_char_hex_key"},
+            token_factory=self.token,
+        )
+        webui, _ = prepare_environment(
+            "open-webui",
+            {},
+            {"WEBUI_SECRET_KEY": "your_generated_secret_key_here"},
+            token_factory=self.token,
+        )
+        self.assertEqual(freellm["ENCRYPTION_KEY"], "generated-32")
+        self.assertEqual(webui["WEBUI_SECRET_KEY"], "generated-32")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { Activity, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CircleGauge, Clock3, ExternalLink, FileText, HardDrive, MemoryStick, Play, RefreshCcw, RotateCcw, Search, Settings, Square, TerminalSquare } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Activity, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CircleGauge, Clock3, ExternalLink, HardDrive, MemoryStick, Play, RotateCcw, Search, Settings, Square, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { useServices } from '../../hooks/useServices'
 import { useSystem } from '../../hooks/useSystem'
-import { useAudit } from '../../hooks/useAudit'
-import { createApproval, fetchServiceLogs, getServiceIconUrl, getServiceUrl, serviceAction } from '../../lib/api'
+import { createApproval, fetchCalendarEvents, fetchServiceLogs, getServiceIconUrl, getServiceUrl, serviceAction } from '../../lib/api'
 import { formatBytes, formatUptime } from '../../lib/format'
-import type { AuditEvent, Service, ServiceAction } from '../../lib/types'
+import type { CalendarEvent, Service, ServiceAction } from '../../lib/types'
 
 const CORE_IDS = ['vaultwarden', 'litellm', 'firecrawl']
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -39,31 +38,34 @@ function toDateKey(date: Date) {
   return `${year}-${month}-${day}`
 }
 
-function CalendarPanel({ events, nextcloud }: { events: AuditEvent[]; nextcloud?: Service }) {
+function CalendarPanel({ nextcloud }: { nextcloud?: Service }) {
   const now = new Date()
   const [cursor, setCursor] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1))
   const [selectedKey, setSelectedKey] = useState(toDateKey(now))
+  const rangeStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - new Date(cursor.getFullYear(), cursor.getMonth(), 1).getDay())
+  const rangeEnd = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + 42)
+  const calendarQuery = useQuery({ queryKey: ['calendar-events', toDateKey(rangeStart), toDateKey(rangeEnd)], queryFn: () => fetchCalendarEvents(toDateKey(rangeStart), toDateKey(rangeEnd)), retry: false })
+  const events = calendarQuery.data?.events || []
   const byDate = useMemo(() => {
-    const grouped = new Map<string, AuditEvent[]>()
+    const grouped = new Map<string, CalendarEvent[]>()
     for (const event of events) {
-      const key = toDateKey(new Date(event.timestamp))
+      const key = event.start.slice(0, 10)
       grouped.set(key, [...(grouped.get(key) || []), event])
     }
     return grouped
   }, [events])
-  const gridStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - new Date(cursor.getFullYear(), cursor.getMonth(), 1).getDay())
-  const days = Array.from({ length: 42 }, (_, index) => new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index))
+  const days = Array.from({ length: 42 }, (_, index) => new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + index))
   const selectedEvents = byDate.get(selectedKey) || []
 
   return <section className="workspace-panel workspace-calendar">
-    <header className="workspace-panel-header"><div><CalendarDays className="h-4 w-4" /><span><strong>Calendar</strong><small>Operations and personal agenda</small></span></div><div className="workspace-calendar-controls"><button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} aria-label="Previous month"><ChevronLeft /></button><button onClick={() => { setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); setSelectedKey(toDateKey(now)) }}>Today</button><button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} aria-label="Next month"><ChevronRight /></button></div></header>
+    <header className="workspace-panel-header"><div><CalendarDays className="h-4 w-4" /><span><strong>Calendar</strong><small>Your Nextcloud agenda</small></span></div><div className="workspace-calendar-controls"><button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} aria-label="Previous month"><ChevronLeft /></button><button onClick={() => { setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); setSelectedKey(toDateKey(now)) }}>Today</button><button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} aria-label="Next month"><ChevronRight /></button></div></header>
     <div className="workspace-calendar-title">{cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
     <div className="workspace-calendar-grid workspace-calendar-weekdays">{WEEKDAYS.map(day => <span key={day}>{day}</span>)}</div>
     <div className="workspace-calendar-grid">{days.map(date => {
       const key = toDateKey(date); const count = byDate.get(key)?.length || 0
       return <button key={key} className={`${date.getMonth() !== cursor.getMonth() ? 'outside' : ''} ${key === toDateKey(now) ? 'today' : ''} ${selectedKey === key ? 'selected' : ''}`} onClick={() => setSelectedKey(key)}><span>{date.getDate()}</span>{count > 0 && <i>{count > 3 ? '3+' : count}</i>}</button>
     })}</div>
-    <div className="workspace-agenda"><div className="workspace-agenda-heading"><strong>{selectedKey === toDateKey(now) ? 'Today' : new Date(`${selectedKey}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</strong><small>{selectedEvents.length} recorded operation{selectedEvents.length === 1 ? '' : 's'}</small></div><div className="workspace-agenda-list">{selectedEvents.length ? selectedEvents.slice(0, 4).map((event, index) => <div key={`${event.timestamp}-${index}`}><time>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><i /><span><strong>{event.service_id || 'OmniLab'}</strong><small>{event.event.split('.').join(' ')}</small></span></div>) : <p>No OmniLab operations recorded for this date.</p>}</div>{nextcloud?.state === 'running' ? <a href={getServiceUrl(nextcloud)} target="_blank" rel="noreferrer">Open Nextcloud Calendar <ExternalLink className="h-3.5 w-3.5" /></a> : <span className="workspace-calendar-source">Start Nextcloud to add your personal calendar source.</span>}</div>
+    <div className="workspace-agenda"><div className="workspace-agenda-heading"><strong>{selectedKey === toDateKey(now) ? 'Today' : new Date(`${selectedKey}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</strong><small>{selectedEvents.length} event{selectedEvents.length === 1 ? '' : 's'}</small></div><div className="workspace-agenda-list">{calendarQuery.isError ? <p>Calendar could not be reached. Check Settings → Connections.</p> : !calendarQuery.data?.configured ? <p>Connect a Nextcloud calendar in Settings → Connections.</p> : selectedEvents.length ? selectedEvents.slice(0, 6).map(event => <div key={event.uid}><time>{event.all_day ? 'All day' : new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><i /><span><strong>{event.title}</strong><small>{event.calendar}</small></span></div>) : <p>No calendar events for this date.</p>}</div>{nextcloud?.state === 'running' ? <a href={getServiceUrl(nextcloud)} target="_blank" rel="noreferrer">Open Nextcloud Calendar <ExternalLink className="h-3.5 w-3.5" /></a> : <span className="workspace-calendar-source">Start Nextcloud to use your calendar.</span>}</div>
   </section>
 }
 
@@ -101,24 +103,20 @@ function ServiceInspector({ service, onOpenSettings }: { service: Service; onOpe
 }
 
 export function ServicesTab({ onOpenSettings }: { onOpenSettings: (serviceId: string) => void }) {
-  const servicesQuery = useServices(); const systemQuery = useSystem(); const auditQuery = useAudit()
+  const servicesQuery = useServices(); const systemQuery = useSystem()
   const [query, setQuery] = useState(''); const [selectedId, setSelectedId] = useState<string | null>(null)
   if (servicesQuery.isLoading) return <div className="loading-stage"><span /></div>
   if (servicesQuery.error || !servicesQuery.data) return <div className="empty-state">Workspace status is unavailable. {servicesQuery.error?.message}</div>
   const services = servicesQuery.data.services
   const selected = services.find(service => service.id === selectedId) || services.find(service => service.state === 'running' && !CORE_IDS.includes(service.id)) || services[0]
   const filtered = services.filter(service => `${service.display_name} ${service.description} ${service.category}`.toLowerCase().includes(query.toLowerCase()))
-  const core = CORE_IDS.map(id => services.find(service => service.id === id)).filter(Boolean) as Service[]
   const online = services.filter(service => service.state === 'running').length
-  const attention = services.filter(service => service.state === 'degraded' || (service.state === 'running' && service.healthy === false))
+  const onlineFiltered = filtered.filter(service => service.state === 'running')
+  const offlineFiltered = filtered.filter(service => service.state !== 'running')
   const system = systemQuery.data
   return <div className="workspace-dashboard">
     <section className="workspace-status-strip"><Metric icon={CircleGauge} label="CPU" value={system ? `${Math.round(system.cpu_percent)}%` : '—'} bar={system?.cpu_percent} /><Metric icon={MemoryStick} label="Memory" value={system ? `${Math.round(system.mem.percent)}%` : '—'} bar={system?.mem.percent} /><Metric icon={HardDrive} label="Disk free" value={system ? formatBytes(system.disk.total - system.disk.used, 0) : '—'} bar={system?.disk.percent} /><Metric icon={Clock3} label="Uptime" value={system ? formatUptime(system.uptime_seconds).split(' ').slice(0, 2).join(' ') : '—'} /><Metric icon={Activity} label="Services" value={`${online}/${services.length} online`} bar={(online / services.length) * 100} /></section>
-    <section className="workspace-app-dock"><div className="workspace-search"><Search /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Filter apps…" /><span>{filtered.length}</span></div><div className="workspace-dock-icons">{filtered.map(service => <button key={service.id} className={selected.id === service.id ? 'selected' : ''} onClick={() => setSelectedId(service.id)} title={`${service.display_name} · ${stateLabel(service)}`}><AppMark service={service} /><i className={`workspace-dot workspace-dot-${service.state}`} /><small>{service.display_name}</small></button>)}</div></section>
-    <div className="workspace-main-grid"><div className="workspace-left-column">
-      <section className="workspace-panel workspace-core-panel"><div className="workspace-panel-header"><div><RefreshCcw className="h-4 w-4" /><span><strong>Core</strong><small>Credential, model, and web services</small></span></div><span>{core.filter(service => service.state === 'running').length}/{core.length}</span></div><div>{core.map(service => <button key={service.id} onClick={() => setSelectedId(service.id)}><AppMark service={service} /><span><strong>{service.display_name}</strong><small>{stateLabel(service)}</small></span><i className={`workspace-dot workspace-dot-${service.state}`} /></button>)}</div></section>
-      <section className="workspace-panel workspace-attention-panel"><div className="workspace-panel-header"><div><Activity className="h-4 w-4" /><span><strong>Attention</strong><small>Health signals worth checking</small></span></div><span>{attention.length}</span></div>{attention.length ? attention.map(service => <button key={service.id} onClick={() => setSelectedId(service.id)}><span>{service.display_name}</span><small>{stateLabel(service)}</small></button>) : <div className="workspace-all-clear"><span>✓</span><p><strong>All clear</strong><small>No degraded running services.</small></p></div>}</section>
-      <section className="workspace-panel workspace-recent-panel"><div className="workspace-panel-header"><div><FileText className="h-4 w-4" /><span><strong>Recent operations</strong><small>Approval and lifecycle trail</small></span></div></div>{(auditQuery.data?.events || []).slice(0, 5).map((event, index) => <div key={`${event.timestamp}-${index}`}><i /><span><strong>{event.service_id || 'OmniLab'}</strong><small>{event.event.split('.').join(' ')}</small></span><time>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div>)}</section>
-    </div><CalendarPanel events={auditQuery.data?.events || []} nextcloud={services.find(service => service.id === 'nextcloud')} /><ServiceInspector key={selected.id} service={selected} onOpenSettings={onOpenSettings} /></div>
+    <section className="workspace-app-dock"><div className="workspace-search"><Search /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Filter apps…" /><span>{filtered.length}</span></div><div className="workspace-dock-icons"><span className="workspace-dock-label">Online</span>{onlineFiltered.map(service => <button key={service.id} className={selected.id === service.id ? 'selected' : ''} onClick={() => setSelectedId(service.id)} title={`${service.display_name} · ${stateLabel(service)}`}><AppMark service={service} /><i className={`workspace-dot workspace-dot-${service.state}`} /><small>{service.display_name}</small></button>)}{offlineFiltered.length > 0 && <span className="workspace-dock-divider"><b />Offline</span>}{offlineFiltered.map(service => <button key={service.id} className={selected.id === service.id ? 'selected' : ''} onClick={() => setSelectedId(service.id)} title={`${service.display_name} · ${stateLabel(service)}`}><AppMark service={service} /><i className={`workspace-dot workspace-dot-${service.state}`} /><small>{service.display_name}</small></button>)}</div></section>
+    <div className="workspace-main-grid"><ServiceInspector key={selected.id} service={selected} onOpenSettings={onOpenSettings} /><CalendarPanel nextcloud={services.find(service => service.id === 'nextcloud')} /></div>
   </div>
 }

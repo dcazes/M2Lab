@@ -13,6 +13,11 @@ services:
       FREE_LLMAPI_API_KEY: ${FREE_LLMAPI_API_KEY}
       DATABASE_URL: ${DATABASE_URL}
       STORE_MODEL_IN_DB: "True"
+      NVIDIA_NIM_API_KEY: ${NVIDIA_NIM_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     networks:
       - frontend-net
       - backend-net

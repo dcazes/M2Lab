@@ -257,6 +257,8 @@ services:
     project: ollama
     compose_files:
       - docker-compose.gpu.yml
+    ignore_containers:
+      - model-init
     port: 11434
     tailnet_port: 8457
     url: http://localhost:11434

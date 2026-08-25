@@ -11,3 +11,17 @@ services:
     volumes:
       - ./data:/root/.ollama
     restart: unless-stopped
+
+  model-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        until ollama list >/dev/null 2>&1; do sleep 2; done;
+        ollama pull nomic-embed-text
+    restart: "no"
