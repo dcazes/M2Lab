@@ -122,6 +122,7 @@ export interface SetupConfigItem {
   description: string
   required: boolean
   value?: string
+  priority: 'important' | 'advanced'
 }
 
 export interface SetupResponse {
