@@ -115,7 +115,9 @@
 :19062 {
   reverse_proxy 127.0.0.1:9001 {
     # Tailscale terminates TLS before forwarding to Caddy. Preserve the
-    # external scheme so Authentik builds correct HTTPS/WSS flow URLs.
+    # external scheme and port so Authentik builds correct HTTPS/WSS flow URLs.
     header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 8462
+    header_up X-Forwarded-Host {host}
   }
 }
