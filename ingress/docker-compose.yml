@@ -1,0 +1,19 @@
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    network_mode: host
+    env_file: ${INGRESS_ENV_FILE:-.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  caddy-data:
+  caddy-config:

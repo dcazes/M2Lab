@@ -10,7 +10,7 @@ export type AppTab = 'workspace' | 'system' | 'settings'
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<AppTab>('workspace')
   const [settingsServiceId, setSettingsServiceId] = useState<string | null>(null)
-  const [settingsSection, setSettingsSection] = useState<'apps' | 'models' | 'connections'>('apps')
+  const [settingsSection, setSettingsSection] = useState<'apps' | 'models' | 'mcp'>('apps')
 
   const openSettings = (serviceId: string) => {
     setSettingsServiceId(serviceId)
@@ -24,7 +24,7 @@ export function AppShell() {
       <main className="mx-auto max-w-[1500px] p-4 md:p-6 lg:p-8">
         <TabNav activeTab={activeTab} onChange={setActiveTab} />
         <div className="mt-6 animate-in fade-in duration-200">
-          {activeTab === 'workspace' && <ServicesTab onOpenSettings={openSettings} />}
+          {activeTab === 'workspace' && <ServicesTab onOpenSettings={openSettings} onOpenSystem={() => setActiveTab('system')} />}
           {activeTab === 'system' && <SystemTab />}
           {activeTab === 'settings' && <SetupTab initialSelectedId={settingsServiceId} initialSection={settingsSection} />}
         </div>

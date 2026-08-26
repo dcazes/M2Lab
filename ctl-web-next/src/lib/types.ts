@@ -10,10 +10,16 @@ export interface Service {
   display_name: string
   description: string
   category: string
+  role: 'application' | 'infrastructure'
+  visibility: 'user' | 'system' | 'hidden'
+  lifecycle: 'managed' | 'always_on' | 'dependency'
   icon: string
   port: number
   url: string
   tailnet_url: string
+  tailnet_route_active: boolean | null
+  tailnet_proxy: string | null
+  external_ready: boolean
   state: 'running' | 'stopped' | 'degraded' | 'absent'
   containers: ServiceContainer[]
   healthy: boolean | null
@@ -49,6 +55,12 @@ export interface SystemStats {
     percent: number
   }
   docker_ok: boolean
+  tailscale: {
+    installed: boolean
+    connected: boolean
+    hostname: string | null
+    serve_ports: number[]
+  }
   uptime_seconds: number
   load_avg: [number, number, number]
 }
@@ -233,6 +245,46 @@ export interface UpdateStatus {
   checked: boolean
   update_available: boolean | null
   images: Array<{ image: string; current_digest: string | null; remote_digest: string | null; update_available: boolean | null }>
+}
+
+export type SetupJobStatus =
+  | 'queued'
+  | 'preparing'
+  | 'starting'
+  | 'waiting'
+  | 'configuring'
+  | 'verifying'
+  | 'user_action_required'
+  | 'ready'
+  | 'failed'
+  | 'cancelled'
+
+export interface SetupJobEvent {
+  timestamp: string
+  stage: string
+  status: SetupJobStatus
+  message: string
+}
+
+export interface SetupJob {
+  id: string
+  target: string
+  kind: 'foundation' | 'application'
+  status: SetupJobStatus
+  stage: string
+  summary: string
+  progress: number
+  action: null | { kind: string; label: string; url?: string }
+  error: string | null
+  created_at: string
+  updated_at: string
+  events: SetupJobEvent[]
+}
+
+export interface SetupJobsResponse {
+  jobs: SetupJob[]
+  active: number
+  attention: number
 }
 
 export type McpState = 'unavailable' | 'installing' | 'authentication_required' | 'verifying' | 'live' | 'degraded' | 'disabled'

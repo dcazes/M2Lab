@@ -1,0 +1,74 @@
+services:
+  postgresql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_POSTGRESQL__PASSWORD}
+    volumes:
+      - authentik-postgresql:/var/lib/postgresql/data
+    networks: [backend-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik -d authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    restart: unless-stopped
+    command: server
+    env_file: ${AUTHENTIK_ENV_FILE:-.env}
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRESQL__PASSWORD}
+    volumes:
+      # Mount only OmniLab's file. Mounting over /blueprints hides authentik's
+      # bundled system/default blueprints and prevents the web worker booting.
+      - ./blueprints/omnilab.yaml:/blueprints/omnilab.yaml:ro
+      - authentik-media:/media
+      - authentik-templates:/templates
+    ports:
+      - "127.0.0.1:9001:9000"
+    networks: [frontend-net, backend-net]
+    depends_on:
+      postgresql: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "ak healthcheck"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+
+  worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    restart: unless-stopped
+    command: worker
+    env_file: ${AUTHENTIK_ENV_FILE:-.env}
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRESQL__PASSWORD}
+    volumes:
+      - ./blueprints/omnilab.yaml:/blueprints/omnilab.yaml:ro
+      - authentik-media:/media
+      - authentik-templates:/templates
+    networks: [frontend-net, backend-net]
+    depends_on:
+      postgresql: {condition: service_healthy}
+
+volumes:
+  authentik-postgresql:
+  authentik-media:
+  authentik-templates:
+
+networks:
+  frontend-net:
+    external: true
+    name: homelab_frontend
+  backend-net:
+    external: true
+    name: homelab_backend

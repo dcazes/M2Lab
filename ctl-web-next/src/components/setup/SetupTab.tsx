@@ -2,18 +2,15 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
-  ChevronRight,
   Cloud,
   Download,
   ExternalLink,
   KeyRound,
-  Layers3,
   LoaderCircle,
   Network,
   PackageCheck,
   PlugZap,
   RefreshCcw,
-  Search,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -23,17 +20,18 @@ import { useServices } from "../../hooks/useServices";
 import {
   createApproval,
   createMcpApproval,
-  fetchBootstrapIdentity,
+  createSetupApproval,
   fetchCalendarConnection,
   fetchSetup,
   fetchMcpServers,
+  fetchSetupJobs,
   fetchUpdateStatus,
   getServiceIconUrl,
   getServiceUrl,
-  prepareInstallService,
-  saveBootstrapIdentity,
+  resumeSetupJob,
   saveCalendarConnection,
   serviceAction,
+  startSetupTarget,
   syncMcpHarnesses,
   updateMcpServer,
   updateSetup,
@@ -42,7 +40,7 @@ import {
 import type { CatalogApp, McpServer, Service, SetupConfigItem } from "../../lib/types";
 import { ServiceSetupPanel } from "./ServiceSetupPanel";
 
-type SettingsSection = "apps" | "models" | "connections" | "mcp";
+type SettingsSection = "apps" | "models" | "mcp";
 const PROVIDERS = [
   [
     "FREE_LLMAPI_API_KEY",
@@ -96,115 +94,6 @@ function stateLabel(service: Service) {
   return "Not installed";
 }
 
-function AppIdentityCard() {
-  const queryClient = useQueryClient();
-  const services = useServices();
-  const identity = useQuery({
-    queryKey: ["bootstrap-identity"],
-    queryFn: fetchBootstrapIdentity,
-  });
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    if (identity.data?.email) setEmail(identity.data.email);
-  }, [identity.data?.email]);
-  const generate = () => {
-    const alphabet =
-      "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    setPassword(
-      Array.from(bytes, (value) => alphabet[value % alphabet.length]).join(""),
-    );
-  };
-  const save = async () => {
-    setSaving(true);
-    try {
-      await saveBootstrapIdentity(email, password);
-      setPassword("");
-      await queryClient.invalidateQueries({ queryKey: ["bootstrap-identity"] });
-      toast.success("Shared app login saved securely");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const vaultwarden = services.data?.services.find(
-    (service) => service.id === "vaultwarden",
-  );
-  const vaultReady = vaultwarden?.state === "running";
-  return (
-    <section className="settings-foundation-card">
-      <div className="settings-foundation-icon">
-        <KeyRound />
-      </div>
-      <div className="settings-foundation-copy">
-        <span className="eyebrow">Shared app identity</span>
-        <h3>
-          {!vaultReady
-            ? "Start with Vaultwarden"
-            : identity.data?.configured
-              ? "App login is ready"
-              : "Create the login used during setup"}
-        </h3>
-        <p>
-          {!vaultReady
-            ? "Install Vaultwarden, create its master account directly in the app, then return here."
-            : "Use one email and password for automated first-admin setup. Reusing it is convenient but increases the impact of one compromised app. Save a recovery copy in Vaultwarden."}
-        </p>
-        {vaultReady && vaultwarden && (
-          <a href={getServiceUrl(vaultwarden)} target="_blank" rel="noreferrer">
-            Open Vaultwarden <ExternalLink />
-          </a>
-        )}
-      </div>
-      <div className="settings-identity-form">
-        <label>
-          Email or login
-          <input
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="omnilab-admin@example.invalid"
-            disabled={!vaultReady}
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder={
-              identity.data?.configured
-                ? "Configured — enter only to replace"
-                : "At least 10 characters"
-            }
-            disabled={!vaultReady}
-          />
-        </label>
-        <button
-          className="button-secondary"
-          onClick={generate}
-          disabled={!vaultReady}
-        >
-          Generate
-        </button>
-        <button
-          className="button-primary"
-          onClick={save}
-          disabled={
-            !vaultReady || saving || !email.trim() || password.length < 10
-          }
-        >
-          {saving ? <LoaderCircle className="animate-spin" /> : <ShieldCheck />}{" "}
-          Save securely
-        </button>
-      </div>
-    </section>
-  );
-}
-
 function InstallPlan({
   app,
   services,
@@ -217,10 +106,8 @@ function InstallPlan({
   onInstalled: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const identity = useQuery({
-    queryKey: ["bootstrap-identity"],
-    queryFn: fetchBootstrapIdentity,
-  });
+  const queryClient = useQueryClient();
+  const jobs = useQuery({ queryKey: ["setup-jobs"], queryFn: fetchSetupJobs, refetchInterval: 2000 });
   const serviceMap = useMemo(
     () => new Map(services.map((service) => [service.id, service])),
     [services],
@@ -245,28 +132,16 @@ function InstallPlan({
     return ordered;
   }, [app, appMap, serviceMap]);
   const identityRequired = Boolean(app.setup?.identity);
-  const canInstall = !identityRequired || identity.data?.configured;
+  const foundationReady = jobs.data?.jobs.some(job => job.target === "foundation" && job.status === "ready") || false;
+  const canInstall = foundationReady;
   const install = async () => {
     setBusy(true);
     try {
-      for (const id of installIds) {
-        await prepareInstallService(id);
-        const approval = await createApproval(id, "up");
-        const result = await serviceAction(id, "up", approval);
-        if (!result.ok) throw new Error(result.output);
-      }
-      // MCP completion is deliberately best-effort: a failed adapter must not
-      // roll back an otherwise healthy application install.
-      const mcpRegistry = await fetchMcpServers(false);
-      for (const id of installIds) {
-        const server = mcpRegistry.servers.find((item) => item.service_id === id && item.kind !== "unsupported");
-        if (!server) continue;
-        const approval = await createMcpApproval(server.id, "mcp-verify");
-        await verifyMcpServer(server.id, approval);
-      }
-      const syncApproval = await createMcpApproval("registry", "mcp-sync");
-      await syncMcpHarnesses(syncApproval);
-      toast.success(`${app.name} install started`);
+      const target = app.service_id!;
+      const approval = await createSetupApproval(target, "setup-start");
+      await startSetupTarget(target, approval);
+      await queryClient.invalidateQueries({ queryKey: ["setup-jobs"] });
+      toast.success(`${app.name} setup started`);
       onInstalled();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -315,9 +190,9 @@ function InstallPlan({
           <ul>
             {identityRequired ? (
               <li>
-                {identity.data?.configured
-                  ? "Shared app login is ready."
-                  : "Create the shared app login above before installing."}
+                {foundationReady
+                  ? "Authentik identity foundation is ready."
+                  : "Complete the identity-first core setup above before installing."}
               </li>
             ) : (
               <li>No login is required before deployment.</li>
@@ -351,11 +226,50 @@ function InstallPlan({
           disabled={busy || !canInstall}
         >
           {busy ? <LoaderCircle className="animate-spin" /> : <Download />}
-          {!canInstall ? "App login required" : `Prepare & install ${app.name}`}
+          {!canInstall ? "Identity setup required" : `Start setup wizard for ${app.name}`}
         </button>
       </footer>
     </div>
   );
+}
+
+function AppSetupWizard({ service }: { service: Service }) {
+  const queryClient = useQueryClient();
+  const jobs = useQuery({ queryKey: ["setup-jobs"], queryFn: fetchSetupJobs, refetchInterval: 2000 });
+  const [busy, setBusy] = useState(false);
+  const job = jobs.data?.jobs.find(item => item.target === service.id);
+  const foundationReady = jobs.data?.jobs.some(item => item.target === "foundation" && item.status === "ready") || false;
+  const start = async () => {
+    setBusy(true);
+    try {
+      const approval = await createSetupApproval(service.id, "setup-start");
+      await startSetupTarget(service.id, approval);
+      await queryClient.invalidateQueries({ queryKey: ["setup-jobs"] });
+      toast.success(`${service.display_name} setup started`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+  const resume = async () => {
+    if (!job) return;
+    setBusy(true);
+    try {
+      const approval = await createSetupApproval(service.id, "setup-resume");
+      await resumeSetupJob(job, approval);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["setup-jobs"] }), queryClient.invalidateQueries({ queryKey: ["services"] })]);
+      toast.success(`${service.display_name} setup verified`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+  return <section className={`app-setup-wizard app-setup-${job?.status || "not_started"}`}>
+    <header><div><span className="eyebrow">Setup wizard</span><h3>{job?.summary || `Finish setting up ${service.display_name}`}</h3><p>{job?.error || job?.events.at(-1)?.message || "Run the remaining automated configuration and receive one prompt at a time when your input is required."}</p></div><span>{job?.progress || 0}%</span></header>
+    {job && <progress max={100} value={job.progress} />}
+    {job?.events.length ? <details><summary>Setup steps</summary><div>{job.events.slice(-8).map((event, index) => <p key={`${event.timestamp}-${index}`}><i className={`setup-status setup-status-${event.status}`} /><span><strong>{event.message}</strong><small>{event.stage.split("_").join(" ")}</small></span></p>)}</div></details> : null}
+    <footer>
+      {!foundationReady && <small>Complete the identity-first core setup before creating app accounts.</small>}
+      {job?.action?.url && <a href={job.action.url} target="_blank" rel="noreferrer">{job.action.label}<ExternalLink /></a>}
+      {job?.status === "user_action_required" ? <button className="button-primary" disabled={busy} onClick={resume}>{busy ? <LoaderCircle className="animate-spin" /> : <Check />} I finished this step</button> : job?.status === "ready" ? <span className="app-setup-ready"><Check /> Setup complete</span> : <button className="button-primary" disabled={busy || !foundationReady || (job && !["failed", "cancelled"].includes(job.status))} onClick={start}>{busy || (job && !["failed", "cancelled"].includes(job.status)) ? <LoaderCircle className="animate-spin" /> : <RefreshCcw />} {job?.status === "failed" ? "Retry setup" : "Run setup wizard"}</button>}
+    </footer>
+  </section>;
 }
 
 function UpdateControl({ service }: { service: Service }) {
@@ -426,12 +340,9 @@ function AppsSettings({
   const servicesQuery = useServices();
   const catalogQuery = useCatalog();
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<"installed" | "add">("installed");
   const [selectedId, setSelectedId] = useState<string | null>(
     initialSelectedId,
   );
-  const [installId, setInstallId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
   if (servicesQuery.isLoading || catalogQuery.isLoading)
     return (
       <div className="loading-stage">
@@ -441,79 +352,59 @@ function AppsSettings({
   if (!servicesQuery.data || !catalogQuery.data)
     return <div className="empty-state">App settings could not be loaded.</div>;
   const services = servicesQuery.data.services;
-  const installed = services.filter((service) => service.state !== "absent");
-  const roster = [...services].sort((a, b) => {
+  const visibleServices = services.filter((service) => service.visibility === "user");
+  const roster = [...visibleServices].sort((a, b) => {
     const order = { running: 0, degraded: 1, stopped: 2, absent: 3 };
     return order[a.state] - order[b.state] || a.display_name.localeCompare(b.display_name);
   });
   const catalogApps = catalogQuery.data.apps.filter(
     (app) => app.service_id && app.availability !== "planned",
   );
-  const available = catalogApps.filter(
-    (app) =>
-      services.find((service) => service.id === app.service_id)?.state ===
-        "absent" &&
-      `${app.name} ${app.description} ${app.category}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
   const activeId =
-    selectedId && installed.some((service) => service.id === selectedId)
+    selectedId && visibleServices.some((service) => service.id === selectedId)
       ? selectedId
-      : installed[0]?.id;
-  const activeService = installed.find((service) => service.id === activeId);
-  const installApp = catalogApps.find((app) => app.id === installId);
+      : roster[0]?.id;
+  const activeService = visibleServices.find((service) => service.id === activeId);
+  const installApp = catalogApps.find((app) => app.service_id === activeService?.id);
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["services"] });
-    setMode("installed");
   };
   return (
     <div className="settings-apps-shell">
-      <div className="settings-segmented">
-        <button
-          className={mode === "installed" ? "active" : ""}
-          onClick={() => setMode("installed")}
-        >
-          <PackageCheck />
-          Installed <span>{installed.length}</span>
-        </button>
-        <button
-          className={mode === "add" ? "active" : ""}
-          onClick={() => setMode("add")}
-        >
-          <Download />
-          Add apps <span>{available.length}</span>
-        </button>
-      </div>
-      <AppIdentityCard />
-      {mode === "installed" ? (
-        <div className="settings-installed-grid">
-          <aside className="settings-app-list">
-            <div className="settings-list-heading">
-              <span>Installed apps</span>
-              <small>Settings remain available while offline.</small>
-            </div>
-            {roster.map((service, index) => {
-              const previous = roster[index - 1];
-              const section = service.state === "absent" ? "Not installed" : service.state === "stopped" ? "Installed · offline" : "Running";
-              const previousSection = previous ? (previous.state === "absent" ? "Not installed" : previous.state === "stopped" ? "Installed · offline" : "Running") : null;
-              return <div className="settings-roster-entry" key={service.id}>
-                {section !== previousSection && <div className="settings-roster-divider"><span>{section}</span></div>}
-                <button
-                  className={`${activeId === service.id ? "active" : ""} ${service.state === "absent" ? "unavailable" : ""}`}
-                  onClick={() => service.state !== "absent" && setSelectedId(service.id)}
-                  disabled={service.state === "absent"}
-                >
-                  <ServiceMark service={service} />
-                  <span><strong>{service.display_name}</strong><small>{stateLabel(service)}</small></span>
-                  <i className={`workspace-dot workspace-dot-${service.state}`} />
-                </button>
-              </div>;
-            })}
-          </aside>
-          <section className="settings-active-panel">
-            {activeService ? (
-              <>
+      <div className="settings-installed-grid">
+        <aside className="settings-app-list">
+          <div className="settings-list-heading">
+            <span>Applications</span>
+            <small>Running first · select an available app to review setup.</small>
+          </div>
+          {roster.map((service, index) => {
+            const previous = roster[index - 1];
+            const section = service.state === "absent" ? "Available" : service.state === "stopped" ? "Installed · offline" : "Running";
+            const previousSection = previous ? (previous.state === "absent" ? "Available" : previous.state === "stopped" ? "Installed · offline" : "Running") : null;
+            return <div className="settings-roster-entry" key={service.id}>
+              {section !== previousSection && <div className="settings-roster-divider"><span>{section}</span></div>}
+              <button
+                className={`${activeId === service.id ? "active" : ""} ${service.state === "absent" ? "unavailable" : ""}`}
+                onClick={() => setSelectedId(service.id)}
+              >
+                <ServiceMark service={service} />
+                <span><strong>{service.display_name}</strong><small>{stateLabel(service)}</small></span>
+                <i className={`workspace-dot workspace-dot-${service.state}`} />
+              </button>
+            </div>;
+          })}
+        </aside>
+        <section className="settings-active-panel">
+          {!activeService ? <div className="empty-state">No applications are registered.</div>
+            : activeService.state === "absent" && installApp ? (
+          <InstallPlan
+            app={installApp}
+            services={services}
+            apps={catalogApps}
+            onInstalled={refresh}
+          />
+            ) : activeService.state === "absent" ? <div className="empty-state">This application does not yet have a reviewed installation plan.</div>
+              : <>
                 <div className="settings-active-heading">
                   <div>
                     <span className="eyebrow">Installed app</span>
@@ -522,83 +413,17 @@ function AppsSettings({
                   </div>
                   <div className="settings-active-actions">
                     <UpdateControl service={activeService} />
-                    <a
-                      href={getServiceUrl(activeService)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open app <ExternalLink />
-                    </a>
+                    {activeService.external_ready
+                      ? <a href={getServiceUrl(activeService)} target="_blank" rel="noreferrer">Open app <ExternalLink /></a>
+                      : <span className="settings-open-unavailable">Private URL unavailable</span>}
                   </div>
                 </div>
-                <ServiceSetupPanel
-                  key={activeService.id}
-                  service={activeService}
-                />
-              </>
-            ) : (
-              <div className="empty-state">
-                No apps have been installed yet. Open Add apps to begin.
-              </div>
-            )}
-          </section>
-        </div>
-      ) : installApp ? (
-        <>
-          <button className="settings-back" onClick={() => setInstallId(null)}>
-            ← Back to apps
-          </button>
-          <InstallPlan
-            app={installApp}
-            services={services}
-            apps={catalogApps}
-            onInstalled={refresh}
-          />
-        </>
-      ) : (
-        <div className="settings-add-apps">
-          <div className="settings-add-heading">
-            <div>
-              <span className="eyebrow">Curated, self-hosted tools</span>
-              <h2>Add an app</h2>
-              <p>
-                See every dependency and required human step before anything is
-                downloaded.
-              </p>
-            </div>
-            <label>
-              <Search />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search apps…"
-              />
-            </label>
-          </div>
-          <div className="settings-add-grid">
-            {available.map((app) => (
-              <article
-                key={app.id}
-                style={{ "--app-accent": app.accent } as React.CSSProperties}
-              >
-                <ServiceMark app={app} />
-                <span className="settings-app-kind">{app.kind}</span>
-                <h3>{app.name}</h3>
-                <strong>{app.tagline}</strong>
-                <p>{app.description}</p>
-                <div>
-                  {app.requirements.slice(0, 2).map((item) => (
-                    <small key={item}>{item}</small>
-                  ))}
-                </div>
-                <button onClick={() => setInstallId(app.id)}>
-                  Review install plan <ChevronRight />
-                </button>
-              </article>
-            ))}
-          </div>
-        </div>
-      )}
+                <AppSetupWizard service={activeService} />
+                {activeService.id === "nextcloud" && <NextcloudCalendarSettings />}
+                <ServiceSetupPanel key={activeService.id} service={activeService} />
+              </>}
+        </section>
+      </div>
     </div>
   );
 }
@@ -746,7 +571,7 @@ function ModelAccess() {
           <Network />
           <div>
             <strong>Install LiteLLM before adding provider keys.</strong>
-            <p>Open Apps → Add apps and review the LiteLLM install plan.</p>
+            <p>Open Apps and select LiteLLM under Available to review its setup plan.</p>
           </div>
         </div>
       ) : (
@@ -812,7 +637,7 @@ function ModelAccess() {
   );
 }
 
-function Connections() {
+function NextcloudCalendarSettings() {
   const connection = useQuery({
     queryKey: ["calendar-connection"],
     queryFn: fetchCalendarConnection,
@@ -843,17 +668,6 @@ function Connections() {
   };
   return (
     <div className="settings-connections">
-      <section className="settings-section-intro">
-        <span className="eyebrow">
-          <Network />
-          Private integrations
-        </span>
-        <h2>Connections</h2>
-        <p>
-          Connect user-owned data to Workspace without mixing it with system
-          operations.
-        </p>
-      </section>
       <section className="settings-connection-card">
         <div className="settings-connection-brand">
           <span>
@@ -868,8 +682,8 @@ function Connections() {
           </div>
         </div>
         <p>
-          Use a Nextcloud app password, not your main password. OmniLab reads
-          only the selected calendar through CalDAV.
+          Show your personal agenda in Workspace. Use a dedicated Nextcloud app
+          password; OmniLab reads only the selected calendar through CalDAV.
         </p>
         {!connection.data?.nextcloud_running && (
           <div className="settings-inline-warning">
@@ -940,29 +754,11 @@ export function SetupTab({
   const [section, setSection] = useState<SettingsSection>(initialSection);
   return (
     <div className="settings-hub">
-      <header className="settings-hub-header">
-        <div>
-          <span className="eyebrow">OmniLab control center</span>
-          <h1>Settings</h1>
-          <p>
-            Install deliberately, configure only what exists, and keep shared
-            connections in one place.
-          </p>
-        </div>
-        <div className="settings-overview-badge">
-          <Layers3 />
-          <span>
-            <strong>One setup surface</strong>
-            <small>Apps · models · connections · MCP</small>
-          </span>
-        </div>
-      </header>
       <nav className="settings-subnav" aria-label="Settings sections">
         {(
           [
             { id: "apps", label: "Apps", icon: PackageCheck },
             { id: "models", label: "Model access", icon: Sparkles },
-            { id: "connections", label: "Connections", icon: Network },
             { id: "mcp", label: "MCP", icon: PlugZap },
           ] as const
         ).map(({ id, label, icon: Icon }) => (
@@ -980,7 +776,6 @@ export function SetupTab({
         <AppsSettings initialSelectedId={initialSelectedId} />
       )}
       {section === "models" && <ModelAccess />}
-      {section === "connections" && <Connections />}
       {section === "mcp" && <McpSettings />}
     </div>
   );

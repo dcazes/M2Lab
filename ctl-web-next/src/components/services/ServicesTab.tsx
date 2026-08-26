@@ -7,8 +7,8 @@ import { useSystem } from '../../hooks/useSystem'
 import { createApproval, fetchCalendarEvents, fetchServiceLogs, getServiceIconUrl, getServiceUrl, serviceAction } from '../../lib/api'
 import { formatBytes, formatUptime } from '../../lib/format'
 import type { CalendarEvent, Service, ServiceAction } from '../../lib/types'
+import { SetupActivityStrip } from '../setup/SetupActivityStrip'
 
-const CORE_IDS = ['vaultwarden', 'litellm', 'firecrawl']
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const ACTION_COPY: Record<ServiceAction, { label: string; detail: string }> = {
   up: { label: 'Start', detail: 'Start this Compose stack and its dependencies.' },
@@ -65,7 +65,7 @@ function CalendarPanel({ nextcloud }: { nextcloud?: Service }) {
       const key = toDateKey(date); const count = byDate.get(key)?.length || 0
       return <button key={key} className={`${date.getMonth() !== cursor.getMonth() ? 'outside' : ''} ${key === toDateKey(now) ? 'today' : ''} ${selectedKey === key ? 'selected' : ''}`} onClick={() => setSelectedKey(key)}><span>{date.getDate()}</span>{count > 0 && <i>{count > 3 ? '3+' : count}</i>}</button>
     })}</div>
-    <div className="workspace-agenda"><div className="workspace-agenda-heading"><strong>{selectedKey === toDateKey(now) ? 'Today' : new Date(`${selectedKey}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</strong><small>{selectedEvents.length} event{selectedEvents.length === 1 ? '' : 's'}</small></div><div className="workspace-agenda-list">{calendarQuery.isError ? <p>Calendar could not be reached. Check Settings → Connections.</p> : !calendarQuery.data?.configured ? <p>Connect a Nextcloud calendar in Settings → Connections.</p> : selectedEvents.length ? selectedEvents.slice(0, 6).map(event => <div key={event.uid}><time>{event.all_day ? 'All day' : new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><i /><span><strong>{event.title}</strong><small>{event.calendar}</small></span></div>) : <p>No calendar events for this date.</p>}</div>{nextcloud?.state === 'running' ? <a href={getServiceUrl(nextcloud)} target="_blank" rel="noreferrer">Open Nextcloud Calendar <ExternalLink className="h-3.5 w-3.5" /></a> : <span className="workspace-calendar-source">Start Nextcloud to use your calendar.</span>}</div>
+    <div className="workspace-agenda"><div className="workspace-agenda-heading"><strong>{selectedKey === toDateKey(now) ? 'Today' : new Date(`${selectedKey}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</strong><small>{selectedEvents.length} event{selectedEvents.length === 1 ? '' : 's'}</small></div><div className="workspace-agenda-list">{calendarQuery.isError ? <p>Calendar could not be reached. Check Nextcloud in Settings → Apps.</p> : !calendarQuery.data?.configured ? <p>Connect a calendar from Nextcloud in Settings → Apps.</p> : selectedEvents.length ? selectedEvents.slice(0, 6).map(event => <div key={event.uid}><time>{event.all_day ? 'All day' : new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><i /><span><strong>{event.title}</strong><small>{event.calendar}</small></span></div>) : <p>No calendar events for this date.</p>}</div>{nextcloud?.external_ready ? <a href={getServiceUrl(nextcloud)} target="_blank" rel="noreferrer">Open Nextcloud Calendar <ExternalLink className="h-3.5 w-3.5" /></a> : <span className="workspace-calendar-source">Start Nextcloud and verify its private route to use your calendar.</span>}</div>
   </section>
 }
 
@@ -94,7 +94,7 @@ function ServiceInspector({ service, onOpenSettings }: { service: Service; onOpe
   return <section className="workspace-panel workspace-inspector">
     <header><AppMark service={service} large /><div><span className={`workspace-state workspace-state-${service.state}`}><i />{stateLabel(service)}</span><h2>{service.display_name}</h2><p>{service.description}</p></div></header>
     <div className="workspace-inspector-facts"><div><small>Containers</small><strong>{service.containers.length}</strong></div><div><small>HTTP</small><strong>{service.healthy === null ? 'N/A' : service.healthy ? 'Ready' : 'Down'}</strong></div><div><small>Port</small><strong>{service.port}</strong></div></div>
-    <div className="workspace-primary-actions"><a href={getServiceUrl(service)} target="_blank" rel="noreferrer"><ExternalLink />Open app</a><button onClick={() => onOpenSettings(service.id)}><Settings />Configure</button></div>
+    <div className="workspace-primary-actions">{service.external_ready ? <a href={getServiceUrl(service)} target="_blank" rel="noreferrer"><ExternalLink />Open app</a> : <button disabled title={service.state !== 'running' ? 'Start the app first' : 'Its private Tailscale route is unavailable'}><ExternalLink />Open unavailable</button>}<button onClick={() => onOpenSettings(service.id)}><Settings />Configure</button></div>
     <div className="workspace-command-grid">{actions.map(({ action, icon: Icon }) => <button key={action} onClick={() => setConfirmAction(action)} disabled={pending !== null}><Icon />{pending === action ? 'Working…' : ACTION_COPY[action].label}</button>)}<button onClick={loadLogs} disabled={logsLoading}><TerminalSquare />{logsLoading ? 'Loading…' : 'Logs'}</button></div>
     {confirmAction && <div className="workspace-confirm"><strong>{ACTION_COPY[confirmAction].label} {service.display_name}?</strong><p>{ACTION_COPY[confirmAction].detail}</p><div><button onClick={() => setConfirmAction(null)}>Cancel</button><button onClick={runAction}>Confirm</button></div></div>}
     {logs && <div className="workspace-logs"><header><span>Recent logs</span><button onClick={() => setLogs(null)}>Close</button></header><pre>{logs.length ? logs.join('\n') : 'No recent log lines.'}</pre></div>}
@@ -102,13 +102,14 @@ function ServiceInspector({ service, onOpenSettings }: { service: Service; onOpe
   </section>
 }
 
-export function ServicesTab({ onOpenSettings }: { onOpenSettings: (serviceId: string) => void }) {
+export function ServicesTab({ onOpenSettings, onOpenSystem }: { onOpenSettings: (serviceId: string) => void; onOpenSystem: () => void }) {
   const servicesQuery = useServices(); const systemQuery = useSystem()
   const [query, setQuery] = useState(''); const [selectedId, setSelectedId] = useState<string | null>(null)
   if (servicesQuery.isLoading) return <div className="loading-stage"><span /></div>
   if (servicesQuery.error || !servicesQuery.data) return <div className="empty-state">Workspace status is unavailable. {servicesQuery.error?.message}</div>
-  const services = servicesQuery.data.services
-  const selected = services.find(service => service.id === selectedId) || services.find(service => service.state === 'running' && !CORE_IDS.includes(service.id)) || services[0]
+  const services = servicesQuery.data.services.filter(service => service.visibility === 'user')
+  if (!services.length) return <div className="empty-state">No user-facing applications are registered yet. Complete infrastructure setup in System.</div>
+  const selected = services.find(service => service.id === selectedId) || services.find(service => service.state === 'running') || services[0]
   const filtered = services.filter(service => `${service.display_name} ${service.description} ${service.category}`.toLowerCase().includes(query.toLowerCase()))
   const online = services.filter(service => service.state === 'running').length
   const onlineFiltered = filtered.filter(service => service.state === 'running')
@@ -116,6 +117,7 @@ export function ServicesTab({ onOpenSettings }: { onOpenSettings: (serviceId: st
   const system = systemQuery.data
   return <div className="workspace-dashboard">
     <section className="workspace-status-strip"><Metric icon={CircleGauge} label="CPU" value={system ? `${Math.round(system.cpu_percent)}%` : '—'} bar={system?.cpu_percent} /><Metric icon={MemoryStick} label="Memory" value={system ? `${Math.round(system.mem.percent)}%` : '—'} bar={system?.mem.percent} /><Metric icon={HardDrive} label="Disk free" value={system ? formatBytes(system.disk.total - system.disk.used, 0) : '—'} bar={system?.disk.percent} /><Metric icon={Clock3} label="Uptime" value={system ? formatUptime(system.uptime_seconds).split(' ').slice(0, 2).join(' ') : '—'} /><Metric icon={Activity} label="Services" value={`${online}/${services.length} online`} bar={(online / services.length) * 100} /></section>
+    <SetupActivityStrip onOpenSettings={onOpenSettings} onOpenSystem={onOpenSystem} />
     <section className="workspace-app-dock"><div className="workspace-search"><Search /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Filter apps…" /><span>{filtered.length}</span></div><div className="workspace-dock-icons"><span className="workspace-dock-label">Online</span>{onlineFiltered.map(service => <button key={service.id} className={selected.id === service.id ? 'selected' : ''} onClick={() => setSelectedId(service.id)} title={`${service.display_name} · ${stateLabel(service)}`}><AppMark service={service} /><i className={`workspace-dot workspace-dot-${service.state}`} /><small>{service.display_name}</small></button>)}{offlineFiltered.length > 0 && <span className="workspace-dock-divider"><b />Offline</span>}{offlineFiltered.map(service => <button key={service.id} className={selected.id === service.id ? 'selected' : ''} onClick={() => setSelectedId(service.id)} title={`${service.display_name} · ${stateLabel(service)}`}><AppMark service={service} /><i className={`workspace-dot workspace-dot-${service.state}`} /><small>{service.display_name}</small></button>)}</div></section>
     <div className="workspace-main-grid"><ServiceInspector key={selected.id} service={selected} onOpenSettings={onOpenSettings} /><CalendarPanel nextcloud={services.find(service => service.id === 'nextcloud')} /></div>
   </div>

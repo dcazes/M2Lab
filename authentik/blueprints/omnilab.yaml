@@ -1,0 +1,12 @@
+version: 1
+metadata:
+  name: OmniLab identity baseline
+entries:
+  - model: authentik_core.group
+    state: present
+    identifiers:
+      name: omnilab-owners
+  - model: authentik_core.group
+    state: present
+    identifiers:
+      name: omnilab-members

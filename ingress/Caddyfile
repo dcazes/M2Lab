@@ -1,0 +1,117 @@
+{
+  auto_https off
+  admin off
+}
+
+# Caddy listens only on loopback high ports. Tailscale Serve remains the sole
+# external TLS endpoint and is switched per app only after verification.
+(authentik_gate) {
+  request_header -X-Authentik-Username
+  request_header -X-Authentik-Groups
+  request_header -X-Authentik-Email
+  request_header -X-Authentik-Uid
+  forward_auth 127.0.0.1:9001 {
+    uri /outpost.goauthentik.io/auth/caddy
+    copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Uid
+  }
+}
+
+(dashboard_headers) {
+  header_up X-OmniLab-Ingress {$OMNILAB_INGRESS_TOKEN}
+}
+
+:19460 {
+  import authentik_gate
+  @owners header X-Authentik-Groups *omnilab-owners*
+  handle @owners {
+    reverse_proxy 127.0.0.1:8787 {
+      import dashboard_headers
+    }
+  }
+  respond "OmniLab owner access required" 403
+}
+
+:19461 {
+  import authentik_gate
+  @owners header X-Authentik-Groups *omnilab-owners*
+  handle @owners {
+    reverse_proxy 127.0.0.1:4096
+  }
+  respond "OmniLab owner access required" 403
+}
+
+:19444 {
+  import authentik_gate
+  reverse_proxy 127.0.0.1:3929
+}
+
+:19445 {
+  import authentik_gate
+  @owners header X-Authentik-Groups *omnilab-owners*
+  handle @owners {
+    reverse_proxy 127.0.0.1:4000
+  }
+  respond "OmniLab owner access required" 403
+}
+
+:19458 {
+  import authentik_gate
+  @owners header X-Authentik-Groups *omnilab-owners*
+  handle @owners {
+    reverse_proxy 127.0.0.1:3002
+  }
+  respond "OmniLab owner access required" 403
+}
+
+:19459 {
+  import authentik_gate
+  @owners header X-Authentik-Groups *omnilab-owners*
+  handle @owners {
+    reverse_proxy 127.0.0.1:3001
+  }
+  respond "OmniLab owner access required" 403
+}
+
+# Native SSO apps are pass-through initially so their exact, documented OIDC
+# callbacks and their local break-glass logins remain available.
+:19443 {
+  reverse_proxy 127.0.0.1:2283
+}
+:19446 {
+  reverse_proxy 127.0.0.1:8081
+}
+:19448 {
+  reverse_proxy 127.0.0.1:8082
+}
+:19450 {
+  reverse_proxy 127.0.0.1:8090
+}
+:19451 {
+  reverse_proxy 127.0.0.1:8010
+}
+:19452 {
+  reverse_proxy 127.0.0.1:5006
+}
+:19453 {
+  reverse_proxy 127.0.0.1:8020
+}
+:19454 {
+  reverse_proxy 127.0.0.1:8015
+}
+:19455 {
+  reverse_proxy 127.0.0.1:9000
+}
+:19456 {
+  reverse_proxy 127.0.0.1:8084
+}
+:19090 {
+  import authentik_gate
+  @owners header X-Authentik-Groups *omnilab-owners*
+  handle @owners {
+    reverse_proxy 127.0.0.1:9090
+  }
+  respond "OmniLab owner access required" 403
+}
+:19062 {
+  reverse_proxy 127.0.0.1:9001
+}

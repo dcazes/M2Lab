@@ -24,11 +24,13 @@ from fastapi.staticfiles import StaticFiles
 from .compose import run_compose
 from .catalog import discover_capabilities, load_catalog, policy_decision
 from .initiate import AUTOMATED_SERVICES, prepare_environment
+from .identity import app_inventory as identity_app_inventory, status as identity_status, verify_app as verify_identity_app
 from .mcp_registry import (
     harness_preview, mark_verified, registry_snapshot, update_server,
     write_harness_exports,
 )
 from .registry import ROOT, SERVICES, service_by_id, SETTINGS
+from .setup_jobs import create_job, get_job, list_jobs, recover_interrupted_jobs, update_job
 
 DLI = docker.DockerClient.from_env()
 API = DLI.api
@@ -40,6 +42,8 @@ _action_locks: dict[str, asyncio.Lock] = {}
 _audit_lock = asyncio.Lock()
 _approvals: dict[str, dict] = {}
 _APPROVAL_TTL = 120
+_setup_tasks: dict[str, asyncio.Task] = {}
+recover_interrupted_jobs()
 _STATE_DIR = ROOT / ".state"
 _AUDIT_PATH = _STATE_DIR / "audit.jsonl"
 _CALENDAR_CONNECTION_PATH = _STATE_DIR / "nextcloud-calendar.json"
@@ -61,9 +65,9 @@ def _cached_http_health(sid: str, probe_fn) -> bool | None:
     return result
 
 
-# Security model: the control plane binds to 127.0.0.1 and is exposed only via
-# Tailscale Serve — tailnet membership is the authentication boundary. No
-# application-level token by design; do not expose this port beyond localhost.
+# During the staged rollout the dashboard remains tailnet-only. Once Caddy has
+# been tested, OMNILAB_REQUIRE_IDENTITY=true makes every mutation require the
+# Authentik identity headers plus the local Caddy-to-dashboard shared token.
 
 
 # ---------- helpers ----------
@@ -85,16 +89,83 @@ def svc_state(s: dict) -> dict:
             "state": c.attrs["State"]["Status"],
             "health": (c.attrs["State"].get("Health") or {}).get("Status"),
         })
-    running = sum(1 for r in rows if r["state"] == "running")
     if not rows:
         overall = "absent"
-    elif running == len(rows):
+    elif any(row["state"] in {"restarting", "dead", "removing"} for row in rows):
+        overall = "degraded"
+    elif all(row["state"] == "running" for row in rows) and not any(
+        row["health"] in {"starting", "unhealthy"} for row in rows
+    ):
         overall = "running"
-    elif running == 0:
+    elif all(row["state"] in {"created", "exited"} for row in rows):
         overall = "stopped"
     else:
         overall = "degraded"
     return {"overall": overall, "containers": rows}
+
+
+def _docker_available() -> bool:
+    try:
+        return bool(DLI.ping())
+    except Exception:
+        return False
+
+
+def _tailscale_snapshot() -> dict:
+    """Return only the small, non-sensitive subset needed by the dashboard."""
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"], capture_output=True, text=True, timeout=5, check=False,
+        )
+        if result.returncode != 0:
+            return {"installed": True, "connected": False, "hostname": None, "serve_ports": []}
+        payload = json.loads(result.stdout)
+        self_node = payload.get("Self") or {}
+        connected = payload.get("BackendState") == "Running" and bool(self_node.get("Online", True))
+    except FileNotFoundError:
+        return {"installed": False, "connected": False, "hostname": None, "serve_ports": []}
+    except Exception:
+        return {"installed": True, "connected": False, "hostname": None, "serve_ports": []}
+
+    ports: list[int] = []
+    try:
+        served = subprocess.run(
+            ["tailscale", "serve", "status", "--json"], capture_output=True, text=True, timeout=5, check=False,
+        )
+        if served.returncode == 0:
+            config = json.loads(served.stdout)
+            ports = sorted(int(port) for port in (config.get("TCP") or {}) if str(port).isdigit())
+    except Exception:
+        pass
+    return {
+        "installed": True,
+        "connected": connected,
+        "hostname": self_node.get("HostName"),
+        "serve_ports": ports,
+    }
+
+
+def _tailscale_serve_proxies() -> dict[int, str]:
+    try:
+        result = subprocess.run(
+            ["tailscale", "serve", "status", "--json"], capture_output=True, text=True, timeout=5, check=False,
+        )
+        if result.returncode != 0:
+            return {}
+        payload = json.loads(result.stdout)
+    except Exception:
+        return {}
+    proxies: dict[int, str] = {}
+    for host, web in (payload.get("Web") or {}).items():
+        try:
+            port = int(host.rsplit(":", 1)[-1]) if ":" in host else 443
+        except ValueError:
+            continue
+        for handler in (web.get("Handlers") or {}).values():
+            if handler.get("Proxy"):
+                proxies[port] = str(handler["Proxy"])
+                break
+    return proxies
 
 
 def request_source(request: Request) -> str:
@@ -111,6 +182,25 @@ def require_trusted_request(request: Request) -> None:
     """Reject control-plane mutations from outside loopback/Tailscale."""
     if request_source(request).startswith("other:"):
         raise HTTPException(403, "Control actions are restricted to localhost or the tailnet")
+    # The loopback listener is the documented owner-only break-glass path.
+    # It never leaves the host; all tailnet traffic must traverse Caddy once
+    # enforcement is enabled.
+    if (os.environ.get("OMNILAB_REQUIRE_IDENTITY", "false").lower() == "true"
+            and request_source(request) != "local" and not request_identity(request)):
+        raise HTTPException(401, "Sign in through the Authentik-protected OmniLab URL")
+
+
+def request_identity(request: Request) -> dict | None:
+    """Accept identity only from the Caddy hop, never from browser headers."""
+    expected = os.environ.get("OMNILAB_INGRESS_TOKEN", "")
+    if not expected or not secrets.compare_digest(request.headers.get("X-OmniLab-Ingress", ""), expected):
+        return None
+    subject = request.headers.get("X-Authentik-Uid", "").strip()
+    email = request.headers.get("X-Authentik-Email", "").strip()
+    if not subject or not email:
+        return None
+    groups = [group.strip() for group in request.headers.get("X-Authentik-Groups", "").split(",") if group.strip()]
+    return {"subject": subject, "email": email, "groups": groups}
 
 
 async def audit_event(request: Request, event: str, **fields) -> None:
@@ -121,18 +211,24 @@ async def audit_event(request: Request, event: str, **fields) -> None:
         "source": request_source(request),
         **fields,
     }
+    identity = request_identity(request)
+    if identity:
+        record["actor"] = {"subject": identity["subject"], "email": identity["email"]}
     async with _audit_lock:
         _STATE_DIR.mkdir(mode=0o700, exist_ok=True)
         with _AUDIT_PATH.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(record, separators=(",", ":")) + "\n")
 
 
-def _consume_approval(token: str | None, sid: str, action: str) -> None:
+def _consume_approval(request: Request, token: str | None, sid: str, action: str) -> None:
     approval = _approvals.pop(token, None) if token else None
     if not approval or approval["expires_at"] < time.time():
         raise HTTPException(403, "A fresh explicit approval is required")
     if approval["service_id"] != sid or approval["action"] != action:
         raise HTTPException(403, "Approval does not match this action")
+    identity = request_identity(request)
+    if approval.get("subject") and (not identity or approval["subject"] != identity["subject"]):
+        raise HTTPException(403, "Approval belongs to a different signed-in user")
 
 
 def http_health(s: dict) -> bool | None:
@@ -170,18 +266,23 @@ async def create_approval(request: Request):
     body = await request.json()
     sid = str(body.get("service_id", ""))
     action = str(body.get("action", ""))
-    if action not in {"up", "stop", "restart", "pull", "update", "mcp-edit", "mcp-verify", "mcp-sync"}:
+    if action not in {"up", "stop", "restart", "pull", "update", "mcp-edit", "mcp-verify", "mcp-sync", "setup-start", "setup-resume"}:
         raise HTTPException(400, "Unknown approval action")
     if action.startswith("mcp-"):
         known = {item["id"] for item in registry_snapshot()["servers"]} | {"registry"}
         if sid not in known:
             raise HTTPException(404, "Unknown MCP server")
+    elif action.startswith("setup-"):
+        if sid != "foundation":
+            service_by_id(sid)
     else:
         service_by_id(sid)
     if body.get("confirm") != f"{action}:{sid}":
         raise HTTPException(400, "Approval confirmation does not match")
     token = secrets.token_urlsafe(24)
-    _approvals[token] = {"service_id": sid, "action": action, "expires_at": time.time() + _APPROVAL_TTL}
+    identity = request_identity(request)
+    _approvals[token] = {"service_id": sid, "action": action, "expires_at": time.time() + _APPROVAL_TTL,
+                         "subject": identity["subject"] if identity else None}
     await audit_event(request, "approval.granted", service_id=sid, action=action)
     return {"token": token, "expires_in": _APPROVAL_TTL}
 
@@ -196,6 +297,35 @@ async def list_audit(limit: int = 50):
     return {"events": events}
 
 
+@app.get("/api/identity/status")
+async def get_identity_status(request: Request):
+    require_trusted_request(request)
+    states = await asyncio.to_thread(_service_state_map)
+    result = identity_status(states)
+    result["enforced"] = os.environ.get("OMNILAB_REQUIRE_IDENTITY", "false").lower() == "true"
+    identity = request_identity(request)
+    result["signed_in"] = {"email": identity["email"], "groups": identity["groups"]} if identity else None
+    return result
+
+
+@app.get("/api/identity/apps")
+async def get_identity_apps(request: Request):
+    require_trusted_request(request)
+    states = await asyncio.to_thread(_service_state_map)
+    return {"apps": identity_app_inventory(states)}
+
+
+@app.post("/api/identity/apps/{sid}/verify")
+async def verify_identity_application(sid: str, request: Request):
+    require_trusted_request(request)
+    try:
+        result = await asyncio.to_thread(verify_identity_app, sid, _service_state_map())
+    except KeyError:
+        raise HTTPException(404, "Unknown identity application") from None
+    await audit_event(request, "identity.verify", service_id=sid, result=result["verification"])
+    return result
+
+
 @app.get("/api/services")
 async def list_services(request: Request):
     tailnet_base = SETTINGS.get("tailnet_base", "")
@@ -205,7 +335,10 @@ async def list_services(request: Request):
     # First pass: gather container state OFF the event loop — the docker SDK
     # does blocking socket calls, and inline execution here stalls every other
     # request (system polls, actions) for the duration, which reads as UI stutter.
-    states = await loop.run_in_executor(None, lambda: {s["id"]: svc_state(s) for s in SERVICES})
+    states, serve_proxies = await asyncio.gather(
+        loop.run_in_executor(None, lambda: {s["id"]: svc_state(s) for s in SERVICES}),
+        loop.run_in_executor(None, _tailscale_serve_proxies),
+    )
 
     service_data = []
     for s in SERVICES:
@@ -218,10 +351,15 @@ async def list_services(request: Request):
             "display_name": s["display_name"],
             "description": s.get("description"),
             "category": s.get("category"),
+            "role": s.get("role", "application"),
+            "visibility": s.get("visibility", "user"),
+            "lifecycle": s.get("lifecycle", "managed"),
             "icon": s.get("icon", "📦"),
             "port": s.get("port"),
             "url": s.get("url"),
             "tailnet_url": tailnet_url,
+            "tailnet_route_active": tailnet_port in serve_proxies if tailnet_port else None,
+            "tailnet_proxy": serve_proxies.get(tailnet_port) if tailnet_port else None,
             "state": st["overall"],
             "containers": st["containers"],
             "_health_probe": s,  # keep reference for health check
@@ -236,6 +374,13 @@ async def list_services(request: Request):
             return http_health(s)
         healthy = await loop.run_in_executor(None, lambda: _cached_http_health(sid, do_probe))
         svc["healthy"] = healthy
+        if healthy is False and svc["state"] == "running":
+            svc["state"] = "degraded"
+        svc["external_ready"] = bool(
+            svc["state"] == "running"
+            and healthy is not False
+            and (svc["tailnet_route_active"] is not False)
+        )
         del svc["_health_probe"]
     
     await asyncio.gather(*[probe_health(svc) for svc in service_data])
@@ -268,7 +413,7 @@ async def list_mcp_tools(server_id: str, request: Request):
 @app.put("/api/mcp/servers/{server_id}")
 async def put_mcp_server(server_id: str, request: Request):
     require_trusted_request(request)
-    _consume_approval(request.headers.get("X-OmniLab-Approval"), server_id, "mcp-edit")
+    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), server_id, "mcp-edit")
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "JSON body must be an object")
@@ -286,7 +431,7 @@ async def put_mcp_server(server_id: str, request: Request):
 @app.post("/api/mcp/servers/{server_id}/verify")
 async def verify_mcp_server(server_id: str, request: Request):
     require_trusted_request(request)
-    _consume_approval(request.headers.get("X-OmniLab-Approval"), server_id, "mcp-verify")
+    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), server_id, "mcp-verify")
     initial = registry_snapshot(_service_state_map(), verify=False)
     candidate = next((item for item in initial["servers"] if item["id"] == server_id), None)
     if candidate and server_id in {"firecrawl", "paperless-ngx", "immich", "ollama"} and candidate["app_state"] == "running":
@@ -313,7 +458,7 @@ async def preview_mcp_harnesses(request: Request):
 @app.post("/api/mcp/harnesses/sync")
 async def sync_mcp_harnesses(request: Request):
     require_trusted_request(request)
-    _consume_approval(request.headers.get("X-OmniLab-Approval"), "registry", "mcp-sync")
+    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), "registry", "mcp-sync")
     paths = write_harness_exports()
     await audit_event(request, "mcp.harness_sync", keys=sorted(paths))
     return {"ok": True, "exports": paths,
@@ -331,6 +476,8 @@ async def destroy(sid: str, request: Request):
     if body.get("confirm") != sid:
         raise HTTPException(400, 'body must be {"confirm":"<service-id>"}')
     s = service_by_id(sid)
+    if s.get("lifecycle") == "always_on":
+        raise HTTPException(409, "Always-on infrastructure cannot be destroyed from the dashboard")
     async with _action_locks.setdefault(sid, asyncio.Lock()):
         rc, out = await run_compose(s, ["down"])
     await audit_event(request, "service.destroy", service_id=sid, ok=rc == 0)
@@ -343,7 +490,11 @@ async def action(sid: str, action: str, request: Request):
     s = service_by_id(sid)
     if action not in {"up", "stop", "restart", "pull", "update"}:
         raise HTTPException(400, f"unknown action {action!r}")
-    _consume_approval(request.headers.get("X-OmniLab-Approval"), sid, action)
+    if action == "stop" and s.get("lifecycle") == "always_on":
+        raise HTTPException(409, "Always-on infrastructure can be repaired or restarted, but not stopped")
+    if action == "up" and svc_state(s)["overall"] == "absent" and sid not in _FOUNDATION_SERVICES and not _foundation_ready():
+        raise HTTPException(409, "Use Settings setup wizard after completing the Authentik identity foundation")
+    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), sid, action)
     async with _action_locks.setdefault(sid, asyncio.Lock()):
         if action == "restart":
             rc, out = await run_compose(s, ["restart"])
@@ -412,7 +563,8 @@ def system():
         "cpu_percent": psutil.cpu_percent(interval=0.2),
         "mem": psutil.virtual_memory()._asdict(),
         "disk": {"total": du.total, "used": du.used, "percent": du.percent},
-        "docker_ok": bool(DLI.ping()),
+        "docker_ok": _docker_available(),
+        "tailscale": _tailscale_snapshot(),
         "uptime_seconds": time.time() - psutil.boot_time(),
         "load_avg": list(os.getloadavg()),
     }
@@ -482,21 +634,7 @@ async def get_bootstrap_identity(request: Request):
 @app.put("/api/bootstrap-identity")
 async def put_bootstrap_identity(request: Request):
     require_trusted_request(request)
-    body = await request.json()
-    email = str(body.get("email", "")).strip()
-    password = str(body.get("password", ""))
-    if not body.get("acknowledge_shared_credential_risk"):
-        raise HTTPException(400, "Shared credential risk acknowledgement is required")
-    if not email or len(email) > 254 or "\n" in email or "\r" in email:
-        raise HTTPException(400, "Enter a valid app login")
-    if len(password) < 10 or len(password) > 256 or "\n" in password or "\r" in password:
-        raise HTTPException(400, "The shared app password must contain 10 to 256 characters")
-    values = _parse_env_file(_env_path("vaultwarden"))
-    values[_IDENTITY_KEYS[0]] = email
-    values[_IDENTITY_KEYS[1]] = password
-    _write_env_file(_env_path("vaultwarden"), values)
-    await audit_event(request, "bootstrap.identity_saved")
-    return {"configured": True, "email": email}
+    raise HTTPException(410, "Shared app passwords were replaced by Authentik-first onboarding")
 
 def _load_env_example(sid: str) -> dict[str, dict]:
     """Parse .env.example into structured config with placeholders.
@@ -649,6 +787,316 @@ async def regenerate_secret(sid: str, request: Request):
     return {"ok": True, "key": key, "configured": True}
 
 
+# ---------- resumable setup/onboarding jobs ----------
+_FOUNDATION_INFRA_ORDER = ("authentik", "sso-ingress")
+_FOUNDATION_SERVICES = (*_FOUNDATION_INFRA_ORDER, "vaultwarden")
+
+
+def _secret_missing(value: str | None) -> bool:
+    return not value or value.lower() in {"change_me", "changeme"} or value.startswith("replace_with_")
+
+
+def _prepare_identity_foundation() -> list[str]:
+    """Generate host-side infrastructure secrets without returning values."""
+    changed: list[str] = []
+    root_values = _parse_env_file(ROOT / ".env")
+    ingress_token = root_values.get("OMNILAB_INGRESS_TOKEN")
+    if _secret_missing(ingress_token):
+        ingress_token = secrets.token_hex(32)
+        root_values["OMNILAB_INGRESS_TOKEN"] = ingress_token
+        changed.append("root ingress token")
+    root_values.setdefault("OMNILAB_REQUIRE_IDENTITY", "false")
+    _write_env_file(ROOT / ".env", root_values)
+
+    authentik_values = _parse_env_file(ROOT / "authentik" / ".env")
+    authentik_values.setdefault("AUTHENTIK_TAG", "2026.5.0")
+    for key, size in (("AUTHENTIK_SECRET_KEY", 32), ("AUTHENTIK_POSTGRESQL__PASSWORD", 24),
+                      ("AUTHENTIK_BOOTSTRAP_TOKEN", 32)):
+        if _secret_missing(authentik_values.get(key)):
+            authentik_values[key] = secrets.token_hex(size)
+            changed.append(f"authentik {key.lower()}")
+    _write_env_file(ROOT / "authentik" / ".env", authentik_values)
+
+    ingress_values = _parse_env_file(ROOT / "ingress" / ".env")
+    if ingress_values.get("OMNILAB_INGRESS_TOKEN") != ingress_token:
+        ingress_values["OMNILAB_INGRESS_TOKEN"] = ingress_token
+        changed.append("caddy ingress token")
+    _write_env_file(ROOT / "ingress" / ".env", ingress_values)
+    return changed
+
+
+async def _wait_for_service(sid: str, timeout: int = 180) -> bool:
+    deadline = time.monotonic() + timeout
+    service = service_by_id(sid)
+    while time.monotonic() < deadline:
+        state = await asyncio.to_thread(svc_state, service)
+        application_health = await asyncio.to_thread(http_health, service)
+        if state["overall"] == "running" and application_health is not False:
+            return True
+        await asyncio.sleep(2)
+    return False
+
+
+async def _start_setup_service(job_id: str, sid: str, progress: int) -> None:
+    service = service_by_id(sid)
+    current_state = await asyncio.to_thread(svc_state, service)
+    current_health = await asyncio.to_thread(http_health, service)
+    if current_state["overall"] == "running" and current_health is not False:
+        update_job(job_id, status="verifying", stage=f"verify_{sid}", progress=progress,
+                   summary=f"{service['display_name']} is already ready",
+                   message=f"Reused the healthy {service['display_name']} installation")
+        return
+    update_job(job_id, status="starting", stage=f"start_{sid}", progress=progress,
+               summary=f"Starting {service['display_name']}", message=f"Starting {service['display_name']} and its backend processes")
+    rc, _output = await run_compose(service, ["up", "-d"])
+    if rc != 0:
+        raise RuntimeError(f"{service['display_name']} could not be started. Open its sanitized service logs for details.")
+    update_job(job_id, status="waiting", stage=f"wait_{sid}", progress=progress,
+               summary=f"Waiting for {service['display_name']}", message=f"Containers started; waiting for {service['display_name']} health")
+    if not await _wait_for_service(sid):
+        raise RuntimeError(f"{service['display_name']} did not become ready before the setup timeout.")
+
+
+async def _foundation_preflight(job_id: str) -> None:
+    update_job(job_id, status="verifying", stage="preflight", progress=3,
+               summary="Checking this host", message="Checking Docker, shared networks, ports, and the Tailscale session")
+    if not await asyncio.to_thread(_docker_available):
+        raise RuntimeError("Docker is not available. Start Docker, then retry setup.")
+    missing_networks = []
+    for network in ("homelab_frontend", "homelab_backend"):
+        try:
+            await asyncio.to_thread(DLI.networks.get, network)
+        except Exception:
+            missing_networks.append(network)
+    if missing_networks:
+        raise RuntimeError(f"Required Docker networks are missing: {', '.join(missing_networks)}. Run the host bootstrap, then retry.")
+    tailscale = await asyncio.to_thread(_tailscale_snapshot)
+    if not tailscale["installed"]:
+        raise RuntimeError("Tailscale is not installed. Install it and sign in before continuing.")
+    if not tailscale["connected"]:
+        raise RuntimeError("Tailscale is installed but not signed in. Complete `tailscale up`, then retry setup.")
+
+
+async def _validate_caddy() -> None:
+    ingress = service_by_id("sso-ingress")
+    rc, output = await run_compose(ingress, [
+        "run", "--rm", "--no-deps", "caddy", "caddy", "validate",
+        "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile",
+    ])
+    if rc != 0:
+        detail = next((line.strip() for line in reversed(output.splitlines()) if line.strip()), "configuration is invalid")
+        raise RuntimeError(f"Caddy configuration validation failed: {detail[:240]}")
+
+
+async def _route_authentik() -> tuple[bool, str | None]:
+    process = await asyncio.create_subprocess_exec(
+        "tailscale", "serve", "--bg", "--yes", "--https=8462", "http://127.0.0.1:19062",
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    _stdout, stderr = await process.communicate()
+    if process.returncode == 0:
+        proxies = await asyncio.to_thread(_tailscale_serve_proxies)
+        if proxies.get(8462) == "http://127.0.0.1:19062":
+            return True, None
+        return False, "Tailscale accepted the route but did not report the expected 8462 listener."
+    message = stderr.decode(errors="replace").strip()
+    if "permission" in message.lower() or "sudo" in message.lower():
+        return False, "Tailscale needs one-time operator permission on this host before OmniLab can manage private routes."
+    return False, "Tailscale could not publish the Authentik URL."
+
+
+async def _verify_external_authentik(timeout: int = 45) -> bool:
+    url = f"{SETTINGS['tailnet_base']}:8462/-/health/ready/"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            def probe() -> bool:
+                with urllib.request.urlopen(url, timeout=5) as response:
+                    return response.status == 200
+            if await asyncio.to_thread(probe):
+                return True
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+    return False
+
+
+async def _run_foundation_job(job_id: str) -> None:
+    try:
+        await _foundation_preflight(job_id)
+        update_job(job_id, status="preparing", stage="secrets", progress=5,
+                   summary="Preparing identity services", message="Generating protected infrastructure credentials")
+        changed = await asyncio.to_thread(_prepare_identity_foundation)
+        update_job(job_id, status="preparing", stage="secrets_ready", progress=10,
+                   summary="Security files prepared", message=f"Prepared {len(changed)} protected settings; values were not exposed")
+        await _start_setup_service(job_id, "authentik", 25)
+        update_job(job_id, status="verifying", stage="validate_caddy", progress=48,
+                   summary="Validating private ingress", message="Checking every Caddy listener before it can receive traffic")
+        await _validate_caddy()
+        await _start_setup_service(job_id, "sso-ingress", 58)
+        update_job(job_id, status="configuring", stage="tailscale", progress=72,
+                   summary="Publishing private Authentik URL", message="Connecting the existing tailnet URL to the identity gateway")
+        routed, route_error = await _route_authentik()
+        if not routed:
+            update_job(job_id, status="user_action_required", stage="tailscale_permission", progress=72,
+                       summary="Tailscale permission required", message=route_error or "Tailscale route needs attention",
+                       action={"kind": "tailscale_permission", "label": "Review host permission"}, error=route_error)
+            return
+        update_job(job_id, status="verifying", stage="verify_external_authentik", progress=80,
+                   summary="Verifying Authentik", message="Checking the complete Tailscale, Caddy, and Authentik path")
+        if not await _verify_external_authentik():
+            raise RuntimeError("Authentik started locally, but its private 8462 URL did not pass the end-to-end health check.")
+        update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
+                   summary="Create your OmniLab owner", message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
+                   action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
+    except Exception as error:
+        update_job(job_id, status="failed", stage="failed", progress=0,
+                   summary="Core setup needs attention", message="Setup stopped safely at the failed stage.", error=str(error)[:500])
+    finally:
+        _setup_tasks.pop(job_id, None)
+
+
+def _foundation_ready() -> bool:
+    snapshot = list_jobs(100)
+    completed = any(job["target"] == "foundation" and job["status"] == "ready" for job in snapshot["jobs"])
+    if not completed:
+        return False
+    if _tailscale_serve_proxies().get(8462) != "http://127.0.0.1:19062":
+        return False
+    return all(
+        svc_state(service_by_id(sid))["overall"] == "running"
+        and http_health(service_by_id(sid)) is not False
+        for sid in _FOUNDATION_SERVICES
+    )
+
+
+async def _run_app_setup_job(job_id: str, sid: str) -> None:
+    try:
+        if not _foundation_ready():
+            raise RuntimeError("Complete Authentik core setup before onboarding a human-facing application.")
+        catalog = load_catalog()
+        app_by_id = {item["id"]: item for item in catalog.get("apps", [])}
+        target_app = next((item for item in app_by_id.values() if item.get("service_id") == sid), None)
+        ordered: list[str] = []
+        seen: set[str] = set()
+        def add_app(app_id: str) -> None:
+            if app_id in seen:
+                return
+            seen.add(app_id)
+            item = app_by_id.get(app_id)
+            for dependency in (item or {}).get("dependencies", []):
+                add_app(dependency)
+            service_id = (item or {}).get("service_id")
+            if service_id:
+                ordered.append(service_id)
+        if target_app:
+            add_app(target_app["id"])
+        if sid not in ordered:
+            ordered.append(sid)
+        update_job(job_id, status="preparing", stage="prepare", progress=10,
+                   summary=f"Preparing {service_by_id(sid)['display_name']}", message="Creating host-only configuration and checking dependencies")
+        for index, service_id in enumerate(ordered):
+            current = _parse_env_file(_env_path(service_id))
+            example = _parse_env_file(_env_example_path(service_id))
+            if service_id in AUTOMATED_SERVICES:
+                prepared, _changed = prepare_environment(service_id, current, example, identity=None)
+            else:
+                prepared = {**example, **current}
+            if prepared:
+                _write_env_file(_env_path(service_id), prepared)
+            await _start_setup_service(job_id, service_id, 25 + int(35 * (index + 1) / len(ordered)))
+        identity_app = next((item for item in identity_app_inventory({sid: "running"}) if item["id"] == sid), None)
+        if identity_app and identity_app["mode"] != "machine_only":
+            note = ("Authentik protects access, but this app requires one local account handoff."
+                    if identity_app["mode"] == "access_gate_only" else
+                    "Complete the application identity handoff; OmniLab will verify it afterward.")
+            update_job(job_id, status="user_action_required", stage="identity_handoff", progress=75,
+                       summary=f"Finish {service_by_id(sid)['display_name']} sign-in", message=note,
+                       action={"kind": "open_url", "label": f"Open {service_by_id(sid)['display_name']}", "url": identity_app["external_url"]})
+            return
+        update_job(job_id, status="ready", stage="ready", progress=100,
+                   summary=f"{service_by_id(sid)['display_name']} is ready", message="Application health and setup checks passed")
+    except Exception as error:
+        update_job(job_id, status="failed", stage="failed", progress=0,
+                   summary=f"{service_by_id(sid)['display_name']} setup needs attention", message="Setup stopped safely.", error=str(error)[:500])
+    finally:
+        _setup_tasks.pop(job_id, None)
+
+
+@app.get("/api/setup/jobs")
+async def get_setup_jobs(request: Request):
+    require_trusted_request(request)
+    return await asyncio.to_thread(list_jobs)
+
+
+@app.get("/api/setup/jobs/{job_id}")
+async def get_setup_job(job_id: str, request: Request):
+    require_trusted_request(request)
+    try:
+        return await asyncio.to_thread(get_job, job_id)
+    except KeyError:
+        raise HTTPException(404, "Unknown setup job") from None
+
+
+@app.post("/api/setup/targets/{target}/start")
+async def start_setup_job(target: str, request: Request):
+    require_trusted_request(request)
+    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), target, "setup-start")
+    if target != "foundation":
+        service_by_id(target)
+    job = await asyncio.to_thread(create_job, target, "foundation" if target == "foundation" else "application",
+                                  "Preparing identity foundation" if target == "foundation" else f"Preparing {service_by_id(target)['display_name']}")
+    if job["status"] == "queued" and job["id"] not in _setup_tasks:
+        coroutine = _run_foundation_job(job["id"]) if target == "foundation" else _run_app_setup_job(job["id"], target)
+        _setup_tasks[job["id"]] = asyncio.create_task(coroutine)
+    await audit_event(request, "setup.started", service_id=target, job_id=job["id"])
+    return job
+
+
+@app.post("/api/setup/jobs/{job_id}/resume")
+async def resume_setup_job(job_id: str, request: Request):
+    require_trusted_request(request)
+    try:
+        job = get_job(job_id)
+    except KeyError:
+        raise HTTPException(404, "Unknown setup job") from None
+    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), job["target"], "setup-resume")
+    body = await request.json()
+    if not body.get("completed"):
+        raise HTTPException(400, "Confirm the displayed handoff is complete before resuming")
+    if job["target"] == "foundation" and job["stage"] == "tailscale_permission":
+        routed, route_error = await _route_authentik()
+        if not routed:
+            raise HTTPException(409, route_error or "The Authentik route is not ready")
+        if not await _verify_external_authentik():
+            raise HTTPException(409, "The 8462 route exists, but Authentik is not reachable through it yet")
+        result = update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
+                            summary="Create your OmniLab owner",
+                            message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
+                            action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
+    elif job["target"] == "foundation" and job["stage"] == "create_owner":
+        if not await _wait_for_service("authentik", 10) or not await _verify_external_authentik(10):
+            raise HTTPException(409, "Authentik is not reachable yet")
+        try:
+            await _start_setup_service(job_id, "vaultwarden", 94)
+        except RuntimeError as error:
+            update_job(job_id, status="failed", stage="start_vaultwarden", progress=90,
+                       summary="Vaultwarden needs attention", message="Identity is ready, but Vaultwarden did not start.", error=str(error)[:500])
+            raise HTTPException(500, str(error)) from error
+        result = update_job(job_id, status="ready", stage="ready", progress=100,
+                            summary="Identity foundation is ready", message="Authentik, Caddy, Tailscale routing, and Vaultwarden are ready")
+    elif job["status"] == "user_action_required":
+        sid = job["target"]
+        if not await _wait_for_service(sid, 10):
+            raise HTTPException(409, f"{service_by_id(sid)['display_name']} is not reachable yet")
+        result = update_job(job_id, status="ready", stage="ready", progress=100,
+                            summary=f"{service_by_id(sid)['display_name']} is ready", message="User handoff confirmed and application health passed")
+    else:
+        raise HTTPException(409, "This setup job is not waiting for a user handoff")
+    await audit_event(request, "setup.resumed", service_id=job["target"], job_id=job_id)
+    return result
+
+
 @app.post("/api/initiate/{sid}/prepare")
 async def prepare_initiate_service(sid: str, request: Request):
     """Prepare a supported service without returning generated credentials."""
@@ -656,6 +1104,8 @@ async def prepare_initiate_service(sid: str, request: Request):
     service = service_by_id(sid)
     if sid not in AUTOMATED_SERVICES:
         raise HTTPException(400, f"Service '{sid}' is not available in automated initiation")
+    if sid not in _FOUNDATION_SERVICES and not _foundation_ready():
+        raise HTTPException(409, "Complete Authentik core setup before preparing this application")
 
     current = _parse_env_file(_env_path(sid))
     example = _parse_env_file(_env_example_path(sid))
@@ -677,6 +1127,8 @@ async def prepare_install_service(sid: str, request: Request):
     """Prepare one catalog service without exposing generated credentials."""
     require_trusted_request(request)
     service = service_by_id(sid)
+    if sid not in _FOUNDATION_SERVICES and not _foundation_ready():
+        raise HTTPException(409, "Complete Authentik core setup before preparing this application")
     current = _parse_env_file(_env_path(sid))
     example = _parse_env_file(_env_example_path(sid))
     containers_exist = svc_state(service)["overall"] != "absent"

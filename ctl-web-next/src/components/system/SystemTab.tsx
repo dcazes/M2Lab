@@ -4,10 +4,11 @@ import { formatBytes, formatPercent, formatUptime, formatLoadAvg } from '../../l
 import { GaugeCard } from './GaugeCard'
 import { Sparkline } from './Sparkline'
 import { TrustPanel } from './TrustPanel'
-import { Activity, FileText, RefreshCcw } from 'lucide-react'
+import { Activity, ExternalLink, FileText, Network, ServerCog } from 'lucide-react'
 import { useServices } from '../../hooks/useServices'
 import { useAudit } from '../../hooks/useAudit'
 import { getServiceIconUrl } from '../../lib/api'
+import { FoundationSetupCard } from './FoundationSetupCard'
 
 const MAX_POINTS = 60
 
@@ -19,15 +20,17 @@ const historyBuffer: { cpu: number[]; mem: number[]; disk: number[] } = {
   disk: [],
 }
 
-const CORE_IDS = ['vaultwarden', 'litellm', 'freellmapi', 'ollama', 'firecrawl']
-
 function OperationsOverview() {
-  const servicesQuery = useServices(); const auditQuery = useAudit()
+  const servicesQuery = useServices(); const auditQuery = useAudit(); const systemQuery = useSystem()
   const services = servicesQuery.data?.services || []
-  const core = CORE_IDS.map(id => services.find(service => service.id === id)).filter(Boolean) as typeof services
+  const infrastructure = services.filter(service => service.visibility === 'system')
   const attention = services.filter(service => service.state === 'degraded' || (service.state === 'running' && service.healthy === false))
   return <section className="system-operations-grid">
-    <div className="workspace-panel workspace-core-panel"><div className="workspace-panel-header"><div><RefreshCcw className="h-4 w-4" /><span><strong>Core services</strong><small>Credentials, models, acquisition</small></span></div><span>{core.filter(service => service.state === 'running').length}/{core.length}</span></div><div>{core.map(service => <button key={service.id}><span className="workspace-app-mark"><img src={getServiceIconUrl(service.id)} alt="" onError={event => { event.currentTarget.style.display = 'none' }} /><span>{service.icon}</span></span><span><strong>{service.display_name}</strong><small>{service.state === 'running' ? 'Online' : service.state}</small></span><i className={`workspace-dot workspace-dot-${service.state}`} /></button>)}</div></div>
+    <div className="workspace-panel workspace-core-panel system-infrastructure-panel"><div className="workspace-panel-header"><div><ServerCog className="h-4 w-4" /><span><strong>Infrastructure</strong><small>Private access and identity</small></span></div><span>{infrastructure.filter(service => service.state === 'running').length + Number(Boolean(systemQuery.data?.docker_ok)) + Number(Boolean(systemQuery.data?.tailscale.connected))}/{infrastructure.length + 2}</span></div><div>
+      <div className="system-infrastructure-row"><span className="system-infrastructure-icon"><ServerCog /></span><span><strong>Docker</strong><small>{systemQuery.data?.docker_ok ? 'Running' : 'Unavailable'}</small></span><i className={`workspace-dot workspace-dot-${systemQuery.data?.docker_ok ? 'running' : 'degraded'}`} /></div>
+      <div className="system-infrastructure-row"><span className="system-infrastructure-icon"><Network /></span><span><strong>Tailscale</strong><small>{systemQuery.data?.tailscale.connected ? `${systemQuery.data.tailscale.serve_ports.length} private routes` : 'Sign-in required'}</small></span><i className={`workspace-dot workspace-dot-${systemQuery.data?.tailscale.connected ? 'running' : 'degraded'}`} /></div>
+      {infrastructure.map(service => <div className="system-infrastructure-row" key={service.id}><span className="workspace-app-mark"><img src={getServiceIconUrl(service.id)} alt="" onError={event => { event.currentTarget.style.display = 'none' }} /><span>{service.icon}</span></span><span><strong>{service.display_name}</strong><small>{service.state === 'running' ? `${service.containers.length} components ready` : service.state}</small></span>{service.tailnet_url && service.external_ready && <a href={service.tailnet_url} target="_blank" rel="noreferrer" aria-label={`Open ${service.display_name}`}><ExternalLink /></a>}<i className={`workspace-dot workspace-dot-${service.state}`} /></div>)}
+    </div></div>
     <div className="workspace-panel workspace-attention-panel"><div className="workspace-panel-header"><div><Activity className="h-4 w-4" /><span><strong>Attention</strong><small>Health signals worth checking</small></span></div><span>{attention.length}</span></div>{attention.length ? attention.map(service => <button key={service.id}><span>{service.display_name}</span><small>{service.healthy === false ? 'Health check failed' : service.state}</small></button>) : <div className="workspace-all-clear"><span>✓</span><p><strong>All clear</strong><small>No degraded running services.</small></p></div>}</div>
     <div className="workspace-panel workspace-recent-panel"><div className="workspace-panel-header"><div><FileText className="h-4 w-4" /><span><strong>Recent operations</strong><small>Approval and lifecycle trail</small></span></div></div>{(auditQuery.data?.events || []).slice(0, 6).map((event, index) => <div key={`${event.timestamp}-${index}`}><i /><span><strong>{event.service_id || 'OmniLab'}</strong><small>{event.event.split('.').join(' ')}</small></span><time>{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div>)}</div>
   </section>
@@ -97,6 +100,8 @@ export function SystemTab() {
           format={formatUptime}
         />
       </section>
+
+      <FoundationSetupCard />
 
       <OperationsOverview />
 

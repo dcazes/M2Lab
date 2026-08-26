@@ -13,6 +13,14 @@ services:
       - WEBUI_AUTH=True
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
       - WEBUI_NAME=Homelab Agent
+      # Native OIDC stays disabled until these are populated in the host-only
+      # .env after the Authentik provider/callback preflight has passed.
+      - OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL:-}
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID:-}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET:-}
+      - OPENID_REDIRECT_URI=${OPENID_REDIRECT_URI:-}
+      - OAUTH_SCOPES=${OAUTH_SCOPES:-openid profile email groups}
+      - ENABLE_OAUTH_SIGNUP=${ENABLE_OAUTH_SIGNUP:-false}
     volumes:
       - ./data:/app/backend/data
     restart: unless-stopped

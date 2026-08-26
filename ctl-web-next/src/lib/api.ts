@@ -14,6 +14,8 @@ import type {
   CalendarEvent,
   UpdateStatus,
   McpRegistryResponse,
+  SetupJob,
+  SetupJobsResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -55,6 +57,30 @@ export async function createApproval(id: string, action: ServiceAction): Promise
     body: JSON.stringify({ service_id: id, action, confirm: `${action}:${id}` }),
   })
   return result.token
+}
+
+export async function createSetupApproval(id: string, action: 'setup-start' | 'setup-resume'): Promise<string> {
+  const result = await fetchJson<{ token: string }>(`${API_BASE}/approvals`, {
+    method: 'POST',
+    body: JSON.stringify({ service_id: id, action, confirm: `${action}:${id}` }),
+  })
+  return result.token
+}
+
+export async function fetchSetupJobs(): Promise<SetupJobsResponse> {
+  return fetchJson(`${API_BASE}/setup/jobs`)
+}
+
+export async function startSetupTarget(target: string, approval: string): Promise<SetupJob> {
+  return fetchJson(`${API_BASE}/setup/targets/${target}/start`, {
+    method: 'POST', headers: { 'X-OmniLab-Approval': approval },
+  })
+}
+
+export async function resumeSetupJob(job: SetupJob, approval: string): Promise<SetupJob> {
+  return fetchJson(`${API_BASE}/setup/jobs/${job.id}/resume`, {
+    method: 'POST', headers: { 'X-OmniLab-Approval': approval }, body: JSON.stringify({ completed: true }),
+  })
 }
 
 export async function createMcpApproval(id: string, action: 'mcp-edit' | 'mcp-verify' | 'mcp-sync'): Promise<string> {

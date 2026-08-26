@@ -5,54 +5,10 @@ settings:
   tailnet_base: "https://home.taile2cc7a.ts.net"
 
 services:
-  - id: authentik
-    display_name: Authentik
-    description: Private identity provider for OmniLab
-    category: infrastructure
-    role: infrastructure
-    visibility: system
-    lifecycle: always_on
-    icon: "🪪"
-    dir: authentik
-    project: authentik
-    port: 9001
-    tailnet_port: 8462
-    url: http://localhost:9001
-    health:
-      mode: http
-      url: "http://localhost:9001/-/health/ready/"
-      expect: 200
-    backup:
-      dumps:
-        - {container: authentik-postgresql-1, user: authentik, database: authentik}
-      volumes:
-        - authentik-media
-        - authentik-templates
-
-  - id: sso-ingress
-    display_name: Caddy ingress
-    description: Caddy access gateway for staged Authentik protection
-    category: infrastructure
-    role: infrastructure
-    visibility: system
-    lifecycle: always_on
-    icon: "🚪"
-    dir: ingress
-    project: ingress
-    port: 19460
-    url: http://localhost:19460
-    health:
-      mode: tcp
-      port: 19460
-    backup:
-      volumes:
-        - ingress_caddy-data
-        - ingress_caddy-config
-
   - id: surfsense
     display_name: SurfSense
     description: AI research / knowledge base
-    category: web-research
+    category: research
     icon: "🧠"
     dir: surfsense
     project: surfsense
@@ -78,7 +34,7 @@ services:
   - id: immich
     display_name: Immich
     description: Photo library
-    category: media
+    category: photos
     icon: "📷"
     dir: immich-app
     project: immich
@@ -99,7 +55,7 @@ services:
   - id: litellm
     display_name: LiteLLM
     description: LLM gateway / model router (OpenAI-compatible)
-    category: infrastructure
+    category: ai
     icon: "🧭"
     dir: litellm
     project: litellm
@@ -117,7 +73,7 @@ services:
   - id: vaultwarden
     display_name: Vaultwarden
     description: Password manager (Bitwarden-compatible)
-    category: infrastructure
+    category: security
     icon: "🔐"
     dir: vaultwarden
     project: vaultwarden
@@ -135,7 +91,7 @@ services:
   - id: puppygraph
     display_name: PuppyGraph
     description: Graph visualizer for SurfSense PostgreSQL
-    category: web-research
+    category: graph
     icon: "📊"
     dir: puppygraph
     project: puppygraph
@@ -150,6 +106,7 @@ services:
       binds:
         - data
 
+  - id: homepage
   - id: mealie
     display_name: Mealie
     description: Recipe manager
@@ -189,7 +146,7 @@ services:
   - id: beszel
     display_name: Beszel
     description: Server monitoring (hub + agent)
-    category: infrastructure
+    category: infra
     icon: "📈"
     dir: beszel
     project: beszel
@@ -209,7 +166,7 @@ services:
   - id: paperless-ngx
     display_name: Paperless-ngx
     description: Document archive / OCR
-    category: media
+    category: productivity
     icon: "📄"
     dir: paperless-ngx
     project: paperless-ngx
@@ -253,7 +210,7 @@ services:
   - id: nextcloud
     display_name: Nextcloud
     description: Files & sync
-    category: media
+    category: productivity
     icon: "☁️"
     dir: nextcloud
     project: nextcloud
@@ -277,7 +234,7 @@ services:
   - id: portainer
     display_name: Portainer
     description: Docker management UI + control API
-    category: infrastructure
+    category: infra
     icon: "🐳"
     dir: portainer
     project: portainer
@@ -301,8 +258,6 @@ services:
     project: ollama
     compose_files:
       - docker-compose.gpu.yml
-    ignore_containers:
-      - model-init
     port: 11434
     tailnet_port: 8457
     url: http://localhost:11434
@@ -335,7 +290,7 @@ services:
   - id: firecrawl
     display_name: Firecrawl
     description: Web scraping and crawling API (LLM-ready output)
-    category: web-research
+    category: ai
     icon: "🕷️"
     dir: firecrawl
     project: firecrawl
@@ -353,7 +308,7 @@ services:
   - id: freellmapi
     display_name: FreeLLMAPI
     description: Free-LLM aggregator (OpenAI-compatible, model ordering/failover)
-    category: infrastructure
+    category: ai
     icon: "🔀"
     dir: FreeLLMAPI
     project: freellmapi
@@ -367,3 +322,20 @@ services:
     backup:
       binds:
         - data
+
+  - id: opencode-agent
+    display_name: OpenCode Agent
+    description: Self-hosted coding agent (views/edits this stack)
+    category: ai
+    icon: "🧩"
+    dir: opencode-agent
+    project: opencode-agent
+    port: 4096
+    tailnet_port: 8461
+    url: http://localhost:4096
+    health:
+      mode: tcp
+      port: 4096
+    backup:
+      volumes:
+        - opencode-agent_opencode-data

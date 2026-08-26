@@ -23,6 +23,42 @@ class CatalogTests(unittest.TestCase):
             if app.get("service_id"):
                 self.assertIn(app["service_id"], registered, app["id"])
 
+    def test_service_presentation_and_lifecycle_metadata_are_valid(self):
+        import yaml
+        from ctl.registry import ROOT
+
+        services = yaml.safe_load((ROOT / "services.yaml").read_text())["services"]
+        roles = {"application", "infrastructure"}
+        visibility = {"user", "system", "hidden"}
+        lifecycles = {"managed", "always_on", "dependency"}
+        for service in services:
+            role = service.get("role", "application")
+            surface = service.get("visibility", "user")
+            lifecycle = service.get("lifecycle", "managed")
+            self.assertIn(role, roles, service["id"])
+            self.assertIn(surface, visibility, service["id"])
+            self.assertIn(lifecycle, lifecycles, service["id"])
+            if role == "infrastructure":
+                self.assertNotEqual(surface, "user", service["id"])
+
+        by_id = {service["id"]: service for service in services}
+        for service_id in ("authentik", "sso-ingress"):
+            self.assertEqual(by_id[service_id]["role"], "infrastructure")
+            self.assertEqual(by_id[service_id]["visibility"], "system")
+            self.assertEqual(by_id[service_id]["lifecycle"], "always_on")
+        for service_id in ("ollama", "litellm", "freellmapi", "firecrawl"):
+            self.assertNotEqual(by_id[service_id].get("lifecycle", "managed"), "always_on")
+
+    def test_authentik_custom_blueprint_does_not_hide_bundled_blueprints(self):
+        import yaml
+        from ctl.registry import ROOT
+
+        compose = yaml.safe_load((ROOT / "authentik" / "docker-compose.yml").read_text())
+        for service_id in ("server", "worker"):
+            mounts = compose["services"][service_id]["volumes"]
+            self.assertIn("./blueprints/omnilab.yaml:/blueprints/omnilab.yaml:ro", mounts)
+            self.assertNotIn("./blueprints:/blueprints:ro", mounts)
+
     def test_install_dependencies_resolve_to_registered_apps(self):
         app_ids = {app["id"] for app in self.catalog["apps"] if app.get("service_id")}
         for app in self.catalog["apps"]:

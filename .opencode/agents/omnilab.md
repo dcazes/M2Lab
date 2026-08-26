@@ -1,5 +1,5 @@
 ---
-mode: primary
+mode: subagent
 description: "OmniLab orchestrator: progressively discovers app capabilities and delegates without loading the full tool fleet."
 color: "#61e7c8"
 permissions:
