@@ -12,7 +12,18 @@
   request_header -X-Authentik-Uid
   forward_auth 127.0.0.1:9001 {
     uri /outpost.goauthentik.io/auth/caddy
+    # The embedded outpost is reached over loopback, but it must see the
+    # public Authentik host to generate a usable authorization redirect.
+    header_up Host home.taile2cc7a.ts.net:8462
     copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Uid
+  }
+}
+
+# Forward the proxy-outpost endpoints without applying the gate itself. These
+# endpoints complete Authentik's redirect, session, and sign-out flows.
+(authentik_outpost) {
+  reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:9001 {
+    header_up Host home.taile2cc7a.ts.net:8462
   }
 }
 
@@ -21,6 +32,7 @@
 }
 
 :19460 {
+  import authentik_outpost
   import authentik_gate
   @owners header X-Authentik-Groups *omnilab-owners*
   handle @owners {
@@ -41,11 +53,13 @@
 }
 
 :19444 {
+  import authentik_outpost
   import authentik_gate
   reverse_proxy 127.0.0.1:3929
 }
 
 :19445 {
+  import authentik_outpost
   import authentik_gate
   @owners header X-Authentik-Groups *omnilab-owners*
   handle @owners {
@@ -55,6 +69,7 @@
 }
 
 :19458 {
+  import authentik_outpost
   import authentik_gate
   @owners header X-Authentik-Groups *omnilab-owners*
   handle @owners {
@@ -64,6 +79,7 @@
 }
 
 :19459 {
+  import authentik_outpost
   import authentik_gate
   @owners header X-Authentik-Groups *omnilab-owners*
   handle @owners {
