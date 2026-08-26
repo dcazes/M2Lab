@@ -61,6 +61,8 @@
 :19445 {
   import authentik_outpost
   import authentik_gate
+  @litellm_root path /
+  redir @litellm_root /ui/ 302
   @owners header X-Authentik-Groups *omnilab-owners*
   handle @owners {
     reverse_proxy 127.0.0.1:4000
