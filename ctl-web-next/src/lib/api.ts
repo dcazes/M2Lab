@@ -100,6 +100,20 @@ export async function fetchModelAccess(): Promise<ModelAccessResponse> {
   return fetchJson<ModelAccessResponse>(`${API_BASE}/model-access`)
 }
 
+export async function wireModelPipeline(config: {
+  NVIDIA_NIM_API_KEY?: string
+  GEMINI_API_KEY?: string
+  HUGGINGFACE_API_KEY?: string
+  MISTRAL_API_KEY?: string
+  OPENAI_API_KEY?: string
+  pull_embedding?: boolean
+}): Promise<{ ok: boolean; configured_keys: string[]; embedding_status: string }> {
+  return fetchJson(`${API_BASE}/model-access/wire`, {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
 export async function updateMcpServer(id: string, patch: Record<string, unknown>, approval: string): Promise<{ ok: boolean }> {
   return fetchJson(`${API_BASE}/mcp/servers/${id}`, {
     method: 'PUT', headers: { 'X-OmniLab-Approval': approval }, body: JSON.stringify(patch),

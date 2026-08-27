@@ -62,6 +62,7 @@ if ! "$ready"; then
 fi
 
 printf 'OmniLab is ready: %s\n' "$dashboard_url"
+printf '  → Open the Onboarding tab for first-time setup and app initialization.\n'
 if "$OPEN_BROWSER" && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] && command -v xdg-open >/dev/null 2>&1; then
   xdg-open "$dashboard_url" >/dev/null 2>&1 || true
 fi

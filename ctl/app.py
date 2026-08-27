@@ -431,6 +431,77 @@ def _ollama_models() -> list[dict]:
     ]
 
 
+def _pull_ollama_model(model_name: str = "nomic-embed-text") -> bool:
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:11434/api/pull",
+            data=json.dumps({"name": model_name, "stream": False}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+@app.post("/api/models/ollama/pull")
+async def pull_ollama_embedding(request: Request):
+    require_trusted_request(request)
+    body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    model_name = str(body.get("model", "nomic-embed-text")).strip()
+    loop = asyncio.get_event_loop()
+    success = await loop.run_in_executor(None, lambda: _pull_ollama_model(model_name))
+    await audit_event(request, "ollama.model_pull", model=model_name, success=success)
+    return {"ok": success, "model": model_name}
+
+
+@app.post("/api/model-access/wire")
+async def wire_model_pipeline(request: Request):
+    """Wire API keys into LiteLLM, trigger Ollama embedding pull, and wire open-webui/surfsense."""
+    require_trusted_request(request)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+
+    keys_to_update = {}
+    for key_name in ("NVIDIA_NIM_API_KEY", "GEMINI_API_KEY", "HUGGINGFACE_API_KEY", "MISTRAL_API_KEY", "OPENAI_API_KEY"):
+        val = str(body.get(key_name, "")).strip()
+        if val:
+            keys_to_update[key_name] = val
+
+    litellm_path = _env_path("litellm")
+    current_litellm = _parse_env_file(litellm_path)
+    current_litellm.update(keys_to_update)
+    _write_env_file(litellm_path, current_litellm)
+
+    # Sync gateway key if FreeLLMAPI is configured
+    _sync_freellmapi_gateway()
+
+    # Apply wiring to Open WebUI and SurfSense .env files
+    for sid in ("open-webui", "surfsense"):
+        if (ROOT / service_by_id(sid)["dir"] / ".env.example").exists():
+            env_file = _env_path(sid)
+            curr = _parse_env_file(env_file)
+            _apply_automatic_model_wiring(sid, curr)
+            _write_env_file(env_file, curr)
+
+    # Pull nomic-embed-text if requested
+    pull_embed = bool(body.get("pull_embedding", True))
+    embed_ok = True
+    if pull_embed and svc_state(service_by_id("ollama"))["overall"] == "running":
+        loop = asyncio.get_event_loop()
+        embed_ok = await loop.run_in_executor(None, lambda: _pull_ollama_model("nomic-embed-text"))
+
+    await audit_event(request, "models.pipeline_wired", configured_keys=list(keys_to_update.keys()), embedding_pulled=embed_ok)
+    return {
+        "ok": True,
+        "configured_keys": list(keys_to_update.keys()),
+        "embedding_status": "pulled" if embed_ok else "pending_or_failed",
+    }
+
+
 @app.get("/api/model-access")
 async def get_model_access(request: Request):
     """Safe model-routing inventory. Provider and gateway secrets never leave the host."""

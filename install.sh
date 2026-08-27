@@ -204,7 +204,7 @@ fi
 
 printf '\n'
 success "OmniLab is installed"
-printf '  Dashboard: http://127.0.0.1:8787\n'
+printf '  Dashboard:   http://127.0.0.1:8787\n'
 printf '  Start later: %s/start.sh\n' "$OMNILAB_ROOT"
 printf '  Logs:        journalctl --user -u homelab-ctl -f\n'
 
@@ -212,4 +212,5 @@ if ! docker info >/dev/null 2>&1; then
   warn "Your current login does not yet have Docker access. Sign out and back in once, then run ./start.sh."
 fi
 
-printf '\nOpen the dashboard and use Settings → Add apps when you are ready.\n'
+printf '\nNext step: Open the dashboard in your browser to complete first-time setup:\n'
+printf '  → http://127.0.0.1:8787 (Click the "Onboarding" tab)\n\n'
