@@ -12,6 +12,8 @@ smallest safe set of capabilities to OpenCode, Open WebUI, or another
 MCP-compatible agent harness.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-61e7c8.svg)](LICENSE)
+[![CI](https://github.com/dcazes/M2Lab/actions/workflows/ci.yml/badge.svg)](https://github.com/dcazes/M2Lab/actions/workflows/ci.yml)
+[![MCP](https://img.shields.io/badge/tools-MCP-7c5cff.svg)](https://modelcontextprotocol.io/)
 [![Self-hosted](https://img.shields.io/badge/data-self--hosted-49a078.svg)](docs/SETUP.md)
 
 [Why M2Lab](#why-m2lab) · [How it works](#how-it-works) ·
