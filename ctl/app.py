@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import select
+import sqlite3
 import subprocess
 import time
 import urllib.request
@@ -48,6 +49,26 @@ _STATE_DIR = ROOT / ".state"
 _AUDIT_PATH = _STATE_DIR / "audit.jsonl"
 _CALENDAR_CONNECTION_PATH = _STATE_DIR / "nextcloud-calendar.json"
 _IDENTITY_KEYS = ("OMNILAB_IDENTITY_EMAIL", "OMNILAB_IDENTITY_PASSWORD")
+
+_PROVIDER_LABELS = {
+    "cerebras": "Cerebras",
+    "cohere": "Cohere",
+    "google": "Google Gemini",
+    "groq": "Groq",
+    "huggingface": "Hugging Face",
+    "mistral": "Mistral",
+    "nvidia": "NVIDIA NIM",
+    "openrouter": "OpenRouter",
+    "together": "Together AI",
+    "zhipu": "Zhipu AI",
+}
+_LITELLM_PROVIDER_KEYS = {
+    "NVIDIA_NIM_API_KEY": "NVIDIA NIM",
+    "GEMINI_API_KEY": "Google Gemini",
+    "HUGGINGFACE_API_KEY": "Hugging Face",
+    "MISTRAL_API_KEY": "Mistral",
+    "OPENAI_API_KEY": "OpenAI",
+}
 
 # ---------- TTL cache for HTTP health probes ----------
 _health_cache: dict[str, tuple[bool | None, float]] = {}
@@ -392,6 +413,52 @@ def _service_state_map() -> dict[str, str]:
     return {service["id"]: svc_state(service)["overall"] for service in SERVICES}
 
 
+def _ollama_models() -> list[dict]:
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=2) as response:
+            payload = json.load(response)
+    except (OSError, ValueError, urllib.error.URLError):
+        return []
+    models = payload.get("models", []) if isinstance(payload, dict) else []
+    return [
+        {
+            "name": str(model.get("name") or model.get("model") or "").strip(),
+            "size": int(model.get("size") or 0),
+            "modified_at": model.get("modified_at"),
+        }
+        for model in models
+        if isinstance(model, dict) and (model.get("name") or model.get("model"))
+    ]
+
+
+@app.get("/api/model-access")
+async def get_model_access(request: Request):
+    """Safe model-routing inventory. Provider and gateway secrets never leave the host."""
+    require_trusted_request(request)
+    states, free_providers, ollama_models = await asyncio.gather(
+        asyncio.to_thread(_service_state_map),
+        asyncio.to_thread(_freellmapi_providers),
+        asyncio.to_thread(_ollama_models),
+    )
+    litellm_values = _parse_env_file(_env_path("litellm"))
+    gateway_key = _freellmapi_gateway_key()
+    configured_gateway = litellm_values.get("FREE_LLMAPI_API_KEY", "")
+    direct_providers = [
+        {"id": key, "name": name, "configured": bool(litellm_values.get(key, "").strip())}
+        for key, name in _LITELLM_PROVIDER_KEYS.items()
+    ]
+    return {
+        "services": {sid: states.get(sid, "absent") for sid in ("freellmapi", "ollama", "litellm")},
+        "gateway": {
+            "available": bool(gateway_key),
+            "wired": bool(gateway_key and configured_gateway == gateway_key),
+        },
+        "free_providers": free_providers,
+        "direct_providers": direct_providers,
+        "ollama_models": ollama_models,
+    }
+
+
 @app.get("/api/mcp/servers")
 async def list_mcp_servers(request: Request, verify: bool = False):
     require_trusted_request(request)
@@ -496,6 +563,8 @@ async def action(sid: str, action: str, request: Request):
         raise HTTPException(409, "Use Settings setup wizard after completing the Authentik identity foundation")
     _consume_approval(request, request.headers.get("X-OmniLab-Approval"), sid, action)
     async with _action_locks.setdefault(sid, asyncio.Lock()):
+        if sid == "litellm" and action in {"up", "restart", "update"}:
+            await asyncio.to_thread(_sync_freellmapi_gateway)
         if action == "restart":
             rc, out = await run_compose(s, ["restart"])
         elif action == "update":
@@ -617,6 +686,132 @@ def _write_env_file(path: Path, values: dict[str, str]) -> None:
     os.replace(temporary, path)
 
 
+_FEATURED_SETUP_KEYS = {
+    "adventurelog": {"SITE_URL"},
+    "firecrawl": {"MODEL_NAME", "MODEL_EMBEDDING_NAME", "OLLAMA_BASE_URL", "SEARXNG_ENDPOINT", "BLOCK_MEDIA"},
+    "freellmapi": {"PORT"},
+    "immich": {"UPLOAD_LOCATION", "DB_DATA_LOCATION", "IMMICH_VERSION"},
+    "mealie": {"TZ"},
+    "nextcloud": {"NEXTCLOUD_ADMIN_USER"},
+    "open-webui": {"WEBUI_AUTH", "WEBUI_NAME", "ENABLE_OAUTH_SIGNUP"},
+    "paperless-ngx": {"TZ", "PAPERLESS_URL"},
+    "puppygraph": {"PUPPYGRAPH_USERNAME"},
+    "surfsense": {
+        "EMBEDDING_MODEL", "SURFSENSE_PUBLIC_URL", "SURFSENSE_ENABLE_MODEL_FALLBACK",
+        "SURFSENSE_ENABLE_SKILLS", "SURFSENSE_ENABLE_SPECIALIZED_SUBAGENTS",
+    },
+}
+
+_SETUP_DESCRIPTIONS = {
+    "SITE_URL": "The public address this app uses when it creates links.",
+    "MODEL_NAME": "The default chat model used for AI-assisted features.",
+    "MODEL_EMBEDDING_NAME": "The model used to turn content into searchable vectors.",
+    "OLLAMA_BASE_URL": "Where this app reaches your local Ollama models.",
+    "SEARXNG_ENDPOINT": "The private search engine used for web discovery.",
+    "BLOCK_MEDIA": "Skip images and media when crawling to reduce bandwidth.",
+    "PORT": "The host port used by this app.",
+    "UPLOAD_LOCATION": "Where the photo and video library is stored.",
+    "DB_DATA_LOCATION": "Where the application database is stored.",
+    "IMMICH_VERSION": "The Immich release channel or version to run.",
+    "TZ": "The timezone used for dates, schedules, and notifications.",
+    "NEXTCLOUD_ADMIN_USER": "The administrator account created on first setup.",
+    "WEBUI_AUTH": "Require users to sign in before using the chat interface.",
+    "WEBUI_NAME": "The product name shown in the Open WebUI interface.",
+    "ENABLE_OAUTH_SIGNUP": "Allow Authentik users to create their account on first sign-in.",
+    "PAPERLESS_URL": "The canonical private URL Paperless uses for links and security checks.",
+    "PUPPYGRAPH_USERNAME": "The username used to access the graph query interface.",
+    "EMBEDDING_MODEL": "The model that powers semantic search across your knowledge base.",
+    "SURFSENSE_PUBLIC_URL": "The private URL SurfSense uses in links and callbacks.",
+    "SURFSENSE_ENABLE_MODEL_FALLBACK": "Try a backup model when the preferred route is unavailable.",
+    "SURFSENSE_ENABLE_SKILLS": "Allow reusable skills in SurfSense conversations.",
+    "SURFSENSE_ENABLE_SPECIALIZED_SUBAGENTS": "Allow specialized agents to handle focused tasks.",
+}
+
+
+def _freellmapi_database() -> Path:
+    return ROOT / service_by_id("freellmapi")["dir"] / "data" / "freeapi.db"
+
+
+def _freellmapi_gateway_key() -> str | None:
+    """Read FreeLLMAPI's generated unified key without exposing it to clients."""
+    path = _freellmapi_database()
+    if not path.exists():
+        return None
+    try:
+        connection = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=1)
+        try:
+            row = connection.execute("SELECT value FROM settings WHERE key = 'unified_api_key'").fetchone()
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return None
+    return str(row[0]).strip() if row and row[0] else None
+
+
+def _freellmapi_providers() -> list[dict]:
+    """Return provider identity and health only; encrypted credentials stay unread."""
+    path = _freellmapi_database()
+    if not path.exists():
+        return []
+    try:
+        connection = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=1)
+        try:
+            rows = connection.execute(
+                """SELECT platform, COUNT(*), SUM(enabled),
+                          SUM(CASE WHEN enabled = 1 AND status = 'healthy' THEN 1 ELSE 0 END)
+                   FROM api_keys GROUP BY platform ORDER BY platform"""
+            ).fetchall()
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return []
+    return [
+        {
+            "id": platform,
+            "name": _PROVIDER_LABELS.get(platform, platform.replace("_", " ").title()),
+            "configured": total > 0,
+            "enabled": bool(enabled),
+            "healthy": bool(healthy),
+            "key_count": total,
+        }
+        for platform, total, enabled, healthy in rows
+    ]
+
+
+def _sync_freellmapi_gateway() -> bool:
+    """Couple FreeLLMAPI to LiteLLM host-side; returns whether config changed."""
+    gateway_key = _freellmapi_gateway_key()
+    if not gateway_key:
+        return False
+    path = _env_path("litellm")
+    values = _parse_env_file(path)
+    if values.get("FREE_LLMAPI_API_KEY") == gateway_key:
+        return False
+    values["FREE_LLMAPI_API_KEY"] = gateway_key
+    _write_env_file(path, values)
+    return True
+
+
+def _apply_automatic_model_wiring(sid: str, values: dict[str, str]) -> list[str]:
+    """Apply host-managed model routes while preserving every unrelated value."""
+    desired: dict[str, str] = {}
+    if sid == "litellm":
+        gateway_key = _freellmapi_gateway_key()
+        if gateway_key:
+            desired["FREE_LLMAPI_API_KEY"] = gateway_key
+    elif sid == "open-webui":
+        litellm_key = _parse_env_file(_env_path("litellm")).get("LITELLM_MASTER_KEY", "")
+        if litellm_key:
+            desired.update({
+                "LITELLM_MASTER_KEY": litellm_key,
+                "OPENAI_API_KEY": litellm_key,
+                "OPENAI_API_BASE_URL": "http://host.docker.internal:4000/v1",
+            })
+    changed = [key for key, value in desired.items() if values.get(key) != value]
+    values.update(desired)
+    return changed
+
+
 def _bootstrap_identity() -> dict[str, str] | None:
     values = _parse_env_file(_env_path("vaultwarden"))
     email = values.get(_IDENTITY_KEYS[0], "").strip()
@@ -674,13 +869,10 @@ def _load_env_example(sid: str) -> dict[str, dict]:
                 priority = "advanced"
                 break
         if priority is None:
-            if _is_secret_key(key):
-                priority = "important"
-            else:
-                priority = "advanced"
+            priority = "important" if key in _FEATURED_SETUP_KEYS.get(sid, set()) else "advanced"
         result[key] = {
             "placeholder": v.strip(),
-            "description": "",
+            "description": _SETUP_DESCRIPTIONS.get(key, "Internal deployment setting. Change only when you know the app requires it."),
             "required": bool(v.strip()),
             "priority": priority,
             "secret": _is_secret_key(key),
@@ -1002,6 +1194,7 @@ async def _run_app_setup_job(job_id: str, sid: str) -> None:
                 prepared, _changed = prepare_environment(service_id, current, example, identity=None)
             else:
                 prepared = {**example, **current}
+            _apply_automatic_model_wiring(service_id, prepared)
             if prepared:
                 _write_env_file(_env_path(service_id), prepared)
             await _start_setup_service(job_id, service_id, 25 + int(35 * (index + 1) / len(ordered)))
@@ -1117,6 +1310,7 @@ async def prepare_initiate_service(sid: str, request: Request):
         replace_placeholders=not containers_exist,
         identity=_bootstrap_identity(),
     )
+    changed.extend(_apply_automatic_model_wiring(sid, prepared))
     _write_env_file(_env_path(sid), prepared)
     await audit_event(request, "initiate.service_prepared", service_id=sid, keys=sorted(changed))
     return {"ok": True, "service_id": sid, "prepared": sorted(changed), "configured": True}
@@ -1140,11 +1334,7 @@ async def prepare_install_service(sid: str, request: Request):
             replace_placeholders=not containers_exist,
             identity=_bootstrap_identity(),
         )
-        if sid == "open-webui":
-            litellm_key = _parse_env_file(_env_path("litellm")).get("LITELLM_MASTER_KEY", "")
-            if litellm_key:
-                prepared["LITELLM_MASTER_KEY"] = litellm_key
-                changed.append("LITELLM_MASTER_KEY")
+        changed.extend(_apply_automatic_model_wiring(sid, prepared))
     else:
         # Generic services keep their documented defaults and any operator
         # values. Service-specific secret relationships are never guessed.

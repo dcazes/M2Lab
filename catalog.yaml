@@ -329,7 +329,7 @@ apps:
     ai_optional: false
     outcomes: [local-ai]
     requirements: [Provider API keys, LiteLLM recommended]
-    setup: {bootstrap: first_login, model_route: none, notes: [Add legitimate provider credentials in FreeLLMAPI and copy its local gateway key into Model access.]}
+    setup: {bootstrap: first_login, model_route: none, notes: [Add legitimate free-tier provider credentials in FreeLLMAPI; OmniLab wires its local gateway key into LiteLLM automatically.]}
     capabilities: []
   - id: ollama
     service_id: ollama

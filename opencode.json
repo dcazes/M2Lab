@@ -2,22 +2,22 @@
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "default",
   "mcp": {
-    "servers": {
-      "omnilab": {
-        "type": "remote",
-        "url": "http://127.0.0.1:8790/mcp",
-        "oauth": false,
-        "headers": {
-          "Authorization": "Bearer {env:CTL_MCP_TOKEN}"
-        }
-      },
-      "litellm": {
-        "type": "remote",
-        "url": "https://home.taile2cc7a.ts.net:8445/litellm_admin/mcp",
-        "oauth": false,
-        "headers": {
-          "Authorization": "Bearer {env:LITELLM_MCP_KEY}"
-        }
+    "omnilab": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8790/mcp",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:CTL_MCP_TOKEN}"
+      }
+    },
+    "litellm": {
+      "type": "remote",
+      "url": "https://home.taile2cc7a.ts.net:8445/litellm_admin/mcp",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:LITELLM_MCP_KEY}"
       }
     }
   }

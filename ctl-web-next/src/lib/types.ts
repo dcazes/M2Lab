@@ -328,3 +328,20 @@ export interface McpRegistryResponse {
   servers: McpServer[]
   summary: Record<'live' | 'degraded' | 'authentication_required' | 'disabled' | 'unavailable', number>
 }
+
+export interface ModelAccessProvider {
+  id: string
+  name: string
+  configured: boolean
+  enabled?: boolean
+  healthy?: boolean
+  key_count?: number
+}
+
+export interface ModelAccessResponse {
+  services: Record<'freellmapi' | 'ollama' | 'litellm', ServiceState>
+  gateway: { available: boolean; wired: boolean }
+  free_providers: ModelAccessProvider[]
+  direct_providers: ModelAccessProvider[]
+  ollama_models: Array<{ name: string; size: number; modified_at?: string }>
+}

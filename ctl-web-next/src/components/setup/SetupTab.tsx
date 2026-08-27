@@ -1,8 +1,11 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
+  ChevronDown,
+  ChevronRight,
   Cloud,
+  Cpu,
   Download,
   ExternalLink,
   KeyRound,
@@ -24,6 +27,7 @@ import {
   fetchCalendarConnection,
   fetchSetup,
   fetchMcpServers,
+  fetchModelAccess,
   fetchSetupJobs,
   fetchUpdateStatus,
   getServiceIconUrl,
@@ -42,11 +46,6 @@ import { ServiceSetupPanel } from "./ServiceSetupPanel";
 
 type SettingsSection = "apps" | "models" | "mcp";
 const PROVIDERS = [
-  [
-    "FREE_LLMAPI_API_KEY",
-    "FreeLLMAPI gateway",
-    "The local gateway key created inside FreeLLMAPI.",
-  ],
   [
     "NVIDIA_NIM_API_KEY",
     "NVIDIA NIM",
@@ -261,14 +260,15 @@ function AppSetupWizard({ service }: { service: Service }) {
     finally { setBusy(false); }
   };
   return <section className={`app-setup-wizard app-setup-${job?.status || "not_started"}`}>
-    <header><div><span className="eyebrow">Setup wizard</span><h3>{job?.summary || `Finish setting up ${service.display_name}`}</h3><p>{job?.error || job?.events.at(-1)?.message || "Run the remaining automated configuration and receive one prompt at a time when your input is required."}</p></div><span>{job?.progress || 0}%</span></header>
+    <div className="app-setup-main"><span className={`setup-status setup-status-${job?.status || "queued"}`} /><div><span className="eyebrow">Setup</span><h3>{job?.summary || `Finish setting up ${service.display_name}`}</h3><p>{job?.error || job?.events.at(-1)?.message || "Run the remaining automated steps; OmniLab pauses only when you need to act."}</p></div><span className="app-setup-progress">{job?.progress || 0}%</span>
+      <footer>
+        {!foundationReady && <small>Core identity setup required</small>}
+        {job?.action?.url && <a href={job.action.url} target="_blank" rel="noreferrer">{job.action.label}<ExternalLink /></a>}
+        {job?.status === "user_action_required" ? <button className="button-primary" disabled={busy} onClick={resume}>{busy ? <LoaderCircle className="animate-spin" /> : <Check />} I finished</button> : job?.status === "ready" ? <span className="app-setup-ready"><Check /> Complete</span> : <button className="button-primary" disabled={busy || !foundationReady || (job && !["failed", "cancelled"].includes(job.status))} onClick={start}>{busy || (job && !["failed", "cancelled"].includes(job.status)) ? <LoaderCircle className="animate-spin" /> : <RefreshCcw />} {job?.status === "failed" ? "Retry" : "Run setup"}</button>}
+      </footer>
+    </div>
     {job && <progress max={100} value={job.progress} />}
     {job?.events.length ? <details><summary>Setup steps</summary><div>{job.events.slice(-8).map((event, index) => <p key={`${event.timestamp}-${index}`}><i className={`setup-status setup-status-${event.status}`} /><span><strong>{event.message}</strong><small>{event.stage.split("_").join(" ")}</small></span></p>)}</div></details> : null}
-    <footer>
-      {!foundationReady && <small>Complete the identity-first core setup before creating app accounts.</small>}
-      {job?.action?.url && <a href={job.action.url} target="_blank" rel="noreferrer">{job.action.label}<ExternalLink /></a>}
-      {job?.status === "user_action_required" ? <button className="button-primary" disabled={busy} onClick={resume}>{busy ? <LoaderCircle className="animate-spin" /> : <Check />} I finished this step</button> : job?.status === "ready" ? <span className="app-setup-ready"><Check /> Setup complete</span> : <button className="button-primary" disabled={busy || !foundationReady || (job && !["failed", "cancelled"].includes(job.status))} onClick={start}>{busy || (job && !["failed", "cancelled"].includes(job.status)) ? <LoaderCircle className="animate-spin" /> : <RefreshCcw />} {job?.status === "failed" ? "Retry setup" : "Run setup wizard"}</button>}
-    </footer>
   </section>;
 }
 
@@ -343,6 +343,7 @@ function AppsSettings({
   const [selectedId, setSelectedId] = useState<string | null>(
     initialSelectedId,
   );
+  const [offlineOpen, setOfflineOpen] = useState(false);
   if (servicesQuery.isLoading || catalogQuery.isLoading)
     return (
       <div className="loading-stage">
@@ -365,10 +366,23 @@ function AppsSettings({
       ? selectedId
       : roster[0]?.id;
   const activeService = visibleServices.find((service) => service.id === activeId);
+  const runningServices = roster.filter(service => service.state === "running" || service.state === "degraded");
+  const offlineServices = roster.filter(service => service.state === "stopped");
+  const availableServices = roster.filter(service => service.state === "absent");
+  const showOffline = offlineOpen || activeService?.state === "stopped";
   const installApp = catalogApps.find((app) => app.service_id === activeService?.id);
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["services"] });
   };
+  const rosterButton = (service: Service) => <button
+    key={service.id}
+    className={`${activeId === service.id ? "active" : ""} ${service.state === "absent" ? "unavailable" : ""}`}
+    onClick={() => setSelectedId(service.id)}
+  >
+    <ServiceMark service={service} />
+    <span><strong>{service.display_name}</strong><small>{stateLabel(service)}</small></span>
+    <i className={`workspace-dot workspace-dot-${service.state}`} />
+  </button>;
   return (
     <div className="settings-apps-shell">
       <div className="settings-installed-grid">
@@ -377,22 +391,9 @@ function AppsSettings({
             <span>Applications</span>
             <small>Running first · select an available app to review setup.</small>
           </div>
-          {roster.map((service, index) => {
-            const previous = roster[index - 1];
-            const section = service.state === "absent" ? "Available" : service.state === "stopped" ? "Installed · offline" : "Running";
-            const previousSection = previous ? (previous.state === "absent" ? "Available" : previous.state === "stopped" ? "Installed · offline" : "Running") : null;
-            return <div className="settings-roster-entry" key={service.id}>
-              {section !== previousSection && <div className="settings-roster-divider"><span>{section}</span></div>}
-              <button
-                className={`${activeId === service.id ? "active" : ""} ${service.state === "absent" ? "unavailable" : ""}`}
-                onClick={() => setSelectedId(service.id)}
-              >
-                <ServiceMark service={service} />
-                <span><strong>{service.display_name}</strong><small>{stateLabel(service)}</small></span>
-                <i className={`workspace-dot workspace-dot-${service.state}`} />
-              </button>
-            </div>;
-          })}
+          {runningServices.length > 0 && <div className="settings-roster-section"><div className="settings-roster-divider"><span>Running</span><em>{runningServices.length}</em></div>{runningServices.map(rosterButton)}</div>}
+          {offlineServices.length > 0 && <div className="settings-roster-section"><button className="settings-roster-divider collapsible" onClick={() => setOfflineOpen(!showOffline)}>{showOffline ? <ChevronDown /> : <ChevronRight />}<span>Installed · offline</span><em>{offlineServices.length}</em></button>{showOffline && offlineServices.map(rosterButton)}</div>}
+          {availableServices.length > 0 && <div className="settings-roster-section"><div className="settings-roster-divider"><span>Available</span><em>{availableServices.length}</em></div>{availableServices.map(rosterButton)}</div>}
         </aside>
         <section className="settings-active-panel">
           {!activeService ? <div className="empty-state">No applications are registered.</div>
@@ -431,80 +432,77 @@ function AppsSettings({
 function McpSettings() {
   const queryClient = useQueryClient();
   const registry = useQuery({ queryKey: ["mcp-servers"], queryFn: () => fetchMcpServers(true), refetchInterval: 30000 });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [context, setContext] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showUnsupported, setShowUnsupported] = useState(false);
+  const [contexts, setContexts] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
   const servers = registry.data?.servers || [];
   const sorted = [...servers].sort((a, b) => {
     const appOrder = (state: McpServer["app_state"]) => state === "running" ? 0 : state === "degraded" ? 1 : state === "stopped" ? 2 : 3;
     return appOrder(a.app_state) - appOrder(b.app_state) || a.name.localeCompare(b.name);
   });
-  const selected = servers.find((server) => server.id === selectedId) || sorted.find((server) => server.app_state !== "absent") || sorted[0];
-  useEffect(() => setContext(selected?.context || ""), [selected?.id, selected?.context]);
-  const mutate = async (patch: Record<string, unknown>) => {
-    if (!selected) return;
-    setBusy(true);
+  const unsupported = sorted.filter(server => server.kind === "unsupported" && server.tools.length === 0);
+  const matrixServers = showUnsupported ? sorted : sorted.filter(server => !unsupported.includes(server));
+  const mutate = async (server: McpServer, patch: Record<string, unknown>) => {
+    setBusyId(server.id);
     try {
-      const approval = await createMcpApproval(selected.id, "mcp-edit");
-      await updateMcpServer(selected.id, patch, approval);
+      const approval = await createMcpApproval(server.id, "mcp-edit");
+      await updateMcpServer(server.id, patch, approval);
       await queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
       toast.success("MCP policy saved");
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { setBusyId(null); }
   };
-  const verify = async () => {
-    if (!selected) return;
-    setBusy(true);
+  const verify = async (server: McpServer) => {
+    setBusyId(server.id);
     try {
-      const approval = await createMcpApproval(selected.id, "mcp-verify");
-      await verifyMcpServer(selected.id, approval);
+      const approval = await createMcpApproval(server.id, "mcp-verify");
+      await verifyMcpServer(server.id, approval);
       await queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
       toast.success("MCP verification finished");
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { setBusyId(null); }
   };
   const sync = async () => {
-    setBusy(true);
+    setBusyId("registry");
     try {
       const approval = await createMcpApproval("registry", "mcp-sync");
       const result = await syncMcpHarnesses(approval);
       toast.success(result.note);
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { setBusyId(null); }
   };
   if (registry.isLoading) return <div className="loading-stage"><span /></div>;
   if (!registry.data) return <div className="empty-state">MCP registry could not be loaded.</div>;
   return <div className="mcp-settings">
     <section className="mcp-summary">
       {(["live", "degraded", "authentication_required", "disabled", "unavailable"] as const).map(state => <div key={state}><strong>{registry.data.summary[state]}</strong><span>{state.replace("_", " ")}</span></div>)}
-      <button className="button-secondary" disabled={busy} onClick={sync}><RefreshCcw /> Sync harnesses</button>
+      <button className="button-secondary" disabled={busyId !== null} onClick={sync}><RefreshCcw className={busyId === "registry" ? "animate-spin" : ""} /> Sync harnesses</button>
     </section>
-    <div className="settings-installed-grid">
-      <aside className="settings-app-list mcp-app-list">
-        <div className="settings-list-heading"><span>Federated servers</span><small>Running apps first · unavailable apps are locked.</small></div>
-        {sorted.map((server, index) => {
-          const group = server.app_state === "absent" ? "Not installed" : server.app_state === "stopped" ? "Installed · offline" : "Running";
-          const previous = sorted[index - 1];
-          const previousGroup = previous ? (previous.app_state === "absent" ? "Not installed" : previous.app_state === "stopped" ? "Installed · offline" : "Running") : null;
-          return <Fragment key={server.id}>{group !== previousGroup && <div className="settings-roster-divider"><span>{group}</span></div>}<button className={selected?.id === server.id ? "active" : ""} disabled={server.app_state === "absent"} onClick={() => setSelectedId(server.id)}>
-            <span className="settings-app-mark"><span>{server.icon}</span></span>
-            <span><strong>{server.name}</strong><small>{server.state.replace("_", " ")}</small></span>
-            <i className={`mcp-state-dot mcp-state-${server.state}`} />
-          </button></Fragment>;
+    <section className="mcp-matrix-card">
+      <header><div><span className="eyebrow">Harness access matrix</span><h2>Federated actions</h2><p>Applications stay grouped; each destination can be reviewed without leaving the table.</p></div></header>
+      <div className="mcp-table-scroll"><table className="mcp-matrix"><thead><tr><th>Application & actions</th><th>Status</th><th>Server</th><th>OpenCode</th><th>Open WebUI</th><th aria-label="Details" /></tr></thead>
+        {matrixServers.map(server => {
+          const locked = server.kind === "unsupported" || server.app_state === "absent";
+          const busy = busyId === server.id;
+          const context = contexts[server.id] ?? server.context;
+          return <tbody key={server.id} className={locked ? "locked" : ""}>
+            <tr className="mcp-app-row">
+              <td><div className="mcp-app-identity"><span className="settings-app-mark"><span>{server.icon}</span></span><span><strong>{server.name}</strong><small>{server.source || server.error || "No reviewed MCP implementation"}</small></span></div>
+                <div className="mcp-action-list">{server.tools.length ? server.tools.map(tool => <label key={tool.id}><input type="checkbox" checked={tool.enabled} disabled={locked || busy} onChange={event => mutate(server, { tools: { [tool.id]: { enabled: event.target.checked } } })} /><span>{tool.label}</span><em className={`mcp-risk mcp-risk-${tool.effective_risk}`}>{tool.effective_risk}</em></label>) : <small>No callable actions</small>}</div>
+              </td>
+              <td><span className={`mcp-status mcp-status-${server.state}`}><i className={`mcp-state-dot mcp-state-${server.state}`} />{server.state.replace("_", " ")}</span></td>
+              <td><input type="checkbox" aria-label={`Enable ${server.name} server`} checked={server.enabled} disabled={locked || busy} onChange={event => mutate(server, { enabled: event.target.checked })} /></td>
+              <td><input type="checkbox" aria-label={`Enable ${server.name} for OpenCode`} checked={server.harnesses.includes("opencode")} disabled={locked || busy} onChange={event => mutate(server, { harnesses: event.target.checked ? [...new Set([...server.harnesses, "opencode"])] : server.harnesses.filter(item => item !== "opencode") })} /></td>
+              <td><input type="checkbox" aria-label={`Enable ${server.name} for Open WebUI`} checked={server.harnesses.includes("open-webui")} disabled={locked || busy} onChange={event => mutate(server, { harnesses: event.target.checked ? [...new Set([...server.harnesses, "open-webui"])] : server.harnesses.filter(item => item !== "open-webui") })} /></td>
+              <td><button className="mcp-expand" onClick={() => setExpandedId(expandedId === server.id ? null : server.id)}>{expandedId === server.id ? <ChevronDown /> : <ChevronRight />}</button></td>
+            </tr>
+            {expandedId === server.id && <tr className="mcp-detail-row"><td colSpan={6}><div><span><strong>{server.kind} · {server.trust}</strong><small>{server.auth.configured ? `${server.auth.type} authentication configured` : "Authentication required"} · {server.transport}</small></span><button className="button-secondary" disabled={locked || busy} onClick={() => verify(server)}><RefreshCcw className={busy ? "animate-spin" : ""} /> Verify</button></div>{server.error && <p className="mcp-warning">{server.error}</p>}<label className="mcp-context">Operating context<textarea value={context} maxLength={2000} onChange={event => setContexts(previous => ({ ...previous, [server.id]: event.target.value }))} placeholder="Data boundaries and guidance for agents using this app." /><button className="button-primary" disabled={busy || context === server.context} onClick={() => mutate(server, { context })}>Save context</button></label></td></tr>}
+          </tbody>;
         })}
-      </aside>
-      <section className="settings-active-panel mcp-detail">
-        {selected && <>
-          <div className="settings-active-heading"><div><span className="eyebrow">{selected.kind} · {selected.trust}</span><h2>{selected.name} MCP</h2><p>{selected.source || selected.error || "No reviewed implementation"}</p></div><div className="settings-active-actions"><button className="button-secondary" disabled={busy || selected.kind === "unsupported"} onClick={verify}><RefreshCcw /> Verify</button></div></div>
-          <div className="mcp-facts"><div><span>Application</span><strong>{selected.app_state}</strong></div><div><span>MCP</span><strong>{selected.state.replace("_", " ")}</strong></div><div><span>Authentication</span><strong>{selected.auth.configured ? selected.auth.type : "required"}</strong></div><div><span>Transport</span><strong>{selected.transport}</strong></div></div>
-          {selected.error && <p className="mcp-warning">{selected.error}</p>}
-          {selected.kind === "community" && <p className="mcp-warning">Community integration · {selected.maintainer || "unknown maintainer"} · pinned {selected.pin || "version missing"}. Review its tools before enabling.</p>}
-          <div className="mcp-controls"><label><input type="checkbox" checked={selected.enabled} disabled={selected.kind === "unsupported" || selected.app_state === "absent" || busy} onChange={event => mutate({ enabled: event.target.checked })} /> Enabled</label><label><input type="checkbox" checked={selected.harnesses.includes("opencode")} onChange={event => mutate({ harnesses: event.target.checked ? [...new Set([...selected.harnesses, "opencode"])] : selected.harnesses.filter(item => item !== "opencode") })} /> OpenCode</label><label><input type="checkbox" checked={selected.harnesses.includes("open-webui")} onChange={event => mutate({ harnesses: event.target.checked ? [...new Set([...selected.harnesses, "open-webui"])] : selected.harnesses.filter(item => item !== "open-webui") })} /> Open WebUI</label></div>
-          <label className="mcp-context">Operating context<textarea value={context} maxLength={2000} onChange={event => setContext(event.target.value)} placeholder="Data boundaries and guidance for agents using this app." /><button className="button-primary" disabled={busy || context === selected.context} onClick={() => mutate({ context })}>Save context</button></label>
-          <div className="mcp-tools"><h3>Actions</h3>{selected.tools.length ? selected.tools.map(tool => <div key={tool.id}><label><input type="checkbox" checked={tool.enabled} onChange={event => mutate({ tools: { [tool.id]: { enabled: event.target.checked } } })} /><span><strong>{tool.label}</strong><small>{tool.id}</small></span></label><span className={`mcp-risk mcp-risk-${tool.effective_risk}`}>{tool.effective_risk}</span></div>) : <p>No callable tools have been verified for this server.</p>}</div>
-        </>}
-      </section>
-    </div>
+        {unsupported.length > 0 && <tbody className="mcp-unavailable-group"><tr><td colSpan={6}><button onClick={() => setShowUnsupported(!showUnsupported)}>{showUnsupported ? <ChevronDown /> : <ChevronRight />}<span><strong>{showUnsupported ? "Hide" : "Show"} unavailable integrations</strong><small>{unsupported.length} apps without a reviewed callable MCP interface</small></span></button></td></tr></tbody>}
+      </table></div>
+    </section>
   </div>;
 }
 
@@ -518,8 +516,10 @@ function ModelAccess() {
     queryFn: () => fetchSetup("litellm"),
     enabled: litellm?.state !== "absent",
   });
+  const inventory = useQuery({ queryKey: ["model-access"], queryFn: fetchModelAccess, refetchInterval: 15000 });
   const queryClient = useQueryClient();
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [providerKey, setProviderKey] = useState<(typeof PROVIDERS)[number][0]>(PROVIDERS[0][0]);
+  const [providerValue, setProviderValue] = useState("");
   const [saving, setSaving] = useState(false);
   const serviceMap = new Map(
     services.data?.services.map((service) => [service.id, service]) || [],
@@ -527,16 +527,21 @@ function ModelAccess() {
   const save = async () => {
     setSaving(true);
     try {
-      await updateSetup("litellm", values);
-      setValues({});
-      await queryClient.invalidateQueries({ queryKey: ["setup", "litellm"] });
-      toast.success("Provider keys saved");
+      await updateSetup("litellm", { [providerKey]: providerValue });
+      setProviderValue("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["setup", "litellm"] }),
+        queryClient.invalidateQueries({ queryKey: ["model-access"] }),
+      ]);
+      toast.success(`${PROVIDERS.find(([key]) => key === providerKey)?.[1]} key saved`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
     }
   };
+  const selectedProvider = PROVIDERS.find(([key]) => key === providerKey)!;
+  const modelData = inventory.data;
   return (
     <div className="settings-models">
       <section className="settings-section-intro">
@@ -551,21 +556,6 @@ function ModelAccess() {
           Ollama add free-tier and local paths.
         </p>
       </section>
-      <div className="settings-core-row">
-        {["litellm", "freellmapi", "ollama", "opencode-agent"].map((id) => {
-          const service = serviceMap.get(id);
-          return service ? (
-            <div key={id}>
-              <ServiceMark service={service} />
-              <span>
-                <strong>{service.display_name}</strong>
-                <small>{stateLabel(service)}</small>
-              </span>
-              <i className={`workspace-dot workspace-dot-${service.state}`} />
-            </div>
-          ) : null;
-        })}
-      </div>
       {litellm?.state === "absent" ? (
         <div className="settings-callout">
           <Network />
@@ -575,63 +565,28 @@ function ModelAccess() {
           </div>
         </div>
       ) : (
-        <section className="settings-provider-panel">
+        <>
+        <section className="model-wiring-card">
           <header>
-            <div>
-              <span className="eyebrow">
-                <KeyRound />
-                Write-only credentials
-              </span>
-              <h3>Provider keys</h3>
-              <p>
-                Configured values are never returned to this page. Paste a value
-                only to add or replace it.
-              </p>
-            </div>
-            <button
-              className="button-primary"
-              onClick={save}
-              disabled={saving || Object.keys(values).length === 0}
-            >
-              {saving ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <ShieldCheck />
-              )}
-              Save keys
-            </button>
+            <div><span className="eyebrow"><Network />Live routing</span><h3>Model wiring</h3><p>Free cloud and local models converge behind one LiteLLM endpoint.</p></div>
+            <span className={`model-wiring-health ${modelData?.gateway.wired ? "ready" : "attention"}`}>{modelData?.gateway.wired ? <><Check />Gateway wired</> : <><RefreshCcw />Wires on LiteLLM restart</>}</span>
           </header>
-          <div className="settings-provider-grid">
-            {PROVIDERS.map(([key, name, detail]) => {
-              const item = setup.data?.config[key] as
-                SetupConfigItem | undefined;
-              return (
-                <label key={key}>
-                  <span>
-                    <strong>{name}</strong>
-                    <small>{detail}</small>
-                  </span>
-                  <em>{item?.configured ? "Configured" : "Not configured"}</em>
-                  <input
-                    type="password"
-                    value={values[key] || ""}
-                    onChange={(event) =>
-                      setValues((previous) => ({
-                        ...previous,
-                        [key]: event.target.value,
-                      }))
-                    }
-                    placeholder={
-                      item?.configured
-                        ? "Paste replacement key"
-                        : "Paste API key"
-                    }
-                  />
-                </label>
-              );
-            })}
+          <div className="model-wiring-grid">
+            <div className="model-source-stack">
+              <article><div className="model-node-heading"><ServiceMark service={serviceMap.get("freellmapi")} /><span><strong>FreeLLMAPI</strong><small>Free cloud providers</small></span><i className={`workspace-dot workspace-dot-${modelData?.services.freellmapi || "absent"}`} /></div><div className="model-node-items">{modelData?.free_providers.length ? modelData.free_providers.map(provider => <span key={provider.id} className={provider.healthy ? "online" : "offline"}>{provider.name}</span>) : <small>No provider keys configured</small>}</div></article>
+              <article><div className="model-node-heading"><ServiceMark service={serviceMap.get("ollama")} /><span><strong>Ollama</strong><small>Models downloaded locally</small></span><i className={`workspace-dot workspace-dot-${modelData?.services.ollama || "absent"}`} /></div><div className="model-node-items">{modelData?.ollama_models.length ? modelData.ollama_models.map(model => <span key={model.name} className="online">{model.name}</span>) : <small>No local models reported</small>}</div></article>
+            </div>
+            <div className="model-route-arrow"><span>routes</span><i>→</i></div>
+            <article className="model-hub"><div className="model-hub-icon"><Cpu /></div><span className="eyebrow">One private endpoint</span><h3>LiteLLM</h3><p>Routing, budgets, model aliases, and fallback policy for every compatible app.</p><div className="model-node-items">{modelData?.direct_providers.filter(provider => provider.configured).map(provider => <span key={provider.id}>{provider.name} direct</span>)}</div><code>http://litellm:4000/v1</code></article>
           </div>
         </section>
+        <section className="provider-key-editor">
+          <header><div><span className="eyebrow"><KeyRound />Write-only credentials</span><h3>Add or rotate a provider key</h3><p>Free-tier credentials stay inside FreeLLMAPI. Add paid or direct routes here only when you need them.</p></div></header>
+          <div className="provider-key-form"><label><span>Provider</span><select value={providerKey} onChange={event => setProviderKey(event.target.value as typeof providerKey)}>{PROVIDERS.map(([key, name]) => <option key={key} value={key}>{name}{(setup.data?.config[key] as SetupConfigItem | undefined)?.configured ? " · configured" : ""}</option>)}</select></label><label className="provider-key-input"><span>API key</span><input type="password" value={providerValue} onChange={event => setProviderValue(event.target.value)} placeholder={(setup.data?.config[providerKey] as SetupConfigItem | undefined)?.configured ? "Paste replacement key" : "Paste API key"} /></label><button className="button-primary" onClick={save} disabled={saving || !providerValue.trim()}>{saving ? <LoaderCircle className="animate-spin" /> : <ShieldCheck />}Save key</button></div>
+          <p className="provider-key-detail"><strong>{selectedProvider[1]}</strong> — {selectedProvider[2]} Stored values are never returned to the browser.</p>
+          <div className="provider-status-list">{PROVIDERS.map(([key, name]) => <span key={key} className={(setup.data?.config[key] as SetupConfigItem | undefined)?.configured ? "configured" : ""}><i />{name}<small>{(setup.data?.config[key] as SetupConfigItem | undefined)?.configured ? "Configured" : "Not configured"}</small></span>)}</div>
+        </section>
+        </>
       )}
     </div>
   );
@@ -757,9 +712,9 @@ export function SetupTab({
       <nav className="settings-subnav" aria-label="Settings sections">
         {(
           [
-            { id: "apps", label: "Apps", icon: PackageCheck },
             { id: "models", label: "Model access", icon: Sparkles },
             { id: "mcp", label: "MCP", icon: PlugZap },
+            { id: "apps", label: "Apps", icon: PackageCheck },
           ] as const
         ).map(({ id, label, icon: Icon }) => (
           <button

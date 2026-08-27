@@ -109,10 +109,6 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
     }
   }
 
-  function isSecretField(item: SetupConfigItem): boolean {
-    return item.secret
-  }
-
   function updateValue(key: string, value: string) {
     setDirtyKeys(prev => new Set(prev).add(key))
     setConfig(prev => !prev ? prev : { ...prev, [key]: { ...prev[key], value } })
@@ -155,186 +151,64 @@ export function ServiceSetupPanel({ service }: ServiceSetupPanelProps) {
   const importantEntries = entries.filter(([, item]) => item.priority === 'important')
   const advancedEntries = entries.filter(([, item]) => item.priority === 'advanced')
 
+  const displayKey = (key: string) => key
+    .split('_')
+    .map(part => ['API', 'URL', 'DB', 'GPU', 'HTTP', 'HTTPS', 'OIDC', 'TTS', 'STT'].includes(part) ? part : part.charAt(0) + part.slice(1).toLowerCase())
+    .join(' ')
+
+  const renderField = ([key, item]: [string, SetupConfigItem]) => (
+    <div className="app-setting-field" key={key}>
+      <span className="app-setting-copy">
+        <span className="app-setting-title">
+          <strong>{displayKey(key)}</strong>
+          <code>{key}</code>
+          {item.secret && item.configured
+            ? <em className="configured">Configured</em>
+            : item.required && !item.value ? <em>Required</em> : null}
+        </span>
+        <small>{item.description}</small>
+      </span>
+      <span className="app-setting-control">
+        <input
+          type={item.secret ? 'password' : 'text'}
+          value={item.value ?? ''}
+          onChange={(event) => updateValue(key, event.target.value)}
+          placeholder={item.secret && item.configured ? 'Paste a replacement to rotate' : item.placeholder}
+          disabled={regenerating[key]}
+        />
+        {item.secret && <button type="button" onClick={() => handleRegenerate(key)} disabled={regenerating[key]} title={`Generate a new ${displayKey(key)}`}>
+          {regenerating[key] ? <span className="animate-spin">◌</span> : 'Generate'}
+        </button>}
+      </span>
+    </div>
+  )
+
   return (
-    <>
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">{service.display_name} Setup</h2>
-        <div className="flex items-center gap-2">
-          {success && (
-            <span className="px-3 py-1 rounded-btn bg-accent/20 text-accent text-xs">
-              {success}
-            </span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={dirtyKeys.size === 0}
-            className={`px-4 py-2 rounded-btn font-medium transition-fast ${
-              dirtyKeys.size > 0
-                ? 'bg-accent text-bg-base hover:opacity-90'
-                : 'bg-surface-2 text-unknown hover:bg-surface-1 hover:text-white'
-            }`}
-          >
-            Save Changes
-          </button>
+    <section className="app-settings-editor">
+      <header>
+        <div><span className="eyebrow">App preferences</span><h3>Customize {service.display_name}</h3><p>Everyday controls first. Deployment internals stay available when you need them.</p></div>
+        <div className="app-settings-actions">
+          {success && <span>{success}</span>}
+          <button className="button-secondary" onClick={handleSave} disabled={dirtyKeys.size === 0}>Save</button>
           <button onClick={handleSaveAndStart} disabled={starting} className="button-primary">
-            <Rocket className="h-4 w-4" /> {starting ? (service.state === 'running' ? 'Restarting…' : 'Starting…') : service.state === 'absent' ? 'Save & install' : service.state === 'running' ? 'Save & restart' : 'Save & start'}
+            <Rocket /> {starting ? (service.state === 'running' ? 'Restarting…' : 'Starting…') : service.state === 'running' ? 'Save & restart' : 'Save & start'}
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Important settings - always visible */}
-      {importantEntries.length > 0 && (
-        <div className="space-y-4">
-          {importantEntries.map(([key, item]) => (
-            <div key={key} className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <span className="flex-1">{key}</span>
-                {item.required && (
-                  <span className="px-2 py-0.5 rounded-btn bg-err/20 text-err text-xs">
-                    required
-                  </span>
-                )}
-              </label>
-              <p className="text-xs text-unknown">{item.description || (item.secret && item.configured ? 'Configured — enter a replacement only if you want to rotate it.' : '')}</p>
-              <div className="flex items-center gap-2">
-                {isSecretField(item) ? (
-                  <>
-                    <input
-                      type="password"
-                      value={item.value ?? ''}
-                      onChange={(e) => updateValue(key, e.target.value)}
-                      className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
-                        regenerating[key] ? 'opacity-50' : ''
-                      }`}
-                      placeholder={item.configured ? 'Configured — paste a replacement to rotate' : item.placeholder}
-                      disabled={regenerating[key]}
-                    />
-                    {regenerating[key] && (
-                      <span className="animate-spin h-4 w-4" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRegenerate(key)}
-                      disabled={regenerating[key]}
-                      className={`ml-2 px-3 py-1 rounded-btn text-xs transition-fast ${
-                        regenerating[key]
-                          ? 'opacity-50 cursor-not-allowed'
-                          : 'text-unknown hover:text-white hover:bg-surface-2'
-                      }`}
-                    >
-                      {regenerating[key] ? 'Generating' : '🔑'}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      value={item.value ?? ''}
-                      onChange={(e) => updateValue(key, e.target.value)}
-                      className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
-                        regenerating[key] ? 'opacity-50' : ''
-                      }`}
-                      placeholder={item.placeholder}
-                      disabled={regenerating[key]}
-                    />
-                    {regenerating[key] && (
-                      <span className="animate-spin h-4 w-4" />
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {importantEntries.length > 0
+        ? <div className="app-featured-settings">{importantEntries.map(renderField)}</div>
+        : <div className="app-settings-empty"><strong>No everyday controls</strong><span>This app is already using the recommended defaults. Deployment fields remain under Advanced.</span></div>}
 
-      {/* Advanced settings - collapsible */}
-      {advancedEntries.length > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-2 mt-6 mb-2 px-3 py-2 text-sm font-medium text-unknown hover:text-white bg-surface-2 hover:bg-surface-1 rounded-btn transition-fast w-full"
-          >
-            {showAdvanced ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            <span>Advanced settings ({advancedEntries.length})</span>
-          </button>
-          {showAdvanced && (
-            <div className="space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
-              {advancedEntries.map(([key, item]) => (
-                <div key={key} className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <span className="flex-1">{key}</span>
-                    {item.required && (
-                      <span className="px-2 py-0.5 rounded-btn bg-err/20 text-err text-xs">
-                        required
-                      </span>
-                    )}
-                  </label>
-                  <p className="text-xs text-unknown">{item.description || (item.secret && item.configured ? 'Configured — enter a replacement only if you want to rotate it.' : '')}</p>
-                  <div className="flex items-center gap-2">
-                    {isSecretField(item) ? (
-                      <>
-                        <input
-                          type="password"
-                          value={item.value ?? ''}
-                          onChange={(e) => updateValue(key, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
-                            regenerating[key] ? 'opacity-50' : ''
-                          }`}
-                          placeholder={item.configured ? 'Configured — paste a replacement to rotate' : item.placeholder}
-                          disabled={regenerating[key]}
-                        />
-                        {regenerating[key] && (
-                          <span className="animate-spin h-4 w-4" />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRegenerate(key)}
-                          disabled={regenerating[key]}
-                          className={`ml-2 px-3 py-1 rounded-btn text-xs transition-fast ${
-                            regenerating[key]
-                              ? 'opacity-50 cursor-not-allowed'
-                              : 'text-unknown hover:text-white hover:bg-surface-2'
-                          }`}
-                        >
-                          {regenerating[key] ? 'Generating' : '🔑'}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <input
-                          type="text"
-                          value={item.value ?? ''}
-                          onChange={(e) => updateValue(key, e.target.value)}
-                          className={`w-full px-3 py-2 rounded-btn border border-border bg-surface-2 text-unknown focus:outline-none focus:ring-2 focus:ring-accent ${
-                            regenerating[key] ? 'opacity-50' : ''
-                          }`}
-                          placeholder={item.placeholder}
-                          disabled={regenerating[key]}
-                        />
-                        {regenerating[key] && (
-                          <span className="animate-spin h-4 w-4" />
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      {advancedEntries.length > 0 && <div className="app-advanced-settings">
+        <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}>
+          {showAdvanced ? <ChevronDown /> : <ChevronRight />}
+          <span><strong>Advanced</strong><small>{advancedEntries.length} deployment and credential settings</small></span>
+        </button>
+        {showAdvanced && <div className="app-advanced-fields">{advancedEntries.map(renderField)}</div>}
+      </div>}
 
-      <div className="border-t pt-4 mt-6 text-xs text-unknown">
-        <p>
-          Changes are written directly to the service's <code className="font-mono-tabular bg-surface-2 px-1 py-0.5 rounded">.env</code> file.
-          After saving, you may need to restart the service for changes to take effect.
-        </p>
-        <p className="mt-2">
-          <strong>Never commit .env files.</strong> They are gitignored by <code className="font-mono-tabular bg-surface-2 px-1 py-0.5 rounded">*.env</code>.
-        </p>
-      </div>
-    </>
+      <footer>Secrets are write-only. Saving a blank unchanged field never erases its stored value.</footer>
+    </section>
   )
 }

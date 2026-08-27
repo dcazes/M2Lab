@@ -16,6 +16,7 @@ import type {
   McpRegistryResponse,
   SetupJob,
   SetupJobsResponse,
+  ModelAccessResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -93,6 +94,10 @@ export async function createMcpApproval(id: string, action: 'mcp-edit' | 'mcp-ve
 
 export async function fetchMcpServers(verify = false): Promise<McpRegistryResponse> {
   return fetchJson(`${API_BASE}/mcp/servers?verify=${verify}`)
+}
+
+export async function fetchModelAccess(): Promise<ModelAccessResponse> {
+  return fetchJson<ModelAccessResponse>(`${API_BASE}/model-access`)
 }
 
 export async function updateMcpServer(id: string, patch: Record<string, unknown>, approval: string): Promise<{ ok: boolean }> {

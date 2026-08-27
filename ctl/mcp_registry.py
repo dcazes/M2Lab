@@ -271,7 +271,8 @@ def mark_verified(server_id: str) -> None:
 def harness_preview(snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     snapshot = snapshot or registry_snapshot()
     active = [s for s in snapshot["servers"] if s["enabled"] and s["state"] not in {"unavailable", "disabled"}]
-    opencode = {"mcp": {"servers": {}}}
+    # OpenCode 1.x expects named servers directly under `mcp`.
+    opencode = {"mcp": {}}
     openwebui = {"servers": []}
     for server in active:
         if not server.get("endpoint"):
@@ -281,7 +282,8 @@ def harness_preview(snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
         if env_ref:
             entry["headers"] = {"Authorization": f"Bearer {{env:{env_ref}}}"}
         if "opencode" in server["harnesses"]:
-            opencode["mcp"]["servers"][server["id"]] = entry
+            entry["enabled"] = True
+            opencode["mcp"][server["id"]] = entry
         if "open-webui" in server["harnesses"] and server["transport"] == "streamable-http":
             openwebui["servers"].append({"id": server["id"], "url": server["endpoint"], "type": "mcp",
                                          "auth": {"type": server["auth"]["type"], "env": env_ref}})
