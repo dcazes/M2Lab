@@ -1,16 +1,17 @@
 <div align="center">
 
+<img src="docs/assets/m2lab-banner.svg" alt="M2Lab" width="100%"/>
+
 # M2Lab
 
-### Your private AI app platform
+**The AI-Native Homelab Starter Kit.** Orchestrate self-hosted apps with SSO and
+expose them directly to AI models via MCP.
 
 Choose useful open-source apps, run them on your own hardware, and expose the
 smallest safe set of capabilities to OpenCode, Open WebUI, or another
 MCP-compatible agent harness.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-61e7c8.svg)](LICENSE)
-[![CI](https://github.com/dcazes/m2lab/actions/workflows/ci.yml/badge.svg)](https://github.com/dcazes/m2lab/actions/workflows/ci.yml)
-[![MCP](https://img.shields.io/badge/tools-MCP-7c5cff.svg)](https://modelcontextprotocol.io/)
 [![Self-hosted](https://img.shields.io/badge/data-self--hosted-49a078.svg)](docs/SETUP.md)
 
 [Why M2Lab](#why-m2lab) · [How it works](#how-it-works) ·
@@ -18,6 +19,16 @@ MCP-compatible agent harness.
 [Security](#security-model) · [Roadmap](docs/review/07-product-plan.md)
 
 </div>
+
+---
+
+### What makes M2Lab different
+
+| | |
+|---|---|
+| 🔒 **Zero-Config SSO** | Authentik is built in, so every app shares one login and one policy surface. |
+| 🧠 **Unified AI Routing** | LiteLLM + Ollama give one endpoint for local, free, and cloud models. |
+| 📦 **1-Click Ontologies** | MCP-ready app stacks install as governed, discoverable capabilities. |
 
 ---
 
@@ -42,17 +53,21 @@ capability layer for self-hosted productivity software.
 
 ```mermaid
 flowchart LR
-    U[You] --> H[OpenCode / Open WebUI / MCP client]
-    H --> D[Progressive capability discovery]
-    D --> P[M2Lab policy and approval gateway]
-    P --> A[Scoped app MCP / API adapters]
-    A --> S[Self-hosted apps]
+    U[User] -->|chat| OW[Open WebUI]
+    U -->|code / agents| OC[OpenCode Agent]
 
-    C[M2Lab catalog and dashboard] --> S
-    C --> M[LiteLLM model gateway]
-    M --> O[Ollama]
-    M --> F[FreeLLMAPI]
-    M --> R[Other providers]
+    OW --> LL[LiteLLM :4000]
+    OC --> MCP[M2Lab MCP Layer]
+
+    LL --> OL[Ollama :11434]
+    LL --> FL[FreeLLMAPI :3001]
+    LL --> CL[Cloud Providers]
+
+    MCP --> APPS[Self-hosted Apps]
+    OW --> APPS
+
+    CTL[M2Lab Control Plane :8787] --> APPS
+    CTL --> LL
 ```
 
 The dashboard and CLI share `services.yaml` for deployed-service operations.
