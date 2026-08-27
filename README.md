@@ -75,37 +75,36 @@ already exist.
 
 ## Quickstart
 
-OmniLab is currently an **alpha, host-integrated deployment** for Debian/Ubuntu.
-It is not yet published as a one-container install because the control plane
-needs deliberate host access to Docker Compose and local service directories.
+OmniLab is a host-integrated deployment for Debian 12, Ubuntu 22.04+, and
+compatible derivatives. The installer prepares Docker, Python, shared networks,
+the production dashboard, and persistent user services. It does not start any
+application stacks until you select them in the dashboard.
 
-### Requirements
-
-- Debian or Ubuntu host
-- Docker Engine with Compose v2
-- Python 3.12+
-- Node.js 20+ to build the dashboard
-- Tailscale for private remote access
-
-### Install the control plane
+### Install
 
 ```bash
 git clone https://github.com/dcazes/omnilab.git
 cd omnilab
-
-python3 -m venv .venv
-.venv/bin/pip install -r ctl/requirements.txt
-
-cd ctl-web-next
-npm ci
-npm run build
-cd ..
-
-.venv/bin/python -m ctl.app
+./install.sh
 ```
 
-Open `http://127.0.0.1:8787`. For a persistent host deployment and Tailscale
-exposure, follow [docs/SETUP.md](docs/SETUP.md).
+Open `http://127.0.0.1:8787`. The dashboard is local-only by default. Remote
+access is intentionally a separate operator choice.
+
+The installer is safe to rerun and never overwrites existing service secrets.
+Preview privileged changes with `./install.sh --dry-run`; see all options with
+`./install.sh --help`. If Docker was installed for the first time, sign out and
+back in once to activate Docker group membership.
+
+For normal use after installation:
+
+```bash
+./start.sh
+```
+
+See [docs/SETUP.md](docs/SETUP.md) for installation details, troubleshooting,
+updates, and verification. Contributors building the dashboard from source
+still need Node.js 20+; end users receive the committed production bundle.
 
 The **Initiate** tab then prepares and starts the minimal core in order:
 Vaultwarden, LiteLLM, and the self-hosted Firecrawl stack. Generated service
@@ -113,15 +112,7 @@ secrets are written directly to mode-`0600` `.env` files and are never returned
 to the browser. Nextcloud and SurfSense are offered afterwards as optional
 foundations. Progress is resumable and the flow can be run again safely.
 
-Existing app stacks expect the shared external Docker networks provisioned by
-the included Ansible roles:
-
-```bash
-cd ansible
-ansible-playbook bootstrap.yml --check --diff --ask-become-pass
-```
-
-Review the dry run before applying it without `--check`.
+Existing app stacks use the shared Docker networks created by the installer.
 
 ## Curated catalog
 
@@ -166,11 +157,11 @@ Capabilities declare a risk tier:
 
 ## Security model
 
-- Dashboard and app ports bind to loopback; Tailscale is the supported remote door.
+- Dashboard and app ports bind to loopback; remote access is not enabled by the base installer.
 - `.env` files are gitignored, agent containers cannot read them, and browser setup responses never contain stored secret values.
 - Lifecycle approvals are short-lived and bound to one service and action.
 - Audit records contain event metadata, never secret values or Compose output.
-- Recent service logs are bounded and remain inside the localhost/tailnet dashboard boundary.
+- Recent service logs are bounded and remain inside the dashboard's local access boundary.
 - Vaultwarden has no agent or MCP exposure.
 - Docker-socket services are treated as root-equivalent and remain read-only or outside agent routing.
 

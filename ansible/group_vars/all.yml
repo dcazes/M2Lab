@@ -1,12 +1,20 @@
 ---
-# Central knobs for the bootstrap. Adjust before first real run.
-# Target: fresh Debian 12 / Ubuntu 22.04+ box
-# (also safe to re-run on this host).
+# Central knobs for the bootstrap. The root install.sh overrides the values
+# that depend on the current checkout. These defaults keep direct Ansible runs
+# safe and portable.
 
-homelab_user: dak
+homelab_user: >-
+  {{ lookup('env', 'SUDO_USER') |
+     default(lookup('env', 'USER'), true) }}
 repo_url: https://github.com/dcazes/omnilab.git
-repo_path: /home/dak/Desktop/Programs/HomeServer
-timezone: America/New_York
+repo_path: "{{ playbook_dir | dirname }}"
+timezone: UTC
+manage_repository: false
+perform_system_upgrade: false
+enable_tailscale: false
+enable_firewall: false
+docker_distro_slug_override: ""
+docker_release_override: ""
 
 base_packages:
   - curl
@@ -14,10 +22,12 @@ base_packages:
   - ca-certificates
   - gnupg
   - ufw
+  - python3
+  - python3-pip
+  - python3-venv
 
 docker_user: "{{ homelab_user }}"
 
-# Leave empty for a manual `sudo tailscale up` login; paste a reusable auth key
-# from https://login.tailscale.com/admin/settings/keys for unattended join.
+# Optional add-on. Tailscale is not installed by the default bootstrap.
 tailscale_authkey: ""
 tailscale_extra_args: ""

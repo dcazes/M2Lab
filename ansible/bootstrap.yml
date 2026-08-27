@@ -6,8 +6,10 @@
   roles:
     - base
     - docker
-    - tailscale
-    - firewall
+    - role: tailscale
+      when: enable_tailscale | bool
+    - role: firewall
+      when: enable_firewall | bool
   post_tasks:
     # tracks main by design; pinning would freeze rebuilds
     - name: Clone or update homelab repository  # noqa: latest[git]
@@ -16,3 +18,4 @@
         dest: "{{ repo_path }}"
         update: true
       become: false
+      when: manage_repository | bool

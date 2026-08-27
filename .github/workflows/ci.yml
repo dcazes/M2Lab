@@ -86,6 +86,9 @@ jobs:
 
   control-plane-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -93,7 +96,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install control-plane dependencies
         run: pip install -r ctl/requirements.txt
@@ -117,3 +120,11 @@ jobs:
       - name: Build dashboard
         run: npm ci && npm run build
         working-directory: ctl-web-next
+
+      - name: Verify committed production bundle
+        run: |
+          if [ -n "$(git status --porcelain -- ctl-web-next/dist)" ]; then
+            echo "ctl-web-next/dist is stale; run 'npm run build' and commit the result."
+            git status --short -- ctl-web-next/dist
+            exit 1
+          fi

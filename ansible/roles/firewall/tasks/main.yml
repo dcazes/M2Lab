@@ -1,8 +1,8 @@
 ---
 # Minimal firewall via raw `ufw` commands (avoids the community.general
 # collection dependency). All app ports bind 127.0.0.1, so only SSH and the
-# tailnet interface matter. Docker-published ports bypass UFW anyway — never
-# publish on 0.0.0.0 without thinking.
+# optional VPN interface matter. Docker-published ports bypass UFW anyway.
+# Never publish on 0.0.0.0 without thinking.
 
 - name: Default deny incoming
   ansible.builtin.command: ufw default deny incoming
@@ -19,6 +19,7 @@
 - name: Allow all traffic arriving on tailscale0
   ansible.builtin.command: ufw allow in on tailscale0
   changed_when: false
+  when: enable_tailscale | bool
 
 - name: Allow homelab-ctl-mcp from Docker bridge networks (agent containers)
   ansible.builtin.command: >-
