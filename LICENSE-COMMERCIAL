@@ -1,0 +1,19 @@
+# Commercial License
+
+M2Lab is dual-licensed. The source code is available under the
+GNU Affero General Public License v3.0 or later (see `LICENSE`).
+
+Organizations that need to use M2Lab without the AGPL's copyleft
+obligations — for example, to offer it as a closed-source or
+proprietary service, or to embed it in proprietary products — may
+purchase a separate commercial license from the copyright holder.
+
+Commercial licenses grant proprietary, non-copyleft terms and may
+include support and integration options.
+
+To request a commercial license, contact the copyright holder
+(GitHub: dcazes).
+
+Contributions are accepted under the Contributor License Agreement
+(`CLA.md`), which grants the copyright holder the right to license
+contributions under both the AGPL and this commercial license.

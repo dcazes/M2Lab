@@ -5,6 +5,22 @@ Docker Compose integrations, and the Python/React control plane. Keep changes
 narrow enough that reviewers can reason about their operational and
 agent-security impact.
 
+## Licensing & contributions
+
+M2Lab is dual-licensed:
+
+- **Open source:** GNU Affero General Public License v3.0 or later
+  (`LICENSE`). The AGPL closes the SaaS loophole — if you offer M2Lab as a
+  network service, you must publish your modifications.
+- **Commercial:** a separate proprietary license (`LICENSE-COMMERCIAL`) is
+  available from the copyright holder for organizations that need to use
+  M2Lab without AGPL obligations.
+
+By submitting a contribution you agree to the Contributor License Agreement
+(`CLA.md`), which grants the copyright holder the right to license your
+contributions under both the AGPL and the commercial license. This is what
+keeps the project open while remaining commercially sustainable.
+
 ## Before you start
 
 - Read [AGENTS.md](AGENTS.md) — it documents the repo's conventions,

@@ -8,7 +8,7 @@ Choose useful open-source apps, run them on your own hardware, and expose the
 smallest safe set of capabilities to OpenCode, Open WebUI, or another
 MCP-compatible agent harness.
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-61e7c8.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-61e7c8.svg)](LICENSE)
 [![CI](https://github.com/dcazes/m2lab/actions/workflows/ci.yml/badge.svg)](https://github.com/dcazes/m2lab/actions/workflows/ci.yml)
 [![MCP](https://img.shields.io/badge/tools-MCP-7c5cff.svg)](https://modelcontextprotocol.io/)
 [![Self-hosted](https://img.shields.io/badge/data-self--hosted-49a078.svg)](docs/SETUP.md)
@@ -188,4 +188,4 @@ into a reusable product. The live product plan and acceptance criteria are in
 [docs/review/07-product-plan.md](docs/review/07-product-plan.md). Honest gaps are
 documented rather than hidden behind roadmap checkmarks.
 
-MIT licensed. Individual catalog apps retain their own licenses and trademarks.
+AGPL-3.0-or-later licensed (dual-licensed; commercial license available — see `LICENSE-COMMERCIAL`). Individual catalog apps retain their own licenses and trademarks.
