@@ -507,7 +507,12 @@ async def ollama_pull_events(request: Request, model: str = "nomic-embed-text", 
 
 @app.post("/api/model-access/wire")
 async def wire_model_pipeline(request: Request):
-    """Wire API keys into LiteLLM, trigger Ollama embedding pull, and wire open-webui/surfsense."""
+    """Wire API keys into LiteLLM and wire open-webui/surfsense.
+
+    The LiteLLM config is generated synchronously and returned immediately. The
+    Ollama embedding pull is streamed separately by the wizard via
+    /api/setup/ollama/pull/events so the UI shows live progress.
+    """
     require_trusted_request(request)
     _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "models", "model-wire")
     try:
