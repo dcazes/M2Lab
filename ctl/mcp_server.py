@@ -138,7 +138,7 @@ async def discover_app_workflows(task: str) -> str:
 
 @mcp.tool()
 async def evaluate_capability_risk(risk: str) -> str:
-    """Evaluate OmniLab's portable default policy for a capability risk tier."""
+    """Evaluate M2Lab's portable default policy for a capability risk tier."""
     return json.dumps({"risk": risk, **policy_decision(risk)}, separators=(",", ":"))
 
 

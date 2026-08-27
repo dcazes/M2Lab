@@ -69,7 +69,7 @@ export function FoundationSetupCard() {
     <div className="settings-foundation-copy">
       <span className="eyebrow">Private access foundation</span>
       <h3>{foundation?.summary || 'Set up one identity before app accounts'}</h3>
-      <p>{foundation?.error || foundation?.events[foundation.events.length - 1]?.message || 'OmniLab checks Docker and Tailscale, then starts PostgreSQL, Authentik, Caddy, private routing, and Vaultwarden.'}</p>
+      <p>{foundation?.error || foundation?.events[foundation.events.length - 1]?.message || 'M2Lab checks Docker and Tailscale, then starts PostgreSQL, Authentik, Caddy, private routing, and Vaultwarden.'}</p>
       {foundation?.action?.url && <a href={foundation.action.url} target="_blank" rel="noreferrer">{foundation.action.label} <ExternalLink /></a>}
     </div>
     <div className="settings-foundation-progress">

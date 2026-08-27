@@ -1,4 +1,4 @@
-import { Monitor, Server, Settings } from 'lucide-react'
+import { Monitor, Server, Settings, Sparkles } from 'lucide-react'
 import type { AppTab } from './AppShell'
 
 interface TabNavProps {
@@ -8,6 +8,7 @@ interface TabNavProps {
 
 const tabs = [
   { id: 'workspace' as const, label: 'Workspace', icon: Monitor },
+  { id: 'onboarding' as const, label: 'Onboarding', icon: Sparkles },
   { id: 'settings' as const, label: 'Settings', icon: Settings },
   { id: 'system' as const, label: 'System', icon: Server },
 ] as const

@@ -4,28 +4,28 @@ schema_version: 1
 # Runtime verification in ctl/mcp_registry.py is the source of live state.
 mcp_servers:
   surfsense:
-    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8811/mcp", source: "OmniLab SurfSense API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: surfsense, env: SURFSENSE_API_KEY, scopes: [search]}, tools: [{id: surfsense.search, title: Search research, risk: read}], harnesses: [opencode, open-webui]}
+    {kind: m2lab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8811/mcp", source: "M2Lab SurfSense API adapter", maintainer: M2Lab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: surfsense, env: SURFSENSE_API_KEY, scopes: [search]}, tools: [{id: surfsense.search, title: Search research, risk: read}], harnesses: [opencode, open-webui]}
   firecrawl:
-    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8812/mcp", source: "OmniLab Firecrawl API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: firecrawl, env: TEST_API_KEY, scopes: [scrape, search]}, tools: [{id: firecrawl.scrape, title: Scrape a selected URL, risk: read}, {id: firecrawl.search, title: Search the web, risk: read}], harnesses: [opencode, open-webui]}
+    {kind: m2lab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8812/mcp", source: "M2Lab Firecrawl API adapter", maintainer: M2Lab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: firecrawl, env: TEST_API_KEY, scopes: [scrape, search]}, tools: [{id: firecrawl.scrape, title: Scrape a selected URL, risk: read}, {id: firecrawl.search, title: Search the web, risk: read}], harnesses: [opencode, open-webui]}
   actual-budget:
-    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8813/mcp", source: "OmniLab Actual Budget API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: service-token, service_dir: actual-budget, env: ACTUAL_PASSWORD, scopes: [budget-read]}, tools: [{id: actual.accounts, title: Read accounts, risk: read}, {id: actual.categories, title: Read categories, risk: read}, {id: actual.transactions, title: Read transactions, risk: read}], harnesses: [opencode, open-webui]}
+    {kind: m2lab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8813/mcp", source: "M2Lab Actual Budget API adapter", maintainer: M2Lab, trust: reviewed, default_enabled: true, auth: {type: service-token, service_dir: actual-budget, env: ACTUAL_PASSWORD, scopes: [budget-read]}, tools: [{id: actual.accounts, title: Read accounts, risk: read}, {id: actual.categories, title: Read categories, risk: read}, {id: actual.transactions, title: Read transactions, risk: read}], harnesses: [opencode, open-webui]}
   adventurelog:
-    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8814/mcp", source: "OmniLab AdventureLog API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: adventurelog, env: ADVENTURELOG_API_TOKEN, scopes: [travel-read]}, tools: [{id: adventurelog.search, title: Read trips and places, risk: read}], harnesses: [opencode, open-webui]}
+    {kind: m2lab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8814/mcp", source: "M2Lab AdventureLog API adapter", maintainer: M2Lab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: adventurelog, env: ADVENTURELOG_API_TOKEN, scopes: [travel-read]}, tools: [{id: adventurelog.search, title: Read trips and places, risk: read}], harnesses: [opencode, open-webui]}
   paperless-ngx:
-    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8815/mcp", source: "OmniLab Paperless REST adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: paperless-ngx, env: PAPERLESS_API_TOKEN, scopes: [documents-read]}, tools: [{id: paperless.search, title: Search documents, risk: read}, {id: paperless.document, title: Read document metadata, risk: read}, {id: paperless.upload, title: Upload a reviewed document, risk: write}], harnesses: [opencode, open-webui]}
+    {kind: m2lab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8815/mcp", source: "M2Lab Paperless REST adapter", maintainer: M2Lab, trust: reviewed, default_enabled: true, auth: {type: bearer, service_dir: paperless-ngx, env: PAPERLESS_API_TOKEN, scopes: [documents-read]}, tools: [{id: paperless.search, title: Search documents, risk: read}, {id: paperless.document, title: Read document metadata, risk: read}, {id: paperless.upload, title: Upload a reviewed document, risk: write}], harnesses: [opencode, open-webui]}
   immich:
-    {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8816/mcp", source: "OmniLab Immich API adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: api-key, service_dir: immich-app, env: IMMICH_API_KEY, scopes: [asset-read]}, tools: [{id: immich.search, title: Search photos and albums, risk: read}], harnesses: [opencode, open-webui]}
+    {kind: m2lab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8816/mcp", source: "M2Lab Immich API adapter", maintainer: M2Lab, trust: reviewed, default_enabled: true, auth: {type: api-key, service_dir: immich-app, env: IMMICH_API_KEY, scopes: [asset-read]}, tools: [{id: immich.search, title: Search photos and albums, risk: read}], harnesses: [opencode, open-webui]}
   nextcloud:
     {kind: native, transport: streamable-http, endpoint: "http://127.0.0.1:8020/index.php/apps/app_api/proxy/context_agent/mcp/", source: "Nextcloud Context Agent", maintainer: Nextcloud, trust: official, default_enabled: true, auth: {type: app-password, service_dir: nextcloud, env: OMNILAB_MCP_APP_PASSWORD, scopes: [context-agent]}, tools: [], harnesses: [opencode, open-webui]}
   litellm:
     {kind: native, transport: streamable-http, endpoint: "http://127.0.0.1:4000/litellm_admin/mcp", public_endpoint: "https://home.taile2cc7a.ts.net:8445/litellm_admin/mcp", source: "LiteLLM OpenAPI MCP gateway", maintainer: LiteLLM, trust: official, default_enabled: true, auth: {type: bearer, service_dir: litellm, env: LITELLM_MCP_KEY, scopes: [models-read]}, tools: [{id: litellm.models, title: Inspect available models, risk: read}, {id: litellm.health, title: Inspect model health, risk: read}], harnesses: [opencode, open-webui]}
   open-webui: {kind: unsupported, transport: none, reason: "Open WebUI consumes MCP servers; no reviewed server exposing its own data is registered."}
-  opencode-agent: {kind: unsupported, transport: none, reason: "OpenCode consumes MCP servers; lifecycle is exposed by the OmniLab control MCP."}
+  opencode-agent: {kind: unsupported, transport: none, reason: "OpenCode consumes MCP servers; lifecycle is exposed by the M2Lab control MCP."}
   vaultwarden: {kind: unsupported, transport: none, reason: "Vault contents are intentionally excluded from agent and MCP access."}
   freellmapi: {kind: unsupported, transport: none, reason: "No reviewed native or community MCP server is pinned."}
-  ollama: {kind: omnilab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8817/mcp", source: "OmniLab Ollama read adapter", maintainer: OmniLab, trust: reviewed, default_enabled: true, auth: {type: none, scopes: [models-read]}, tools: [{id: ollama.list, title: List local models, risk: read}], harnesses: [opencode, open-webui]}
+  ollama: {kind: m2lab-adapter, transport: streamable-http, endpoint: "http://127.0.0.1:8817/mcp", source: "M2Lab Ollama read adapter", maintainer: M2Lab, trust: reviewed, default_enabled: true, auth: {type: none, scopes: [models-read]}, tools: [{id: ollama.list, title: List local models, risk: read}], harnesses: [opencode, open-webui]}
   endurain: {kind: unsupported, transport: none, reason: "Evaluation app; no reviewed MCP server is registered."}
-  openwhisper: {kind: unsupported, transport: none, reason: "Desktop companion has no remotely managed API in OmniLab."}
+  openwhisper: {kind: unsupported, transport: none, reason: "Desktop companion has no remotely managed API in M2Lab."}
   graphite: {kind: unsupported, transport: none, reason: "Browser editor has no safe automation interface."}
   freemind: {kind: unsupported, transport: none, reason: "Desktop editor has no safe automation interface."}
 
@@ -89,7 +89,7 @@ apps:
     name: SurfSense
     tagline: Your private research library
     description: Save, search, and discuss web pages and documents without scattering research across browser tabs.
-    category: research
+    category: agent_driven
     kind: service
     availability: available
     icon: "🧠"
@@ -99,15 +99,24 @@ apps:
     outcomes: [research, travel]
     requirements: [Docker, 8 GB RAM recommended]
     dependencies: [litellm, ollama]
+    links:
+      homepage: https://surfsense.net
+      source: https://github.com/MODSetter/SurfSense
+    mcp_summary:
+      summary: Enables AI agents to search your private knowledge base, extract research sources, and generate cited summaries.
+      example_prompts:
+        - "Search my SurfSense library for notes on Docker container security."
+        - "Find cited research about machine learning model routing and summarize the key findings."
     setup: {bootstrap: first_login, model_route: ollama, notes: [Create the first SurfSense user after the stack is online; chat models remain user-selected inside SurfSense.]}
     capabilities:
       - {id: research.retrieve, title: Retrieve cited research, risk: read, tools: [surfsense.search]}
+
   - id: firecrawl
     service_id: firecrawl
     name: Firecrawl
     tagline: Turn the live web into clean data
     description: Crawl user-selected sites and produce LLM-ready content for research workflows.
-    category: research
+    category: agent_support
     kind: service
     availability: available
     icon: "🔥"
@@ -116,15 +125,24 @@ apps:
     ai_optional: true
     outcomes: [research, travel]
     requirements: [Docker, 4 GB RAM recommended]
+    links:
+      homepage: https://firecrawl.dev
+      source: https://github.com/mendableai/firecrawl
+    mcp_summary:
+      summary: Scrapes web URLs or searches the web to return clean Markdown formatting directly into your AI context.
+      example_prompts:
+        - "Scrape https://news.ycombinator.com and extract top stories."
+        - "Search the web for the latest updates on Python 3.12 features."
     setup: {bootstrap: automatic, model_route: none}
     capabilities:
       - {id: web.acquire, title: Fetch a user-selected web source, risk: read, tools: [firecrawl.scrape, firecrawl.search]}
+
   - id: actual-budget
     service_id: actual-budget
     name: Actual Budget
     tagline: Local-first personal finance
     description: Keep budgets private and prepare reviewed transactions from receipts and documents.
-    category: productivity
+    category: agent_driven
     kind: service
     availability: available
     icon: "◎"
@@ -133,17 +151,26 @@ apps:
     ai_optional: true
     outcomes: [money]
     requirements: [Docker]
+    links:
+      homepage: https://actualbudget.org
+      source: https://github.com/actualbudget/actual
+    mcp_summary:
+      summary: Reads budget categories, accounts, and transactions, allowing agents to draft budget entries from receipts.
+      example_prompts:
+        - "What were my top spending categories last month?"
+        - "Draft a budget entry of $45.50 for groceries under the Food category."
     setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: finance.read, title: Read budget summaries and categories, risk: read, tools: [actual.accounts, actual.categories, actual.transactions]}
       - {id: finance.transaction-draft, title: Prepare transaction drafts, risk: draft, tools: [actual.prepare_transaction]}
       - {id: finance.transaction-write, title: Commit approved transactions, risk: write, tools: [actual.create_transaction]}
+
   - id: adventurelog
     service_id: adventurelog
     name: AdventureLog
     tagline: Trips, places, and memories
     description: Plan travel, keep itineraries, and preserve the story of each adventure.
-    category: productivity
+    category: agent_driven
     kind: service
     availability: available
     icon: "🧭"
@@ -152,17 +179,26 @@ apps:
     ai_optional: true
     outcomes: [travel, wellness]
     requirements: [Docker]
+    links:
+      homepage: https://adventurelog.app
+      source: https://github.com/AdventureLog/AdventureLog
+    mcp_summary:
+      summary: Explores saved travel destinations, places, and itineraries, assisting with drafting new trip logs.
+      example_prompts:
+        - "List my planned trips and saved places for Tokyo."
+        - "Draft an itinerary for a 3-day weekend trip to Yosemite."
     setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: travel.read, title: Read trips and places, risk: read, tools: [adventurelog.search]}
       - {id: travel.draft, title: Prepare an itinerary draft, risk: draft, tools: [adventurelog.prepare_trip]}
       - {id: travel.write, title: Save an approved itinerary, risk: write, tools: [adventurelog.create_trip]}
+
   - id: paperless-ngx
     service_id: paperless-ngx
     name: Paperless-ngx
     tagline: Searchable documents and receipts
     description: OCR, tag, and archive household documents while keeping the originals under your control.
-    category: productivity
+    category: agent_driven
     kind: service
     availability: available
     icon: "📄"
@@ -171,16 +207,25 @@ apps:
     ai_optional: true
     outcomes: [money, travel]
     requirements: [Docker, persistent storage]
+    links:
+      homepage: https://docs.paperless-ngx.com
+      source: https://github.com/paperless-ngx/paperless-ngx
+    mcp_summary:
+      summary: Allows AI agents to search archived PDF documents, read OCR content, and upload newly scanned receipts.
+      example_prompts:
+        - "Find all tax invoices uploaded in 2024."
+        - "Extract the total amount and merchant from my latest electric bill PDF."
     setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: documents.read, title: Search documents and receipt metadata, risk: read, tools: [paperless.search, paperless.document]}
       - {id: documents.ingest, title: Ingest a selected document, risk: write, tools: [paperless.upload]}
+
   - id: immich
     service_id: immich
     name: Immich
     tagline: A private home for photos
     description: Back up, search, and organize personal media with explicit selection for cross-app workflows.
-    category: media
+    category: agent_driven
     kind: service
     availability: available
     icon: "✺"
@@ -189,15 +234,24 @@ apps:
     ai_optional: true
     outcomes: [money, travel, creative]
     requirements: [Docker, substantial storage]
+    links:
+      homepage: https://immich.app
+      source: https://github.com/immich-app/immich
+    mcp_summary:
+      summary: Searches photo library metadata, albums, and facial recognition tags to locate relevant media assets.
+      example_prompts:
+        - "Find photos tagged with 'receipt' taken in June."
+        - "Show me my recent travel album from France."
     setup: {bootstrap: first_login, model_route: none}
     capabilities:
       - {id: media.read, title: Search photos and albums, risk: read, tools: [immich.search]}
       - {id: media.export-selected, title: Export explicitly selected assets, risk: write, tools: [immich.download_asset]}
+
   - id: endurain
     name: Endurain
     tagline: Self-hosted activity tracking
     description: A privacy-focused fitness history with Garmin Connect, Strava, and GPX, TCX, or FIT imports.
-    category: wellness
+    category: agent_driven
     kind: service
     availability: evaluation
     icon: "♥"
@@ -209,13 +263,18 @@ apps:
     links:
       homepage: https://docs.endurain.com/
       source: https://codeberg.org/endurain-project/endurain
+    mcp_summary:
+      summary: Analyzes fitness tracking data and workout metrics for personal activity trend reports.
+      example_prompts:
+        - "Summarize my running distance and average heart rate over the last month."
     capabilities:
       - {id: fitness.read, title: Summarize activity trends, risk: read, tools: [endurain.activities, endurain.summary]}
+
   - id: openwhisper
     name: OpenWhisper
     tagline: Local voice-to-text everywhere
     description: Transcribe microphone, meetings, and selected audio locally with Faster-Whisper models.
-    category: capture
+    category: agent_support
     kind: companion
     availability: available
     icon: "◉"
@@ -227,13 +286,18 @@ apps:
     links:
       homepage: https://openwhisper.io/
       source: https://github.com/Knuckles92/OpenWhisper
+    mcp_summary:
+      summary: Provides local speech-to-text voice transcription for agent prompts and meeting audio processing.
+      example_prompts:
+        - "Transcribe the recorded voice memo from today's meeting."
     capabilities:
       - {id: audio.transcribe-selected, title: Transcribe explicitly selected audio, risk: read, tools: []}
+
   - id: graphite
     name: Graphite Editor
     tagline: Nondestructive vector design
     description: Create procedural vector graphics locally in the browser and export SVG, PNG, or JPG.
-    category: creative
+    category: agent_driven
     kind: companion
     availability: available
     icon: "◆"
@@ -245,12 +309,16 @@ apps:
     links:
       homepage: https://editor.graphite.art/
       source: https://github.com/GraphiteEditor/Graphite
+    mcp_summary:
+      summary: Local vector graphics design companion operating directly in your browser.
+      example_prompts: []
     capabilities: []
+
   - id: freemind
     name: FreeMind
     tagline: Fast, local mind mapping
     description: Organize ideas as portable mind maps and keep the creative editing loop human-operated.
-    category: creative
+    category: agent_driven
     kind: companion
     availability: available
     icon: "⌘"
@@ -262,13 +330,17 @@ apps:
     links:
       homepage: https://freemind.sourceforge.io/
       source: https://sourceforge.net/projects/freemind/
+    mcp_summary:
+      summary: Desktop Java mind-mapping companion for visual brain storming and structural notes.
+      example_prompts: []
     capabilities: []
+
   - id: open-webui
     service_id: open-webui
     name: Open WebUI
     tagline: Friendly self-hosted AI chat
     description: A general-user chat surface for local and routed models, knowledge, and admin-approved tools.
-    category: harness
+    category: agent_support
     kind: harness
     availability: available
     icon: "◌"
@@ -278,13 +350,21 @@ apps:
     outcomes: [local-ai]
     requirements: [LiteLLM or Ollama recommended]
     dependencies: [litellm]
+    links:
+      homepage: https://openwebui.com
+      source: https://github.com/open-webui/open-webui
+    mcp_summary:
+      summary: Web chat harness that connects to LiteLLM model gateways and exposes registered MCP tools to end users.
+      example_prompts:
+        - "Ask Open WebUI to execute a search query across SurfSense and Paperless."
     setup: {bootstrap: first_login, model_route: litellm, notes: [The first registered Open WebUI user becomes its administrator.]}
     capabilities: []
+
   - id: opencode-agent
     name: OpenCode
     tagline: Agent harness for power users
     description: Run focused subagents with scoped permissions and progressively discovered MCP tools.
-    category: harness
+    category: agent_support
     kind: harness
     availability: available
     icon: "⌘"
@@ -296,13 +376,18 @@ apps:
     links:
       homepage: https://opencode.ai/
       source: https://github.com/anomalyco/opencode
+    mcp_summary:
+      summary: Terminal/CLI autonomous coding agent powered by M2Lab's governed MCP capability server.
+      example_prompts:
+        - "opencode 'discover app capabilities for finance and budget'"
     capabilities: []
+
   - id: litellm
     service_id: litellm
     name: LiteLLM
     tagline: One private model gateway
     description: Give every app an OpenAI-compatible endpoint with model routing, budgets, and provider fallbacks.
-    category: infrastructure
+    category: agent_support
     kind: infrastructure
     availability: available
     icon: "⌁"
@@ -312,15 +397,23 @@ apps:
     outcomes: [local-ai]
     requirements: [At least one model provider or Ollama]
     dependencies: [freellmapi, ollama]
+    links:
+      homepage: https://litellm.ai
+      source: https://github.com/BerriAI/litellm
+    mcp_summary:
+      summary: Unified model gateway routing LLM and embedding calls to FreeLLMAPI, NVIDIA NIM, OpenAI, and local Ollama.
+      example_prompts:
+        - "Check LiteLLM model health and active routing endpoints."
     setup: {bootstrap: automatic, model_route: none}
     capabilities:
       - {id: models.read, title: Inspect model availability and health, risk: read, tools: [litellm.models, litellm.health]}
+
   - id: freellmapi
     service_id: freellmapi
     name: FreeLLMAPI
     tagline: Optional free-tier aggregation
     description: Route legitimate provider free tiers behind one OpenAI-compatible adapter with ordering and failover.
-    category: infrastructure
+    category: agent_support
     kind: infrastructure
     availability: available
     icon: "⇄"
@@ -329,14 +422,21 @@ apps:
     ai_optional: false
     outcomes: [local-ai]
     requirements: [Provider API keys, LiteLLM recommended]
-    setup: {bootstrap: first_login, model_route: none, notes: [Add legitimate free-tier provider credentials in FreeLLMAPI; OmniLab wires its local gateway key into LiteLLM automatically.]}
+    links:
+      homepage: https://github.com/dcazes/m2lab
+      source: https://github.com/dcazes/m2lab
+    mcp_summary:
+      summary: Aggregates free-tier API keys across Gemini, Groq, NVIDIA NIM, Cohere, etc., into a single unified gateway.
+      example_prompts: []
+    setup: {bootstrap: first_login, model_route: none, notes: [Add legitimate free-tier provider credentials in FreeLLMAPI; M2Lab wires its local gateway key into LiteLLM automatically.]}
     capabilities: []
+
   - id: ollama
     service_id: ollama
     name: Ollama
     tagline: Private models on your own hardware
     description: Run local language models as a private fallback or primary inference path.
-    category: infrastructure
+    category: agent_support
     kind: infrastructure
     availability: available
     icon: "◒"
@@ -345,15 +445,23 @@ apps:
     ai_optional: false
     outcomes: [local-ai]
     requirements: [8 GB RAM minimum, NVIDIA GPU optional]
-    setup: {bootstrap: automatic, model_route: none, notes: [OmniLab pulls nomic-embed-text as the default local embedding model.]}
+    links:
+      homepage: https://ollama.com
+      source: https://github.com/ollama/ollama
+    mcp_summary:
+      summary: Local LLM and embedding runner (`nomic-embed-text`) serving local inference without external API keys.
+      example_prompts:
+        - "List local Ollama models and verify nomic-embed-text status."
+    setup: {bootstrap: automatic, model_route: none, notes: [M2Lab pulls nomic-embed-text as the default local embedding model.]}
     capabilities:
       - {id: models.local-read, title: Inspect installed local models, risk: read, tools: [ollama.list]}
+
   - id: vaultwarden
     service_id: vaultwarden
     name: Vaultwarden
     tagline: Human-controlled credentials
     description: Store personal credentials without exposing vault contents to agents or MCP tools.
-    category: infrastructure
+    category: security_infrastructure
     kind: infrastructure
     availability: available
     icon: "▣"
@@ -362,7 +470,13 @@ apps:
     ai_optional: true
     outcomes: []
     requirements: [Docker, TLS access]
-    setup: {bootstrap: first_login, model_route: none, notes: [Create the master account directly in Vaultwarden; OmniLab never receives that password.]}
+    links:
+      homepage: https://github.com/dani-garcia/vaultwarden
+      source: https://github.com/dani-garcia/vaultwarden
+    mcp_summary:
+      summary: Secure password vault. Vaultwarden is intentionally isolated and has NO agent or MCP access.
+      example_prompts: []
+    setup: {bootstrap: first_login, model_route: none, notes: [Create the master account directly in Vaultwarden; M2Lab never receives that password.]}
     capabilities: []
 
   - id: nextcloud
@@ -370,7 +484,7 @@ apps:
     name: Nextcloud
     tagline: Files and calendar you control
     description: Keep files, calendars, and personal collaboration data on your own server.
-    category: productivity
+    category: agent_driven
     kind: service
     availability: available
     icon: "☁️"
@@ -379,5 +493,12 @@ apps:
     ai_optional: true
     outcomes: [money, travel]
     requirements: [Docker, persistent storage]
+    links:
+      homepage: https://nextcloud.com
+      source: https://github.com/nextcloud/server
+    mcp_summary:
+      summary: Exposes personal calendar, contact, and file metadata via Nextcloud Context Agent to AI subagents.
+      example_prompts:
+        - "Check my Nextcloud calendar for upcoming travel events next week."
     setup: {bootstrap: automatic, identity: true, model_route: none, notes: [The shared app login becomes the initial Nextcloud administrator.]}
     capabilities: []

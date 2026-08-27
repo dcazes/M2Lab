@@ -44,7 +44,7 @@ class McpRegistryTests(unittest.TestCase):
     def test_absent_apps_are_unavailable(self):
         states = {app.get("service_id", ""): "absent" for app in self.catalog["apps"]}
         snapshot = mcp_registry.registry_snapshot(states)
-        app_servers = [server for server in snapshot["servers"] if server["app_id"] != "omnilab"]
+        app_servers = [server for server in snapshot["servers"] if server["app_id"] != "m2lab"]
         self.assertTrue(all(server["state"] == "unavailable" for server in app_servers))
 
 

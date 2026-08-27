@@ -20,7 +20,7 @@ usage() {
   cat <<'EOF'
 Usage: ./install.sh [options]
 
-Prepare a Debian or Ubuntu host and install the OmniLab control plane.
+Prepare a Debian or Ubuntu host and install the M2Lab control plane.
 
 Options:
   --yes             Accept the installation summary without prompting
@@ -60,9 +60,9 @@ done
 [[ $EUID -ne 0 ]] || die "Run this installer as your normal user, not with sudo. It will request sudo only when needed."
 [[ "$OMNILAB_ROOT" != *[[:space:]]* ]] || die "The repository path cannot contain whitespace. Move the checkout and try again."
 [[ "$OMNILAB_ROOT" != *"|"* ]] || die "The repository path cannot contain a pipe character. Move the checkout and try again."
-[[ -f "$OMNILAB_ROOT/services.yaml" && -f "$OMNILAB_ROOT/ansible/bootstrap.yml" ]] || die "Run install.sh from a complete OmniLab checkout."
+[[ -f "$OMNILAB_ROOT/services.yaml" && -f "$OMNILAB_ROOT/ansible/bootstrap.yml" ]] || die "Run install.sh from a complete M2Lab checkout."
 
-[[ -r /etc/os-release ]] || die "Cannot identify this operating system. OmniLab supports Debian 12 and Ubuntu 22.04+."
+[[ -r /etc/os-release ]] || die "Cannot identify this operating system. M2Lab supports Debian 12 and Ubuntu 22.04+."
 # shellcheck disable=SC1091
 source /etc/os-release
 docker_distro=""
@@ -89,14 +89,14 @@ case "${ID:-}" in
       docker_release="$DEBIAN_CODENAME"
       warn "Using Debian compatibility mode for ${PRETTY_NAME:-$ID}."
     else
-      die "Unsupported operating system '${PRETTY_NAME:-unknown}'. OmniLab supports Debian 12, Ubuntu 22.04+, and compatible derivatives."
+      die "Unsupported operating system '${PRETTY_NAME:-unknown}'. M2Lab supports Debian 12, Ubuntu 22.04+, and compatible derivatives."
     fi
     ;;
 esac
 
 case "$(uname -m)" in
   x86_64|aarch64|arm64) ;;
-  *) die "Unsupported CPU architecture '$(uname -m)'. OmniLab supports x86-64 and ARM64 hosts." ;;
+  *) die "Unsupported CPU architecture '$(uname -m)'. M2Lab supports x86-64 and ARM64 hosts." ;;
 esac
 [[ -n "$docker_release" ]] || die "Cannot determine the operating-system codename required for Docker packages."
 
@@ -107,7 +107,7 @@ install_user="$(id -un)"
 timezone="$(timedatectl show --property=Timezone --value 2>/dev/null || true)"
 timezone="${timezone:-UTC}"
 
-printf '\nOmniLab host installation\n'
+printf '\nM2Lab host installation\n'
 printf '  User:       %s\n' "$install_user"
 printf '  Repository: %s\n' "$OMNILAB_ROOT"
 printf '  Platform:   %s\n' "${PRETTY_NAME:-$ID}"
@@ -193,7 +193,7 @@ run systemctl --user daemon-reload
 run systemctl --user enable homelab-ctl.service homelab-ctl-mcp.service
 
 if ! "$NO_START"; then
-  info "Starting OmniLab"
+  info "Starting M2Lab"
   run systemctl --user restart homelab-ctl.service homelab-ctl-mcp.service
 fi
 
@@ -203,8 +203,8 @@ if "$DRY_RUN"; then
 fi
 
 printf '\n'
-success "OmniLab is installed"
-printf '  Dashboard: http://127.0.0.1:8787\n'
+success "M2Lab is installed"
+printf '  Dashboard:   http://127.0.0.1:8787\n'
 printf '  Start later: %s/start.sh\n' "$OMNILAB_ROOT"
 printf '  Logs:        journalctl --user -u homelab-ctl -f\n'
 
@@ -212,4 +212,5 @@ if ! docker info >/dev/null 2>&1; then
   warn "Your current login does not yet have Docker access. Sign out and back in once, then run ./start.sh."
 fi
 
-printf '\nOpen the dashboard and use Settings → Add apps when you are ready.\n'
+printf '\nNext step: Open the dashboard in your browser to complete first-time setup:\n'
+printf '  → http://127.0.0.1:8787 (Click the "Onboarding" tab)\n\n'

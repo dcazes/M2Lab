@@ -1,6 +1,6 @@
 # AGENTS.md
 
-OmniLab — a Docker Compose homelab (~16 self-hosted services, one top-level
+M2Lab — a Docker Compose homelab (~16 self-hosted services, one top-level
 dir each) with a FastAPI/React control plane and a governed MCP capability
 layer for AI agent harnesses. Verification means catalog unit tests, a
 production UI build, valid compose configs, and CI security scans.
@@ -18,7 +18,7 @@ ctl/app_mcp.py         ← read-focused MCP adapters for firecrawl, paperless, i
 ctl/catalog.py         ← progressive capability discovery (task → capability matching)
 ctl/initiate.py        ← safe env preparation for automated first-run setup
 opencode.json          ← agent harness config (MCP server wiring)
-.opencode/agents/      ← agent profiles (default primary, omnilab orchestrator, litellm read-only)
+.opencode/agents/      ← agent profiles (default primary, m2lab orchestrator, litellm read-only)
 .opencode/skills/      ← agent skills (currently: litellm-model-catalog)
 ```
 
@@ -59,7 +59,7 @@ memory-to-trip).
 
 `ctl/catalog.py` provides lexical task→capability matching without injecting
 every tool schema into an agent context. `ctl/mcp_server.py` exposes this as
-`omnilab_discover_app_capabilities` and `omnilab_discover_app_workflows` MCP
+`m2lab_discover_app_capabilities` and `m2lab_discover_app_workflows` MCP
 tools.
 
 ## MCP layer
@@ -94,7 +94,7 @@ Agent profiles live in `.opencode/agents/`:
 | Agent | Mode | Purpose |
 |-------|------|---------|
 | `default` | primary | General-purpose coding agent for this project. Full file/shell/web access + both MCP servers. |
-| `omnilab` | subagent | Progressive-discovery orchestrator. Owns no credentials; discovers capabilities via MCP, evaluates risk, delegates to app subagents. |
+| `m2lab` | subagent | Progressive-discovery orchestrator. Owns no credentials; discovers capabilities via MCP, evaluates risk, delegates to app subagents. |
 | `litellm` | subagent | Read-only LiteLLM model catalog. Drives the litellm MCP server exclusively. |
 
 Skills live in `.opencode/skills/<name>/SKILL.md`. Currently:
