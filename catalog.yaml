@@ -423,8 +423,8 @@ apps:
     outcomes: [local-ai]
     requirements: [Provider API keys, LiteLLM recommended]
     links:
-      homepage: https://github.com/dcazes/m2lab
-      source: https://github.com/dcazes/m2lab
+      homepage: "{{repo}}"
+      source: "{{repo}}"
     mcp_summary:
       summary: Aggregates free-tier API keys across Gemini, Groq, NVIDIA NIM, Cohere, etc., into a single unified gateway.
       example_prompts: []

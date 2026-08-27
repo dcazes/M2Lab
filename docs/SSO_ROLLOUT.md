@@ -6,7 +6,7 @@ after a local preflight succeeds. The previous direct target is the rollback.
 
 ## Initial bootstrap
 
-The normal path is **Settings → Apps → Start identity setup**. OmniLab creates
+The normal path is **Settings → Apps → Start identity setup**. M2Lab creates
 the protected env files, generates infrastructure-only credentials, starts
 PostgreSQL, Authentik, Caddy, Ollama and the core services, publishes the
 private Authentik URL, and shows every stage in Workspace. It pauses only for
@@ -30,7 +30,7 @@ experience.
 
 4. Route Authentik through Caddy: `scripts/sso-ingress.sh apply authentik`.
    Create the first owner, enroll MFA/passkeys, store recovery codes outside
-   OmniLab, and load the `omnilab-owners` / `omnilab-members` blueprint.
+   M2Lab, and load the `omnilab-owners` / `omnilab-members` blueprint.
 5. Create the dashboard provider and Caddy outpost in Authentik. Its forward
    auth endpoint is `http://127.0.0.1:9001/outpost.goauthentik.io/auth/caddy`.
 6. In a second tailnet browser, run `scripts/sso-ingress.sh apply dashboard`,

@@ -60,7 +60,7 @@ export async function createApproval(id: string, action: ServiceAction): Promise
   return result.token
 }
 
-export async function createSetupApproval(id: string, action: 'setup-start' | 'setup-resume'): Promise<string> {
+export async function createSetupApproval(id: string, action: 'setup-start' | 'setup-resume' | 'model-wire' | 'model-pull'): Promise<string> {
   const result = await fetchJson<{ token: string }>(`${API_BASE}/approvals`, {
     method: 'POST',
     body: JSON.stringify({ service_id: id, action, confirm: `${action}:${id}` }),
@@ -100,16 +100,20 @@ export async function fetchModelAccess(): Promise<ModelAccessResponse> {
   return fetchJson<ModelAccessResponse>(`${API_BASE}/model-access`)
 }
 
-export async function wireModelPipeline(config: {
-  NVIDIA_NIM_API_KEY?: string
-  GEMINI_API_KEY?: string
-  HUGGINGFACE_API_KEY?: string
-  MISTRAL_API_KEY?: string
-  OPENAI_API_KEY?: string
-  pull_embedding?: boolean
-}): Promise<{ ok: boolean; configured_keys: string[]; embedding_status: string }> {
+export async function wireModelPipeline(
+  config: {
+    NVIDIA_NIM_API_KEY?: string
+    GEMINI_API_KEY?: string
+    HUGGINGFACE_API_KEY?: string
+    MISTRAL_API_KEY?: string
+    OPENAI_API_KEY?: string
+    pull_embedding?: boolean
+  },
+  approval: string,
+): Promise<{ ok: boolean; configured_keys: string[]; embedding_status: 'pulled' | 'skipped' | 'failed' }> {
   return fetchJson(`${API_BASE}/model-access/wire`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-M2Lab-Approval': approval },
     body: JSON.stringify(config),
   })
 }

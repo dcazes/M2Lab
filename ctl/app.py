@@ -287,7 +287,7 @@ async def create_approval(request: Request):
     body = await request.json()
     sid = str(body.get("service_id", ""))
     action = str(body.get("action", ""))
-    if action not in {"up", "stop", "restart", "pull", "update", "mcp-edit", "mcp-verify", "mcp-sync", "setup-start", "setup-resume"}:
+    if action not in {"up", "stop", "restart", "pull", "update", "mcp-edit", "mcp-verify", "mcp-sync", "setup-start", "setup-resume", "model-wire", "model-pull"}:
         raise HTTPException(400, "Unknown approval action")
     if action.startswith("mcp-"):
         known = {item["id"] for item in registry_snapshot()["servers"]} | {"registry"}
@@ -296,6 +296,12 @@ async def create_approval(request: Request):
     elif action.startswith("setup-"):
         if sid != "foundation":
             service_by_id(sid)
+    elif action == "model-wire":
+        if sid != "models":
+            raise HTTPException(400, "model-wire approval must target 'models'")
+    elif action == "model-pull":
+        if sid != "ollama":
+            raise HTTPException(400, "model-pull approval must target 'ollama'")
     else:
         service_by_id(sid)
     if body.get("confirm") != f"{action}:{sid}":
@@ -448,6 +454,7 @@ def _pull_ollama_model(model_name: str = "nomic-embed-text") -> bool:
 @app.post("/api/models/ollama/pull")
 async def pull_ollama_embedding(request: Request):
     require_trusted_request(request)
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "ollama", "model-pull")
     body = await request.json() if request.headers.get("content-type") == "application/json" else {}
     model_name = str(body.get("model", "nomic-embed-text")).strip()
     loop = asyncio.get_event_loop()
@@ -460,6 +467,7 @@ async def pull_ollama_embedding(request: Request):
 async def wire_model_pipeline(request: Request):
     """Wire API keys into LiteLLM, trigger Ollama embedding pull, and wire open-webui/surfsense."""
     require_trusted_request(request)
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "models", "model-wire")
     try:
         body = await request.json()
     except json.JSONDecodeError:
@@ -489,16 +497,20 @@ async def wire_model_pipeline(request: Request):
 
     # Pull nomic-embed-text if requested
     pull_embed = bool(body.get("pull_embedding", True))
-    embed_ok = True
-    if pull_embed and svc_state(service_by_id("ollama"))["overall"] == "running":
-        loop = asyncio.get_event_loop()
-        embed_ok = await loop.run_in_executor(None, lambda: _pull_ollama_model("nomic-embed-text"))
+    embed_status = "skipped"
+    if pull_embed:
+        if svc_state(service_by_id("ollama"))["overall"] == "running":
+            loop = asyncio.get_event_loop()
+            embed_ok = await loop.run_in_executor(None, lambda: _pull_ollama_model("nomic-embed-text"))
+            embed_status = "pulled" if embed_ok else "failed"
+        else:
+            embed_status = "skipped"  # Ollama not running — nothing was pulled
 
-    await audit_event(request, "models.pipeline_wired", configured_keys=list(keys_to_update.keys()), embedding_pulled=embed_ok)
+    await audit_event(request, "models.pipeline_wired", configured_keys=list(keys_to_update.keys()), embedding_pulled=embed_status == "pulled")
     return {
         "ok": True,
         "configured_keys": list(keys_to_update.keys()),
-        "embedding_status": "pulled" if embed_ok else "pending_or_failed",
+        "embedding_status": embed_status,
     }
 
 

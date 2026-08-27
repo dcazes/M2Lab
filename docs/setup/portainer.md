@@ -29,4 +29,4 @@ Backs up: `portainer_data` named volume.
 - Uses frontend-net only
 - **Security:** Full Docker socket access = root-equivalent on host
 - First login creates admin user
-- Used by OmniLab dashboard for container management
+- Used by M2Lab dashboard for container management

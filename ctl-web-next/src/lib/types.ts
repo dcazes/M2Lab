@@ -292,7 +292,7 @@ export interface SetupJobsResponse {
 }
 
 export type McpState = 'unavailable' | 'installing' | 'authentication_required' | 'verifying' | 'live' | 'degraded' | 'disabled'
-export type McpKind = 'native' | 'community' | 'omnilab-adapter' | 'unsupported'
+export type McpKind = 'native' | 'community' | 'm2lab-adapter' | 'unsupported'
 
 export interface McpTool {
   id: string

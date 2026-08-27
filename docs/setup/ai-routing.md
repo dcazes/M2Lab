@@ -1,6 +1,6 @@
 # AI Routing Architecture & Flow
 
-OmniLab implements a centralized, resilient AI routing architecture that separates **free provider aggregations**, **paid API billing/budgets**, and **local GPU execution**.
+M2Lab implements a centralized, resilient AI routing architecture that separates **free provider aggregations**, **paid API billing/budgets**, and **local GPU execution**.
 
 ---
 
@@ -31,7 +31,7 @@ OmniLab implements a centralized, resilient AI routing architecture that separat
 - **LiteLLM (`port 4000`)**: Acts as the master gateway. It routes free requests to FreeLLMAPI (`free-auto`), local queries to Ollama, and paid provider requests (OpenAI, Anthropic, DeepSeek, etc.) using keys stored strictly in `litellm/.env`.
 
 ### 2. Centralized AI Consumption
-All applications in OmniLab (Open WebUI, SurfSense, OpenCode Agent) point to **LiteLLM (`http://host.docker.internal:4000/v1`)** using the `LITELLM_MASTER_KEY`. This ensures:
+All applications in M2Lab (Open WebUI, SurfSense, OpenCode Agent) point to **LiteLLM (`http://host.docker.internal:4000/v1`)** using the `LITELLM_MASTER_KEY`. This ensures:
 - **Unified Logging & Budgets:** Track spend and rate limits across all agents in one place.
 - **Automatic Fallbacks:** If free cloud providers fail or rate-limit, LiteLLM automatically falls back to local Ollama (`local-fallback`).
 

@@ -2,7 +2,7 @@
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "default",
   "mcp": {
-    "omnilab": {
+    "m2lab": {
       "type": "remote",
       "url": "http://127.0.0.1:8790/mcp",
       "enabled": true,

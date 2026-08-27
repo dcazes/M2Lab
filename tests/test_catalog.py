@@ -84,6 +84,42 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(policy_decision("privileged")["decision"], "deny")
         self.assertEqual(policy_decision("unexpected")["decision"], "deny")
 
+    def test_repo_sentinel_links_resolve_to_hosting_repo(self):
+        """{{repo}} links must resolve to the git remote, never leak as a literal."""
+        from ctl.catalog import _repo_http_url
+
+        expected = _repo_http_url()
+        self.assertTrue(expected, "host should have an origin remote for this test")
+        freellmapi = next(app for app in self.catalog["apps"] if app["id"] == "freellmapi")
+        for key in ("homepage", "source"):
+            link = freellmapi["links"][key]
+            self.assertEqual(link, expected, key)  # derived from the remote, not hardcoded
+            self.assertNotIn("{{", link, key)
+        for app in self.catalog["apps"]:
+            for link in (app.get("links") or {}).values():
+                self.assertNotIn("{{repo}}", link)
+
+    def test_repo_url_normalization(self):
+        from unittest.mock import patch
+
+        from ctl.catalog import _repo_http_url
+        cases = {
+            "https://github.com/dcazes/M2Lab.git": "https://github.com/dcazes/M2Lab",
+            "git@github.com:dcazes/M2Lab.git": "https://github.com/dcazes/M2Lab",
+            "ssh://git@github.com/dcazes/M2Lab.git": "https://github.com/dcazes/M2Lab",
+            "https://example.org/someone/else.git": "https://example.org/someone/else",
+        }
+        for remote, expected in cases.items():
+            with self.subTest(remote=remote), patch("ctl.catalog._repo_remote", return_value=remote):
+                self.assertEqual(_repo_http_url(), expected)
+
+    def test_repo_url_missing_remote_leaves_links_alone(self):
+        from unittest.mock import patch
+
+        from ctl.catalog import _repo_http_url
+        with patch("ctl.catalog._repo_remote", return_value=None):
+            self.assertIsNone(_repo_http_url())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 # React Dashboard (ctl-web-next) — UI/UX Improvement Plan
 
-This document outlines a phased plan to make the OmniLab React control dashboard more beautiful, functional, and delightful.
+This document outlines a phased plan to make the M2Lab React control dashboard more beautiful, functional, and delightful.
 
 ---
 

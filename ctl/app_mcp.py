@@ -56,7 +56,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 def build_server(sid: str) -> FastMCP:
     service = service_by_id(sid)
     env = _parse_env_file(ROOT / service["dir"] / ".env")
-    mcp = FastMCP(f"omnilab-{sid}")
+    mcp = FastMCP(f"m2lab-{sid}")
 
     if sid == "firecrawl":
         headers = {"Authorization": f"Bearer {env.get('TEST_API_KEY', '')}"}
