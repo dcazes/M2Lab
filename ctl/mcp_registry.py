@@ -34,7 +34,15 @@ def _read_json(path: Path, default: Any) -> Any:
 
 def load_overrides() -> dict[str, Any]:
     data = _read_json(STATE_PATH, {"servers": {}})
-    return data if isinstance(data, dict) and isinstance(data.get("servers"), dict) else {"servers": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("servers"), dict):
+        return {"servers": {}}
+    # Migrate pre-rebrand override keys (omnilab -> m2lab) so user
+    # customizations continue to apply after the control-plane rename.
+    servers = data["servers"]
+    if "omnilab" in servers and "m2lab" not in servers:
+        servers["m2lab"] = servers.pop("omnilab")
+        save_overrides(data)
+    return data
 
 
 def save_overrides(data: dict[str, Any]) -> None:

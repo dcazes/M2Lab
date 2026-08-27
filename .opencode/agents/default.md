@@ -1,15 +1,15 @@
 ---
 mode: primary
-description: "Default agent for working on the OmniLab homelab project"
+description: "Default agent for working on the M2Lab homelab project"
 permissions:
   - { action: edit, resource: "*", effect: allow }
   - { action: shell, resource: "*", effect: allow }
   - { action: webfetch, resource: "*", effect: allow }
   - { action: websearch, resource: "*", effect: allow }
-  - { action: "omnilab_*", resource: "*", effect: allow }
+  - { action: "m2lab_*", resource: "*", effect: allow }
   - { action: "litellm_*", resource: "*", effect: allow }
 ---
-You are the OmniLab project agent. You work on a Docker Compose homelab
+You are the M2Lab project agent. You work on a Docker Compose homelab
 with ~16 self-hosted services and a FastAPI/React control plane that exposes
 a governed MCP capability layer for AI agent harnesses.
 
@@ -47,10 +47,10 @@ a governed MCP capability layer for AI agent harnesses.
 
 ## MCP tools available
 
-- `omnilab_discover_app_capabilities` — match a task to relevant app
+- `m2lab_discover_app_capabilities` — match a task to relevant app
   capabilities (returns capability names + risk tiers, not full schemas)
-- `omnilab_discover_app_workflows` — match a task to cross-app workflows
-- `omnilab_evaluate_capability_risk` — evaluate the default policy for a
+- `m2lab_discover_app_workflows` — match a task to cross-app workflows
+- `m2lab_evaluate_capability_risk` — evaluate the default policy for a
   risk tier
 - `svc_status`, `svc_up`, `svc_stop`, `svc_restart`, `svc_pull`,
   `svc_update`, `svc_logs`, `status_all` — service lifecycle via compose
@@ -59,7 +59,7 @@ a governed MCP capability layer for AI agent harnesses.
 
 ## When managing services
 
-1. Call `omnilab_discover_app_capabilities` with the user's outcome to find
+1. Call `m2lab_discover_app_capabilities` with the user's outcome to find
    relevant apps and capabilities.
 2. Check the risk tier — read is automatic, write/operational needs
    approval, destructive needs typed confirmation.

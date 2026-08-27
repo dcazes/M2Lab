@@ -23,7 +23,7 @@ export function HeaderBar() {
     <header className="sticky top-0 z-40 border-b border-border bg-surface-1/80 backdrop-blur-sm">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
         <div className="flex items-center gap-3">
-          <div className="brand-mark">O</div>
+          <div className="brand-mark">M</div>
           <div>
             <h1 className="text-lg font-semibold tracking-tight leading-tight">M2Lab</h1>
             <p className="hidden md:block text-[11px] text-unknown">Your private AI app platform</p>

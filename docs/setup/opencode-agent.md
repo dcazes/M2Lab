@@ -8,7 +8,7 @@ Self-hosted autonomous coding agent designed to monitor, document, and edit this
 - Systemd integration on host
 
 ## Architecture
-The OpenCode Agent runs natively as a systemd service (`opencode-agent.service`) for fast file system access and system operation. It is integrated into the OmniLab control plane dashboard as a registered service.
+The OpenCode Agent runs natively as a systemd service (`opencode-agent.service`) for fast file system access and system operation. It is integrated into the M2Lab control plane dashboard as a registered service.
 
 ## Configuration
 

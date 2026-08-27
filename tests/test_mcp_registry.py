@@ -47,6 +47,20 @@ class McpRegistryTests(unittest.TestCase):
         app_servers = [server for server in snapshot["servers"] if server["app_id"] != "m2lab"]
         self.assertTrue(all(server["state"] == "unavailable" for server in app_servers))
 
+    def test_load_overrides_migrates_omnilab_key_to_m2lab(self):
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = Path(directory) / "mcp-overrides.json"
+            state_path.write_text(json.dumps({"servers": {"omnilab": {"enabled": False}}}), encoding="utf-8")
+            with patch.object(mcp_registry, "STATE_PATH", state_path):
+                data = mcp_registry.load_overrides()
+            self.assertIn("m2lab", data["servers"])
+            self.assertNotIn("omnilab", data["servers"])
+            self.assertEqual(data["servers"]["m2lab"], {"enabled": False})
+            migrated = json.loads(state_path.read_text())
+            self.assertIn("m2lab", migrated["servers"])
+            self.assertNotIn("omnilab", migrated["servers"])
+
 
 if __name__ == "__main__":
     unittest.main()

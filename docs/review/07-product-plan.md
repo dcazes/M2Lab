@@ -1,4 +1,4 @@
-# OmniLab Product Plan — Personal AI App Platform
+# M2Lab Product Plan — Personal AI App Platform
 
 > **Status:** active implementation direction. The catalog, progressive
 > discovery API/MCP tools, lifecycle approvals, local audit trail, and
@@ -9,13 +9,13 @@
 > core-service health and the audit trail. App-specific cross-app adapters
 > remain staged. **Updated:** 2026-08-25.
 >
-> **Product thesis:** OmniLab helps people choose, install, configure, and
+> **Product thesis:** M2Lab helps people choose, install, configure, and
 > safely use privacy-respecting productivity apps through the AI harness of
 > their choice.
 
 ## 1. Product boundary
 
-OmniLab is **not** another container dashboard, a model provider, or a new
+M2Lab is **not** another container dashboard, a model provider, or a new
 general-purpose agent runtime. It is the layer that makes a curated collection
 of useful apps coherent:
 
@@ -23,7 +23,7 @@ of useful apps coherent:
 Settings: apps, model access, connections
        │ selects/configures/deploys
        ▼
-OmniLab capability gateway
+M2Lab capability gateway
   ├─ app manifests and health
   ├─ scoped MCP capabilities
   ├─ approvals and audit events
@@ -54,7 +54,7 @@ the official first-login fallback. Dependency stacks are added automatically
 and one deliberate action performs the displayed plan.
 
 Vaultwarden is first. The user creates its master account directly in the app;
-OmniLab never receives that password. The user may then create a shared app
+M2Lab never receives that password. The user may then create a shared app
 email/password for supported admin bootstrap, acknowledging the larger breach
 impact of credential reuse and saving a recovery copy in Vaultwarden.
 
@@ -62,8 +62,8 @@ Each app uses one of three explicit actions:
 
 | App kind | Dashboard action | Meaning |
 |---|---|---|
-| Self-hosted service | **Install** | OmniLab manages its declared Compose stack. |
-| Local/browser companion | **Open locally** | User runs it on their own device; OmniLab does not pretend to host it. |
+| Self-hosted service | **Install** | M2Lab manages its declared Compose stack. |
+| Local/browser companion | **Open locally** | User runs it on their own device; M2Lab does not pretend to host it. |
 | Infrastructure | **Configure** | A supporting service, not an end-user destination. |
 
 Provider choice never blocks installing a normal productivity app.
@@ -101,7 +101,7 @@ Do **not** build a standalone vector/RAG "context engine" in v1. Instead build
 a small, harness-agnostic task-context broker:
 
 1. The harness submits a task.
-2. OmniLab matches it against an app capability registry.
+2. M2Lab matches it against an app capability registry.
 3. It returns only the relevant MCP servers/tools, app constraints, source IDs,
    and approval requirements.
 4. The harness delegates to focused subagents when it supports them.
@@ -122,7 +122,7 @@ data proves insufficient.
 
 ## 6. Policy and trust model
 
-The agent harness may have its own permissions, but OmniLab must enforce the
+The agent harness may have its own permissions, but M2Lab must enforce the
 portable policy boundary. Every MCP integration declares a risk tier:
 
 | Tier | Examples | Default |

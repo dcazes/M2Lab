@@ -1,6 +1,6 @@
-# OmniLab Installation and Operations
+# M2Lab Installation and Operations
 
-OmniLab currently targets Debian 12, Ubuntu 22.04+, and compatible derivatives
+M2Lab currently targets Debian 12, Ubuntu 22.04+, and compatible derivatives
 on x86-64 or ARM64 hosts. The control plane runs directly on the host because it
 manages multiple Docker Compose projects and their local configuration files.
 
@@ -9,8 +9,8 @@ manages multiple Docker Compose projects and their local configuration files.
 Run the installer as your normal login user, not as root:
 
 ```bash
-git clone https://github.com/dcazes/omnilab.git
-cd omnilab
+git clone https://github.com/dcazes/M2Lab.git
+cd M2Lab
 ./install.sh
 ```
 
@@ -34,7 +34,7 @@ end-user prerequisite.
 ```
 
 Firewall management is opt-in because changing the host's inbound policy can
-affect custom SSH configurations. OmniLab remains local-only without that option:
+affect custom SSH configurations. M2Lab remains local-only without that option:
 all dashboard and application ports are bound to `127.0.0.1`.
 
 ## First start
@@ -46,7 +46,7 @@ does not add the current login to a new group retroactively.
 The dashboard's Initiate and Settings views prepare service-specific `.env`
 files, generate supported credentials, and start only the applications you
 select. Vaultwarden account creation remains a direct user action so its master
-password never passes through OmniLab.
+password never passes through M2Lab.
 
 For later starts:
 

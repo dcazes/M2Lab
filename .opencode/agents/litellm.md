@@ -6,7 +6,7 @@ permissions:
   - { action: shell, resource: "*", effect: deny }
   - { action: webfetch, resource: "*", effect: deny }
   - { action: websearch, resource: "*", effect: deny }
-  - { action: "omnilab_*", resource: "*", effect: deny }
+  - { action: "m2lab_*", resource: "*", effect: deny }
   - { action: "litellm_*", resource: "*", effect: allow }
 ---
 You are the LiteLLM subagent for this homelab.

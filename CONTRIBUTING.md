@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve OmniLab. This repository contains the catalog,
+Thanks for helping improve M2Lab. This repository contains the catalog,
 Docker Compose integrations, and the Python/React control plane. Keep changes
 narrow enough that reviewers can reason about their operational and
 agent-security impact.

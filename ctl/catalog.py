@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,10 @@ REQUIRED_APP_FIELDS = {
     "availability", "icon", "accent", "setup_minutes", "ai_optional",
     "outcomes", "requirements", "capabilities",
 }
+# Sentinel used in catalog.yaml links that should point at the hosting repo
+# itself (e.g. a private service bundled in this repo's tree). Resolved at load
+# time from the git remote so the link is correct on any clone/setup.
+REPO_LINK_SENTINEL = "{{repo}}"
 
 
 def load_catalog() -> dict[str, Any]:
@@ -65,7 +70,46 @@ def load_catalog() -> dict[str, Any]:
         unknown = set(workflow.get("apps", [])) - app_ids
         if unknown:
             raise ValueError(f"catalog workflow {workflow.get('id')} references unknown apps: {sorted(unknown)}")
+    repo_url = _repo_http_url()
+    for app in apps:
+        _resolve_repo_links(app, repo_url)
     return raw
+
+
+def _repo_remote() -> str | None:
+    """Return the repo's origin remote URL, or None when unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return (result.stdout or "").strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _repo_http_url() -> str | None:
+    """Normalize the git remote into an https:// homepage URL."""
+    remote = _repo_remote()
+    if not remote:
+        return None
+    url = remote.removesuffix(".git")
+    if url.startswith("git@"):
+        url = url.replace(":", "/", 1)  # git@github.com:owner/repo -> git@github.com/owner/repo
+        url = "https://" + url.split("@", 1)[1]
+    elif url.startswith("ssh://git@"):
+        url = "https://" + url.split("@", 1)[1]
+    return url
+
+
+def _resolve_repo_links(app: dict[str, Any], repo_url: str | None) -> None:
+    """Point {{repo}} sentinel links at the hosting repository (any setup)."""
+    links = app.get("links")
+    if not isinstance(links, dict) or not repo_url:
+        return
+    for key in ("homepage", "source"):
+        if links.get(key) == REPO_LINK_SENTINEL:
+            links[key] = repo_url
 
 
 def discover_capabilities(query: str, catalog: dict[str, Any] | None = None) -> list[dict[str, Any]]:

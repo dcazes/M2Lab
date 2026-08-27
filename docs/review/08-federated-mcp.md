@@ -1,6 +1,6 @@
 # Federated MCP operations
 
-OmniLab treats an application and its MCP integration as separate health domains. A running app can legitimately report `authentication_required` or `unavailable` for MCP without being rolled back.
+M2Lab treats an application and its MCP integration as separate health domains. A running app can legitimately report `authentication_required` or `unavailable` for MCP without being rolled back.
 
 ## Sources of truth
 

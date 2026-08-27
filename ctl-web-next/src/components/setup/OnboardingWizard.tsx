@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Check, Cpu, ExternalLink, Layers, LoaderCircle, ShieldCheck, Sparkles, Terminal, ArrowRight, Lock, KeyRound
+  Check, Cpu, ExternalLink, Layers, LoaderCircle, Rocket, ShieldCheck, Sparkles, Terminal, ArrowRight, Lock, KeyRound
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCatalog } from '../../hooks/useCatalog'
@@ -9,6 +9,7 @@ import {
   fetchSystemStats, fetchSetupJobs, wireModelPipeline, createSetupApproval, startSetupTarget,
   resumeSetupJob
 } from '../../lib/api'
+import type { SetupJob } from '../../lib/types'
 
 export function OnboardingWizard() {
   const [step, setStep] = useState<number>(1)
@@ -71,14 +72,21 @@ export function OnboardingWizard() {
   const handleWireModels = async () => {
     setWiringBusy(true)
     try {
+      const approval = await createSetupApproval('models', 'model-wire')
       const res = await wireModelPipeline({
         NVIDIA_NIM_API_KEY: nvidiaKey.trim() || undefined,
         GEMINI_API_KEY: geminiKey.trim() || undefined,
         pull_embedding: pullEmbeddings,
-      })
+      }, approval)
       if (res.ok) {
         setWiredDone(true)
-        toast.success('Model pipeline wired successfully!')
+        const embedNote =
+          res.embedding_status === 'pulled'
+            ? 'Embedding model pulled successfully.'
+            : res.embedding_status === 'skipped'
+              ? 'Embedding pull skipped (Ollama not running yet — will pull when launched).'
+              : 'Embedding pull failed — check Ollama after launch.'
+        toast.success(`Model pipeline wired! ${embedNote}`)
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -88,6 +96,39 @@ export function OnboardingWizard() {
   }
 
   const foundationJob = jobsQuery.data?.jobs.find(j => j.target === 'foundation')
+
+  // Launch plan: required infrastructure + selected driven apps + selected support items
+  const launchTargets = useMemo(() => {
+    const targets = new Set<string>(requiredDeps)
+    for (const app of drivenApps) if (selectedApps.has(app.id)) targets.add(app.id)
+    for (const app of supportApps) if (selectedSupport.has(app.id)) targets.add(app.id)
+    return targets
+  }, [requiredDeps, selectedApps, selectedSupport, drivenApps, supportApps])
+
+  // Live setup-job status keyed by target, for honest step-5 status chips
+  const jobByTarget = useMemo(() => {
+    const byTarget = new Map<string, SetupJob>()
+    for (const job of jobsQuery.data?.jobs || []) byTarget.set(job.target, job)
+    return byTarget
+  }, [jobsQuery.data])
+
+  const [launching, setLaunching] = useState(false)
+
+  const launchAll = async () => {
+    setLaunching(true)
+    try {
+      for (const target of launchTargets) {
+        const approval = await createSetupApproval(target, 'setup-start')
+        await startSetupTarget(target, approval)
+      }
+      await queryClient.invalidateQueries({ queryKey: ['setup-jobs'] })
+      toast.success(`Started ${launchTargets.size} application setup job(s)`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLaunching(false)
+    }
+  }
   const startFoundation = async () => {
     try {
       const approval = await createSetupApproval('foundation', 'setup-start')
@@ -486,25 +527,45 @@ export function OnboardingWizard() {
       {step === 5 && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div className="text-center space-y-2 py-4">
-            <span className="text-4xl">🎉</span>
-            <h2 className="text-2xl font-bold text-white">M2Lab Initialization Complete!</h2>
+            <span className="text-4xl">🚀</span>
+            <h2 className="text-2xl font-bold text-white">Launch Your Workspace</h2>
             <p className="text-sm text-unknown max-w-lg mx-auto">
-              Your M2Lab control plane, Open WebUI harness, AI model gateway, and selected applications are online and governed by your single login.
+              Start your selected applications. Each launches as a setup job — the same jobs the Settings tab drives — and status below updates live.
             </p>
           </div>
 
+          <div className="flex justify-center pt-1">
+            <button className="button-primary flex items-center gap-2 px-8 py-3 text-base" onClick={launchAll} disabled={launching}>
+              {launching ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
+              {launching ? 'Starting applications…' : `Launch ${launchTargets.size} Selected Applications`}
+            </button>
+          </div>
+
           <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
-            <h4 className="text-sm font-bold text-white border-b border-border pb-2">Active Applications & Endpoints</h4>
+            <h4 className="text-sm font-bold text-white border-b border-border pb-2">Selected Applications & Endpoints</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              {apps.filter(a => selectedApps.has(a.id) || requiredDeps.has(a.id)).map(app => (
-                <div key={app.id} className="p-3 bg-bg-base border border-border rounded flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span>{app.icon}</span>
-                    <span className="font-semibold text-white">{app.name}</span>
+              {apps.filter(a => selectedApps.has(a.id) || requiredDeps.has(a.id) || selectedSupport.has(a.id)).map(app => {
+                const target = app.service_id || app.id
+                const job = jobByTarget.get(target)
+                const status = job
+                  ? job.status === 'ready'
+                    ? { label: 'Ready', cls: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' }
+                    : job.status === 'failed'
+                      ? { label: 'Failed', cls: 'bg-rose-500/20 text-rose-400 border border-rose-500/30' }
+                      : job.status === 'user_action_required'
+                        ? { label: 'Action needed', cls: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' }
+                        : { label: 'Starting…', cls: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
+                  : { label: 'Not started', cls: 'bg-surface-1/60 text-unknown border border-border' }
+                return (
+                  <div key={app.id} className="p-3 bg-bg-base border border-border rounded flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span>{app.icon}</span>
+                      <span className="font-semibold text-white">{app.name}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded font-mono text-[11px] font-bold ${status.cls}`}>{status.label}</span>
                   </div>
-                  <span className="text-emerald-400 font-mono text-[11px]">Ready</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
