@@ -3,7 +3,7 @@
 repository:
   name: homelab
   description: "Security-hardened self-hosted homelab managed with Docker Compose, Tailscale, and Ansible."
-  homepage: "https://github.com/dcazes/omnilab"
+  homepage: "https://github.com/dcazes/M2Lab"
   topics:
     - docker
     - docker-compose

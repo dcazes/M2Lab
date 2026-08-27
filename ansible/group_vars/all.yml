@@ -6,7 +6,7 @@
 homelab_user: >-
   {{ lookup('env', 'SUDO_USER') |
      default(lookup('env', 'USER'), true) }}
-repo_url: https://github.com/dcazes/omnilab.git
+repo_url: https://github.com/dcazes/M2Lab.git
 repo_path: "{{ playbook_dir | dirname }}"
 timezone: UTC
 manage_repository: false
