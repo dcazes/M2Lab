@@ -208,13 +208,13 @@ def require_trusted_request(request: Request) -> None:
     # enforcement is enabled.
     if (os.environ.get("OMNILAB_REQUIRE_IDENTITY", "false").lower() == "true"
             and request_source(request) != "local" and not request_identity(request)):
-        raise HTTPException(401, "Sign in through the Authentik-protected OmniLab URL")
+        raise HTTPException(401, "Sign in through the Authentik-protected M2Lab URL")
 
 
 def request_identity(request: Request) -> dict | None:
     """Accept identity only from the Caddy hop, never from browser headers."""
     expected = os.environ.get("OMNILAB_INGRESS_TOKEN", "")
-    if not expected or not secrets.compare_digest(request.headers.get("X-OmniLab-Ingress", ""), expected):
+    if not expected or not secrets.compare_digest(request.headers.get("X-M2Lab-Ingress", ""), expected):
         return None
     subject = request.headers.get("X-Authentik-Uid", "").strip()
     email = request.headers.get("X-Authentik-Email", "").strip()
@@ -551,7 +551,7 @@ async def list_mcp_tools(server_id: str, request: Request):
 @app.put("/api/mcp/servers/{server_id}")
 async def put_mcp_server(server_id: str, request: Request):
     require_trusted_request(request)
-    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), server_id, "mcp-edit")
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), server_id, "mcp-edit")
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "JSON body must be an object")
@@ -569,7 +569,7 @@ async def put_mcp_server(server_id: str, request: Request):
 @app.post("/api/mcp/servers/{server_id}/verify")
 async def verify_mcp_server(server_id: str, request: Request):
     require_trusted_request(request)
-    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), server_id, "mcp-verify")
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), server_id, "mcp-verify")
     initial = registry_snapshot(_service_state_map(), verify=False)
     candidate = next((item for item in initial["servers"] if item["id"] == server_id), None)
     if candidate and server_id in {"firecrawl", "paperless-ngx", "immich", "ollama"} and candidate["app_state"] == "running":
@@ -596,7 +596,7 @@ async def preview_mcp_harnesses(request: Request):
 @app.post("/api/mcp/harnesses/sync")
 async def sync_mcp_harnesses(request: Request):
     require_trusted_request(request)
-    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), "registry", "mcp-sync")
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "registry", "mcp-sync")
     paths = write_harness_exports()
     await audit_event(request, "mcp.harness_sync", keys=sorted(paths))
     return {"ok": True, "exports": paths,
@@ -632,7 +632,7 @@ async def action(sid: str, action: str, request: Request):
         raise HTTPException(409, "Always-on infrastructure can be repaired or restarted, but not stopped")
     if action == "up" and svc_state(s)["overall"] == "absent" and sid not in _FOUNDATION_SERVICES and not _foundation_ready():
         raise HTTPException(409, "Use Settings setup wizard after completing the Authentik identity foundation")
-    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), sid, action)
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), sid, action)
     async with _action_locks.setdefault(sid, asyncio.Lock()):
         if sid == "litellm" and action in {"up", "restart", "update"}:
             await asyncio.to_thread(_sync_freellmapi_gateway)
@@ -1164,7 +1164,7 @@ async def _route_authentik() -> tuple[bool, str | None]:
         return False, "Tailscale accepted the route but did not report the expected 8462 listener."
     message = stderr.decode(errors="replace").strip()
     if "permission" in message.lower() or "sudo" in message.lower():
-        return False, "Tailscale needs one-time operator permission on this host before OmniLab can manage private routes."
+        return False, "Tailscale needs one-time operator permission on this host before M2Lab can manage private routes."
     return False, "Tailscale could not publish the Authentik URL."
 
 
@@ -1210,7 +1210,7 @@ async def _run_foundation_job(job_id: str) -> None:
         if not await _verify_external_authentik():
             raise RuntimeError("Authentik started locally, but its private 8462 URL did not pass the end-to-end health check.")
         update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
-                   summary="Create your OmniLab owner", message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
+                   summary="Create your M2Lab owner", message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
                    action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
     except Exception as error:
         update_job(job_id, status="failed", stage="failed", progress=0,
@@ -1258,7 +1258,13 @@ async def _run_app_setup_job(job_id: str, sid: str) -> None:
             ordered.append(sid)
         update_job(job_id, status="preparing", stage="prepare", progress=10,
                    summary=f"Preparing {service_by_id(sid)['display_name']}", message="Creating host-only configuration and checking dependencies")
-        for index, service_id in enumerate(ordered):
+        # Tier 1: Infrastructure & Databases (e.g. litellm, freellmapi, ollama)
+        # Tier 2: User Applications (e.g. surfsense, paperless-ngx, immich, actual-budget)
+        tier_infra = [sid for sid in ordered if service_by_id(sid).get("role") == "infrastructure" or sid in {"litellm", "ollama", "freellmapi"}]
+        tier_apps = [sid for sid in ordered if sid not in tier_infra]
+        staggered_order = tier_infra + tier_apps
+
+        for index, service_id in enumerate(staggered_order):
             current = _parse_env_file(_env_path(service_id))
             example = _parse_env_file(_env_example_path(service_id))
             if service_id in AUTOMATED_SERVICES:
@@ -1268,12 +1274,15 @@ async def _run_app_setup_job(job_id: str, sid: str) -> None:
             _apply_automatic_model_wiring(service_id, prepared)
             if prepared:
                 _write_env_file(_env_path(service_id), prepared)
-            await _start_setup_service(job_id, service_id, 25 + int(35 * (index + 1) / len(ordered)))
+            await _start_setup_service(job_id, service_id, 25 + int(35 * (index + 1) / len(staggered_order)))
+            # Stagger launch slightly between heavy containers to avoid CPU/IO spikes
+            if index < len(staggered_order) - 1:
+                await asyncio.sleep(1)
         identity_app = next((item for item in identity_app_inventory({sid: "running"}) if item["id"] == sid), None)
         if identity_app and identity_app["mode"] != "machine_only":
             note = ("Authentik protects access, but this app requires one local account handoff."
                     if identity_app["mode"] == "access_gate_only" else
-                    "Complete the application identity handoff; OmniLab will verify it afterward.")
+                    "Complete the application identity handoff; M2Lab will verify it afterward.")
             update_job(job_id, status="user_action_required", stage="identity_handoff", progress=75,
                        summary=f"Finish {service_by_id(sid)['display_name']} sign-in", message=note,
                        action={"kind": "open_url", "label": f"Open {service_by_id(sid)['display_name']}", "url": identity_app["external_url"]})
@@ -1305,7 +1314,7 @@ async def get_setup_job(job_id: str, request: Request):
 @app.post("/api/setup/targets/{target}/start")
 async def start_setup_job(target: str, request: Request):
     require_trusted_request(request)
-    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), target, "setup-start")
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), target, "setup-start")
     if target != "foundation":
         service_by_id(target)
     job = await asyncio.to_thread(create_job, target, "foundation" if target == "foundation" else "application",
@@ -1324,7 +1333,7 @@ async def resume_setup_job(job_id: str, request: Request):
         job = get_job(job_id)
     except KeyError:
         raise HTTPException(404, "Unknown setup job") from None
-    _consume_approval(request, request.headers.get("X-OmniLab-Approval"), job["target"], "setup-resume")
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), job["target"], "setup-resume")
     body = await request.json()
     if not body.get("completed"):
         raise HTTPException(400, "Confirm the displayed handoff is complete before resuming")
@@ -1335,7 +1344,7 @@ async def resume_setup_job(job_id: str, request: Request):
         if not await _verify_external_authentik():
             raise HTTPException(409, "The 8462 route exists, but Authentik is not reachable through it yet")
         result = update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
-                            summary="Create your OmniLab owner",
+                            summary="Create your M2Lab owner",
                             message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
                             action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
     elif job["target"] == "foundation" and job["stage"] == "create_owner":

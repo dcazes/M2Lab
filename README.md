@@ -1,6 +1,6 @@
 <div align="center">
 
-# OmniLab
+# M2Lab
 
 ### Your private AI app platform
 
@@ -9,11 +9,11 @@ smallest safe set of capabilities to OpenCode, Open WebUI, or another
 MCP-compatible agent harness.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-61e7c8.svg)](LICENSE)
-[![CI](https://github.com/dcazes/omnilab/actions/workflows/ci.yml/badge.svg)](https://github.com/dcazes/omnilab/actions/workflows/ci.yml)
+[![CI](https://github.com/dcazes/m2lab/actions/workflows/ci.yml/badge.svg)](https://github.com/dcazes/m2lab/actions/workflows/ci.yml)
 [![MCP](https://img.shields.io/badge/tools-MCP-7c5cff.svg)](https://modelcontextprotocol.io/)
 [![Self-hosted](https://img.shields.io/badge/data-self--hosted-49a078.svg)](docs/SETUP.md)
 
-[Why OmniLab](#why-omnilab) · [How it works](#how-it-works) ·
+[Why M2Lab](#why-m2lab) · [How it works](#how-it-works) ·
 [Quickstart](#quickstart) · [Catalog](#curated-catalog) ·
 [Security](#security-model) · [Roadmap](docs/review/07-product-plan.md)
 
@@ -21,13 +21,13 @@ MCP-compatible agent harness.
 
 ---
 
-## Why OmniLab
+## Why M2Lab
 
 Self-hosting gives you ownership, but assembling a useful stack still means
 finding compatible apps, writing Compose files, managing credentials, and
 loading dozens of unrelated tool schemas into an AI client.
 
-OmniLab turns that into an outcome-led workspace:
+M2Lab turns that into an outcome-led workspace:
 
 - **Choose a goal:** research, money, travel, wellness, creative work, or local AI.
 - **Install deliberately:** see requirements, setup time, dependencies, and data boundaries first.
@@ -44,11 +44,11 @@ capability layer for self-hosted productivity software.
 flowchart LR
     U[You] --> H[OpenCode / Open WebUI / MCP client]
     H --> D[Progressive capability discovery]
-    D --> P[OmniLab policy and approval gateway]
+    D --> P[M2Lab policy and approval gateway]
     P --> A[Scoped app MCP / API adapters]
     A --> S[Self-hosted apps]
 
-    C[OmniLab catalog and dashboard] --> S
+    C[M2Lab catalog and dashboard] --> S
     C --> M[LiteLLM model gateway]
     M --> O[Ollama]
     M --> F[FreeLLMAPI]
@@ -75,7 +75,7 @@ already exist.
 
 ## Quickstart
 
-OmniLab is a host-integrated deployment for Debian 12, Ubuntu 22.04+, and
+M2Lab is a host-integrated deployment for Debian 12, Ubuntu 22.04+, and
 compatible derivatives. The installer prepares Docker, Python, shared networks,
 the production dashboard, and persistent user services. It does not start any
 application stacks until you select them in the dashboard.
@@ -83,8 +83,8 @@ application stacks until you select them in the dashboard.
 ### Install
 
 ```bash
-git clone https://github.com/dcazes/omnilab.git
-cd omnilab
+git clone https://github.com/dcazes/m2lab.git
+cd m2lab
 ./install.sh
 ```
 
@@ -143,7 +143,7 @@ The top-level harness asks for capabilities using natural task language:
 archive selected receipt photos and prepare budget entries
 ```
 
-OmniLab returns a small shortlist such as document retrieval, selected-asset
+M2Lab returns a small shortlist such as document retrieval, selected-asset
 export, and transaction drafting. It does not send every underlying tool schema.
 Capabilities declare a risk tier:
 
@@ -183,7 +183,7 @@ container configuration, Ansible, the dashboard build, and catalog/policy tests.
 
 ## Project status
 
-OmniLab is an opinionated alpha built from a running homelab, now being separated
+M2Lab is an opinionated alpha built from a running homelab, now being separated
 into a reusable product. The live product plan and acceptance criteria are in
 [docs/review/07-product-plan.md](docs/review/07-product-plan.md). Honest gaps are
 documented rather than hidden behind roadmap checkmarks.

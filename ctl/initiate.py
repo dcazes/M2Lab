@@ -1,4 +1,4 @@
-"""Safe environment preparation for the OmniLab initiation flow."""
+"""Safe environment preparation for the M2Lab initiation flow."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def prepare_environment(
     token_factory: Callable[[int], str] = secrets.token_hex,
     identity: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], list[str]]:
-    """Return a prepared env mapping and the keys OmniLab changed.
+    """Return a prepared env mapping and the keys M2Lab changed.
 
     Existing non-placeholder values are always preserved. Placeholder rotation
     can be disabled for an already-created stack so setup never invalidates a

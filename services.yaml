@@ -7,7 +7,7 @@ settings:
 services:
   - id: authentik
     display_name: Authentik
-    description: Private identity provider for OmniLab
+    description: Private identity provider for M2Lab
     category: infrastructure
     role: infrastructure
     visibility: system

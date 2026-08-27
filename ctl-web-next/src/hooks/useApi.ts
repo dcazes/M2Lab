@@ -39,7 +39,7 @@ export function useApi() {
     const { token } = await approvalRes.json()
     const res = await fetch(`/api/services/${id}/${action}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-OmniLab-Approval': token },
+      headers: { 'Content-Type': 'application/json', 'X-M2Lab-Approval': token },
     })
     if (!res.ok) {
       const error = await res.json().catch(() => ({}))

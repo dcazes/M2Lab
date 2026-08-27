@@ -1,5 +1,5 @@
 [Unit]
-Description=OmniLab control-plane dashboard
+Description=M2Lab control-plane dashboard
 After=docker.service network-online.target
 
 [Service]

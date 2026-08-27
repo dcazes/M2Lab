@@ -1,4 +1,4 @@
-"""Catalog and progressive capability discovery for OmniLab."""
+"""Catalog and progressive capability discovery for M2Lab."""
 
 from __future__ import annotations
 

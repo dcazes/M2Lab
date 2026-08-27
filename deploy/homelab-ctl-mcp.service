@@ -1,5 +1,5 @@
 [Unit]
-Description=OmniLab control-plane MCP (read/manage verbs for agents)
+Description=M2Lab control-plane MCP (read/manage verbs for agents)
 After=docker.service network-online.target
 
 [Service]

@@ -74,13 +74,13 @@ export async function fetchSetupJobs(): Promise<SetupJobsResponse> {
 
 export async function startSetupTarget(target: string, approval: string): Promise<SetupJob> {
   return fetchJson(`${API_BASE}/setup/targets/${target}/start`, {
-    method: 'POST', headers: { 'X-OmniLab-Approval': approval },
+    method: 'POST', headers: { 'X-M2Lab-Approval': approval },
   })
 }
 
 export async function resumeSetupJob(job: SetupJob, approval: string): Promise<SetupJob> {
   return fetchJson(`${API_BASE}/setup/jobs/${job.id}/resume`, {
-    method: 'POST', headers: { 'X-OmniLab-Approval': approval }, body: JSON.stringify({ completed: true }),
+    method: 'POST', headers: { 'X-M2Lab-Approval': approval }, body: JSON.stringify({ completed: true }),
   })
 }
 
@@ -116,26 +116,26 @@ export async function wireModelPipeline(config: {
 
 export async function updateMcpServer(id: string, patch: Record<string, unknown>, approval: string): Promise<{ ok: boolean }> {
   return fetchJson(`${API_BASE}/mcp/servers/${id}`, {
-    method: 'PUT', headers: { 'X-OmniLab-Approval': approval }, body: JSON.stringify(patch),
+    method: 'PUT', headers: { 'X-M2Lab-Approval': approval }, body: JSON.stringify(patch),
   })
 }
 
 export async function verifyMcpServer(id: string, approval: string) {
   return fetchJson(`${API_BASE}/mcp/servers/${id}/verify`, {
-    method: 'POST', headers: { 'X-OmniLab-Approval': approval },
+    method: 'POST', headers: { 'X-M2Lab-Approval': approval },
   })
 }
 
 export async function syncMcpHarnesses(approval: string): Promise<{ ok: boolean; note: string }> {
   return fetchJson(`${API_BASE}/mcp/harnesses/sync`, {
-    method: 'POST', headers: { 'X-OmniLab-Approval': approval },
+    method: 'POST', headers: { 'X-M2Lab-Approval': approval },
   })
 }
 
 export async function serviceAction(id: string, action: ServiceAction, approvalToken: string): Promise<ActionResult> {
   return fetchJson<ActionResult>(`${API_BASE}/services/${id}/${action}`, {
     method: 'POST',
-    headers: { 'X-OmniLab-Approval': approvalToken },
+    headers: { 'X-M2Lab-Approval': approvalToken },
   })
 }
 

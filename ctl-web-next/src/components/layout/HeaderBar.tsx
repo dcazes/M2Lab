@@ -25,7 +25,7 @@ export function HeaderBar() {
         <div className="flex items-center gap-3">
           <div className="brand-mark">O</div>
           <div>
-            <h1 className="text-lg font-semibold tracking-tight leading-tight">OmniLab</h1>
+            <h1 className="text-lg font-semibold tracking-tight leading-tight">M2Lab</h1>
             <p className="hidden md:block text-[11px] text-unknown">Your private AI app platform</p>
           </div>
           <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono-tabular text-unknown bg-surface-2 rounded-btn">

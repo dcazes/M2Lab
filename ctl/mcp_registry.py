@@ -20,7 +20,7 @@ VALID_STATES = {
     "unavailable", "installing", "authentication_required", "verifying",
     "live", "degraded", "disabled",
 }
-VALID_KINDS = {"native", "community", "omnilab-adapter", "unsupported"}
+VALID_KINDS = {"native", "community", "m2lab-adapter", "unsupported"}
 VALID_TRANSPORTS = {"streamable-http", "stdio", "none"}
 
 
@@ -131,7 +131,7 @@ def registry_snapshot(service_states: dict[str, str] | None = None, verify: bool
     catalog = load_catalog()
     validate_catalog_manifests(catalog)
     overrides = load_overrides()["servers"]
-    ctl_override = overrides.get("omnilab", {})
+    ctl_override = overrides.get("m2lab", {})
     ctl_auth = bool(os.environ.get("CTL_MCP_TOKEN")) or any(
         line.startswith("CTL_MCP_TOKEN=") and line.split("=", 1)[1].strip()
         for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines()
@@ -150,8 +150,8 @@ def registry_snapshot(service_states: dict[str, str] | None = None, verify: bool
     else:
         ctl_state, ctl_error = "verifying", None
     ctl_tools = [
-        {"id": "omnilab.status", "title": "Inspect service status", "label": "Inspect service status", "risk": "read", "effective_risk": "read", "enabled": True, "context": ""},
-        {"id": "omnilab.lifecycle", "title": "Manage service lifecycle", "label": "Manage service lifecycle", "risk": "operational", "effective_risk": "operational", "enabled": True, "context": ""},
+        {"id": "m2lab.status", "title": "Inspect service status", "label": "Inspect service status", "risk": "read", "effective_risk": "read", "enabled": True, "context": ""},
+        {"id": "m2lab.lifecycle", "title": "Manage service lifecycle", "label": "Manage service lifecycle", "risk": "operational", "effective_risk": "operational", "enabled": True, "context": ""},
     ]
     for tool in ctl_tools:
         custom = ctl_override.get("tools", {}).get(tool["id"], {})
@@ -161,10 +161,10 @@ def registry_snapshot(service_states: dict[str, str] | None = None, verify: bool
         requested_risk = custom.get("risk", tool["risk"])
         tool["effective_risk"] = requested_risk if requested_risk in RISK_ORDER and RISK_ORDER[requested_risk] >= RISK_ORDER[tool["risk"]] else tool["risk"]
     servers: list[dict[str, Any]] = [{
-        "id": "omnilab", "app_id": "omnilab", "service_id": None, "name": "OmniLab Control",
+        "id": "m2lab", "app_id": "m2lab", "service_id": None, "name": "M2Lab Control",
         "icon": "◉", "app_state": "running", "kind": "native", "transport": "streamable-http",
-        "endpoint": "http://127.0.0.1:8790/mcp", "source": "OmniLab lifecycle and discovery server",
-        "maintainer": "OmniLab", "pin": None, "trust": "official",
+        "endpoint": "http://127.0.0.1:8790/mcp", "source": "M2Lab lifecycle and discovery server",
+        "maintainer": "M2Lab", "pin": None, "trust": "official",
         "auth": {"type": "bearer", "configured": ctl_auth, "scopes": ["service-read", "service-lifecycle"], "env_ref": "CTL_MCP_TOKEN"},
         "enabled": ctl_enabled, "state": ctl_state, "error": ctl_error,
         "context": ctl_override.get("context", ""), "harnesses": ctl_override.get("harnesses", ["opencode", "open-webui"]),
@@ -176,7 +176,7 @@ def registry_snapshot(service_states: dict[str, str] | None = None, verify: bool
         override = overrides.get(sid, {})
         installed_state = service_states.get(app.get("service_id", ""), "absent") if service_states is not None else "unknown"
         supported = manifest["kind"] != "unsupported"
-        default_enabled = bool(manifest.get("default_enabled", manifest["kind"] in {"native", "omnilab-adapter"}))
+        default_enabled = bool(manifest.get("default_enabled", manifest["kind"] in {"native", "m2lab-adapter"}))
         enabled = bool(override.get("enabled", default_enabled)) and supported
         auth_ok = _secret_configured(manifest)
         if not supported:
@@ -188,7 +188,7 @@ def registry_snapshot(service_states: dict[str, str] | None = None, verify: bool
         elif not auth_ok:
             state, error = "authentication_required", "A dedicated integration credential is required"
         elif verify:
-            if manifest["kind"] == "omnilab-adapter":
+            if manifest["kind"] == "m2lab-adapter":
                 root_path = ROOT / ".env"
                 probe_token = os.environ.get("CTL_MCP_TOKEN") or (next((line.split("=", 1)[1].strip()
                     for line in root_path.read_text().splitlines() if line.startswith("CTL_MCP_TOKEN=")), None)
@@ -217,7 +217,7 @@ def registry_snapshot(service_states: dict[str, str] | None = None, verify: bool
             "pin": manifest.get("pin"), "trust": manifest.get("trust", "unreviewed"),
             "auth": {"type": manifest.get("auth", {}).get("type", "none"), "configured": auth_ok,
                      "scopes": manifest.get("auth", {}).get("scopes", []),
-                     "env_ref": "CTL_MCP_TOKEN" if manifest["kind"] == "omnilab-adapter" else manifest.get("auth", {}).get("env")},
+                     "env_ref": "CTL_MCP_TOKEN" if manifest["kind"] == "m2lab-adapter" else manifest.get("auth", {}).get("env")},
             "enabled": enabled, "state": state, "error": error,
             "context": override.get("context", ""),
             "harnesses": override.get("harnesses", manifest.get("harnesses", ["opencode", "open-webui"])),
