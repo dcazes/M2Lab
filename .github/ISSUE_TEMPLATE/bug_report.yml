@@ -1,0 +1,62 @@
+name: "Bug Report"
+description: "Report a problem with a M2Lab service, the control plane, or the installer"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: input
+    id: environment_os
+    attributes:
+      label: "Operating System"
+      description: "Host OS and version (e.g., Debian 12, Ubuntu 22.04)"
+      placeholder: "Debian 12 (bookworm)"
+    validations:
+      required: true
+  - type: input
+    id: environment_docker
+    attributes:
+      label: "Docker version"
+      description: "Output of `docker --version` and `docker compose version`"
+      placeholder: "Docker 27.1.1, Compose v2.29.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment_install_method
+    attributes:
+      label: "Install method"
+      description: "How was M2Lab installed or deployed?"
+      options:
+        - "./install.sh (full bootstrap)"
+        - "Manual / docker compose"
+        - "Ansible bootstrap only"
+        - "Other (describe below)"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: "What happened?"
+      description: "A clear and concise description of the bug."
+      placeholder: "Describe the observed behavior..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected behavior"
+      description: "What did you expect to happen instead?"
+      placeholder: "Describe the expected behavior..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Relevant logs"
+      description: "Paste logs from the affected service or the dashboard. Redact secrets."
+      render: shell
+      placeholder: "docker compose logs <service> --tail=50"
+  - type: input
+    id: services_affected
+    attributes:
+      label: "Service(s) affected"
+      description: "Comma-separated service ids from services.yaml (e.g., litellm, nextcloud). Leave blank if not service-specific."
+      placeholder: "litellm, nextcloud"
