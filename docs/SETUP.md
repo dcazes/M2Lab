@@ -88,7 +88,7 @@ Common issues:
 - **Port 8787 already in use:** stop the conflicting process or set
   `DASHBOARD_PORT` in the root `.env` and restart the unit.
 - **Dashboard bundle missing:** restore the checkout or, as a developer, run
-  `npm ci && npm run build` in `ctl-web-next`.
+  `npm ci && npm run build` in `dashboard`.
 - **A service needs configuration:** use Settings in the dashboard; do not copy
   every `.env.example` globally or commit generated `.env` files.
 - **GPU service fails:** use the registry/dashboard path, which automatically
@@ -113,7 +113,7 @@ by default.
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
-cd ctl-web-next && npm ci && npm run build && cd ..
+cd dashboard && npm ci && npm run build && cd ..
 yamllint .
 gitleaks detect --no-banner
 ansible-lint ansible/

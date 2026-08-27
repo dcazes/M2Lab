@@ -110,12 +110,17 @@ export async function wireModelPipeline(
     pull_embedding?: boolean
   },
   approval: string,
-): Promise<{ ok: boolean; configured_keys: string[]; embedding_status: 'pulled' | 'skipped' | 'failed' }> {
+): Promise<{ ok: boolean; configured_keys: string[]; embedding_status: 'pulled' | 'skipped' | 'failed' | 'streamed' }> {
   return fetchJson(`${API_BASE}/model-access/wire`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-M2Lab-Approval': approval },
     body: JSON.stringify(config),
   })
+}
+
+export function ollamaPullStreamUrl(model: string, approval: string): string {
+  const params = new URLSearchParams({ model, approval })
+  return `${API_BASE}/setup/ollama/pull/events?${params.toString()}`
 }
 
 export async function updateMcpServer(id: string, patch: Record<string, unknown>, approval: string): Promise<{ ok: boolean }> {

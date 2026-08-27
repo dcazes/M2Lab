@@ -15,38 +15,38 @@ __pycache__/
 *.pyc
 .pytest_cache/
 dist/
-!ctl-web-next/dist/
-!ctl-web-next/dist/**
+!dashboard/dist/
+!dashboard/dist/**
 build/
 logs/
 data/
 .state/
 
 # Data directories (bind mounts, user data) - configs stay tracked
-surfsense/opensandbox/
-immich-app/library/
-immich-app/postgres/
-FreeLLMAPI/data/
-vaultwarden/data/
-puppygraph/data/
-beszel/beszel_data/
-beszel/beszel_agent_data/
-beszel/beszel_socket/
-paperless-ngx/data/
-paperless-ngx/media/
-paperless-ngx/consume/
-paperless-ngx/export/
-actual-budget/server-files/
-nextcloud/data/
-nextcloud/html/
-adventurelog/media/
-adventurelog/pgdata/
-paperless-ngx/pgdata/
-nextcloud/pgdata/
-mealie/data/
-ollama/data/
-open-webui/data/
-firecrawl/data/
+apps/surfsense/opensandbox/
+apps/immich-app/library/
+apps/immich-app/postgres/
+apps/FreeLLMAPI/data/
+core/vaultwarden/data/
+apps/puppygraph/data/
+apps/beszel/beszel_data/
+apps/beszel/beszel_agent_data/
+apps/beszel/beszel_socket/
+apps/paperless-ngx/data/
+apps/paperless-ngx/media/
+apps/paperless-ngx/consume/
+apps/paperless-ngx/export/
+apps/actual-budget/server-files/
+apps/nextcloud/data/
+apps/nextcloud/html/
+apps/adventurelog/media/
+apps/adventurelog/pgdata/
+apps/paperless-ngx/pgdata/
+apps/nextcloud/pgdata/
+apps/mealie/data/
+core/ollama/data/
+core/open-webui/data/
+apps/firecrawl/data/
 
 # Backups
 backups/
@@ -64,4 +64,4 @@ backups/
 docs/documentation/
 
 # Dashboard Next build
-ctl-web-next/node_modules/
+dashboard/node_modules/

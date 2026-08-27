@@ -19,7 +19,7 @@ import docker
 import psutil
 import yaml
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .compose import run_compose
@@ -463,9 +463,56 @@ async def pull_ollama_embedding(request: Request):
     return {"ok": success, "model": model_name}
 
 
+def _ollama_pull_stream(model_name: str = "nomic-embed-text"):
+    """Yield Server-Sent-Events forwarding Ollama's NDJSON pull progress.
+
+    Each line from Ollama's streaming pull API (status, completed, total) is
+    forwarded verbatim as an SSE `data:` frame so the wizard can render a live
+    progress bar instead of blocking on a ~300s pull.
+    """
+    if svc_state(service_by_id("ollama"))["overall"] != "running":
+        yield f'data: {json.dumps({"status": "skipped", "reason": "ollama not running"})}\n\n'
+        return
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:11434/api/pull",
+            data=json.dumps({"name": model_name, "stream": True}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            for raw in resp:
+                line = raw.decode().strip()
+                if not line:
+                    continue
+                yield f"data: {line}\n\n"
+        yield f'data: {json.dumps({"status": "success"})}\n\n'
+    except Exception as error:  # noqa: BLE001 - surface any pull failure to the UI
+        yield f'data: {json.dumps({"status": "error", "error": str(error)[:300]})}\n\n'
+
+
+@app.get("/api/setup/ollama/pull/events")
+async def ollama_pull_events(request: Request, model: str = "nomic-embed-text", approval: str | None = None):
+    """Stream Ollama model pull progress as Server-Sent-Events.
+
+    The approval token is passed as a query parameter because EventSource
+    cannot set request headers. The token is consumed exactly like the other
+    model-access endpoints.
+    """
+    require_trusted_request(request)
+    _consume_approval(request, approval, "ollama", "model-pull")
+    model_name = str(model).strip() or "nomic-embed-text"
+    return StreamingResponse(_ollama_pull_stream(model_name), media_type="text/event-stream")
+
+
 @app.post("/api/model-access/wire")
 async def wire_model_pipeline(request: Request):
-    """Wire API keys into LiteLLM, trigger Ollama embedding pull, and wire open-webui/surfsense."""
+    """Wire API keys into LiteLLM and wire open-webui/surfsense.
+
+    The LiteLLM config is generated synchronously and returned immediately. The
+    Ollama embedding pull is streamed separately by the wizard via
+    /api/setup/ollama/pull/events so the UI shows live progress.
+    """
     require_trusted_request(request)
     _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "models", "model-wire")
     try:
@@ -495,18 +542,13 @@ async def wire_model_pipeline(request: Request):
             _apply_automatic_model_wiring(sid, curr)
             _write_env_file(env_file, curr)
 
-    # Pull nomic-embed-text if requested
+    # The LiteLLM config is generated above (non-blocking). The embedding model
+    # pull is streamed live by the wizard via /api/setup/ollama/pull/events so
+    # the UI shows real progress instead of blocking on a ~300s pull.
     pull_embed = bool(body.get("pull_embedding", True))
-    embed_status = "skipped"
-    if pull_embed:
-        if svc_state(service_by_id("ollama"))["overall"] == "running":
-            loop = asyncio.get_event_loop()
-            embed_ok = await loop.run_in_executor(None, lambda: _pull_ollama_model("nomic-embed-text"))
-            embed_status = "pulled" if embed_ok else "failed"
-        else:
-            embed_status = "skipped"  # Ollama not running — nothing was pulled
+    embed_status = "streamed" if pull_embed else "skipped"
 
-    await audit_event(request, "models.pipeline_wired", configured_keys=list(keys_to_update.keys()), embedding_pulled=embed_status == "pulled")
+    await audit_event(request, "models.pipeline_wired", configured_keys=list(keys_to_update.keys()), embedding_pulled=pull_embed)
     return {
         "ok": True,
         "configured_keys": list(keys_to_update.keys()),
@@ -1204,7 +1246,10 @@ async def _run_foundation_job(job_id: str) -> None:
         changed = await asyncio.to_thread(_prepare_identity_foundation)
         update_job(job_id, status="preparing", stage="secrets_ready", progress=10,
                    summary="Security files prepared", message=f"Prepared {len(changed)} protected settings; values were not exposed")
-        await _start_setup_service(job_id, "authentik", 25)
+        # Boot Vaultwarden first so the user can create its master password and
+        # store provider API keys while Authentik configures itself asynchronously.
+        await _start_setup_service(job_id, "vaultwarden", 18)
+        await _start_setup_service(job_id, "authentik", 30)
         update_job(job_id, status="verifying", stage="validate_caddy", progress=48,
                    summary="Validating private ingress", message="Checking every Caddy listener before it can receive traffic")
         await _validate_caddy()
@@ -1221,9 +1266,9 @@ async def _run_foundation_job(job_id: str) -> None:
                    summary="Verifying Authentik", message="Checking the complete Tailscale, Caddy, and Authentik path")
         if not await _verify_external_authentik():
             raise RuntimeError("Authentik started locally, but its private 8462 URL did not pass the end-to-end health check.")
-        update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
-                   summary="Create your M2Lab owner", message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
-                   action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
+        update_job(job_id, status="user_action_required", stage="create_vaultwarden_owner", progress=84,
+                   summary="Create your Vaultwarden master password", message="Vaultwarden is ready. Create its master account now so you can store provider API keys while Authentik finishes configuring.",
+                   action={"kind": "open_url", "label": "Open Vaultwarden", "url": "http://127.0.0.1:8081"})
     except Exception as error:
         update_job(job_id, status="failed", stage="failed", progress=0,
                    summary="Core setup needs attention", message="Setup stopped safely at the failed stage.", error=str(error)[:500])
@@ -1355,19 +1400,28 @@ async def resume_setup_job(job_id: str, request: Request):
             raise HTTPException(409, route_error or "The Authentik route is not ready")
         if not await _verify_external_authentik():
             raise HTTPException(409, "The 8462 route exists, but Authentik is not reachable through it yet")
-        result = update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
+        result = update_job(job_id, status="user_action_required", stage="create_vaultwarden_owner", progress=84,
+                            summary="Create your Vaultwarden master password",
+                            message="Vaultwarden is ready. Create its master account now so you can store provider API keys while Authentik finishes configuring.",
+                            action={"kind": "open_url", "label": "Open Vaultwarden", "url": "http://127.0.0.1:8081"})
+    elif job["target"] == "foundation" and job["stage"] == "create_vaultwarden_owner":
+        if not await _wait_for_service("vaultwarden", 10):
+            raise HTTPException(409, "Vaultwarden is not reachable yet")
+        result = update_job(job_id, status="user_action_required", stage="create_owner", progress=90,
                             summary="Create your M2Lab owner",
                             message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
                             action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
     elif job["target"] == "foundation" and job["stage"] == "create_owner":
         if not await _wait_for_service("authentik", 10) or not await _verify_external_authentik(10):
             raise HTTPException(409, "Authentik is not reachable yet")
-        try:
-            await _start_setup_service(job_id, "vaultwarden", 94)
-        except RuntimeError as error:
-            update_job(job_id, status="failed", stage="start_vaultwarden", progress=90,
-                       summary="Vaultwarden needs attention", message="Identity is ready, but Vaultwarden did not start.", error=str(error)[:500])
-            raise HTTPException(500, str(error)) from error
+        # Vaultwarden was started early in the foundation job; ensure it is still up.
+        if svc_state(service_by_id("vaultwarden"))["overall"] != "running":
+            try:
+                await _start_setup_service(job_id, "vaultwarden", 94)
+            except RuntimeError as error:
+                update_job(job_id, status="failed", stage="start_vaultwarden", progress=90,
+                           summary="Vaultwarden needs attention", message="Identity is ready, but Vaultwarden did not start.", error=str(error)[:500])
+                raise HTTPException(500, str(error)) from error
         result = update_job(job_id, status="ready", stage="ready", progress=100,
                             summary="Identity foundation is ready", message="Authentik, Caddy, Tailscale routing, and Vaultwarden are ready")
     elif job["status"] == "user_action_required":
@@ -1601,10 +1655,10 @@ async def calendar_events(request: Request, start: str, end: str):
 
 
 # ---------- static UI ----------
-dist = ROOT / "ctl-web-next" / "dist"
+dist = ROOT / "dashboard" / "dist"
 if not dist.is_dir():
     raise RuntimeError(
-        f"Dashboard bundle missing: {dist} — run `npm run build` in ctl-web-next/"
+        f"Dashboard bundle missing: {dist} — run `npm run build` in dashboard/"
     )
 app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
 

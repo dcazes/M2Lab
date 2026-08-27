@@ -48,7 +48,7 @@ ansible-lint ansible/            # only when touching ansible/
 cd <service-dir> && docker compose config -q
 python3 ctl/registry.py status  # after up: all containers running
 python3 -m unittest discover -s tests -v
-cd ctl-web-next && npm run build
+cd dashboard && npm run build
 ```
 
 ## Pull requests

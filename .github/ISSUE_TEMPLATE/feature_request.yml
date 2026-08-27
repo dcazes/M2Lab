@@ -1,0 +1,33 @@
+name: "Feature Request"
+description: "Propose a new capability, integration, or improvement for M2Lab"
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem statement"
+      description: "What problem would this solve? What is the user or operator pain point?"
+      placeholder: "As a self-hoster, I want..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Proposed solution"
+      description: "Describe the feature or change you'd like to see, and how it would work in M2Lab."
+      placeholder: "Add a ... that integrates with ..."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives considered"
+      description: "What other approaches or workarounds did you consider?"
+      placeholder: "Alternatively, we could..."
+  - type: textarea
+    id: impact
+    attributes:
+      label: "Impact"
+      description: "Who benefits, and how does this fit the security and capability model (read/draft/write/destructive tiers)?"
+      placeholder: "This helps operators who..."

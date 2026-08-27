@@ -21,7 +21,7 @@ a governed MCP capability layer for AI agent harnesses.
   MCP manifests
 - `ctl/` — Python control plane (registry, MCP server, catalog, dashboard,
   initiate flow, app MCP adapters)
-- `ctl-web-next/` — React/Vite dashboard
+- `dashboard/` — React/Vite dashboard
 - `opencode.json` — agent/MCP configuration (harness wiring)
 
 ## Key rules
