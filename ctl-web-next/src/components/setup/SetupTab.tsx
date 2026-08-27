@@ -260,7 +260,7 @@ function AppSetupWizard({ service }: { service: Service }) {
     finally { setBusy(false); }
   };
   return <section className={`app-setup-wizard app-setup-${job?.status || "not_started"}`}>
-    <div className="app-setup-main"><span className={`setup-status setup-status-${job?.status || "queued"}`} /><div><span className="eyebrow">Setup</span><h3>{job?.summary || `Finish setting up ${service.display_name}`}</h3><p>{job?.error || job?.events.at(-1)?.message || "Run the remaining automated steps; OmniLab pauses only when you need to act."}</p></div><span className="app-setup-progress">{job?.progress || 0}%</span>
+    <div className="app-setup-main"><span className={`setup-status setup-status-${job?.status || "queued"}`} /><div><span className="eyebrow">Setup</span><h3>{job?.summary || `Finish setting up ${service.display_name}`}</h3><p>{job?.error || job?.events[job.events.length - 1]?.message || "Run the remaining automated steps; OmniLab pauses only when you need to act."}</p></div><span className="app-setup-progress">{job?.progress || 0}%</span>
       <footer>
         {!foundationReady && <small>Core identity setup required</small>}
         {job?.action?.url && <a href={job.action.url} target="_blank" rel="noreferrer">{job.action.label}<ExternalLink /></a>}

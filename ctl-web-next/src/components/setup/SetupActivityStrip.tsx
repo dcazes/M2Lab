@@ -38,7 +38,7 @@ export function SetupActivityStrip({ onOpenSettings, onOpenSystem }: { onOpenSet
     {expanded && <div className="workspace-setup-events">
       {visible.map(job => <div key={job.id}>
         <span className={`setup-status setup-status-${job.status}`} />
-        <span><strong>{job.summary}</strong><small>{job.error || job.events.at(-1)?.message}</small></span>
+        <span><strong>{job.summary}</strong><small>{job.error || job.events[job.events.length - 1]?.message}</small></span>
         <em>{job.progress}%</em>
         {(job.status === 'user_action_required' || job.status === 'failed') && <button onClick={() => job.target === 'foundation' ? onOpenSystem() : onOpenSettings(job.target)}><Settings2 /> Setup</button>}
       </div>)}
