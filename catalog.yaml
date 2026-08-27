@@ -207,6 +207,7 @@ apps:
     ai_optional: true
     outcomes: [money, travel]
     requirements: [Docker, persistent storage]
+    dependencies: [litellm, ollama]
     links:
       homepage: https://docs.paperless-ngx.com
       source: https://github.com/paperless-ngx/paperless-ngx
