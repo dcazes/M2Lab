@@ -54,7 +54,13 @@ export function FoundationSetupCard() {
       const approval = await createSetupApproval('foundation', 'setup-resume')
       await resumeSetupJob(foundation, approval)
       await refresh()
-      toast.success(foundation.stage === 'create_owner' ? 'Identity foundation completed' : 'Infrastructure check resumed')
+      toast.success(
+        foundation.stage === 'create_owner'
+          ? 'Identity foundation completed'
+          : foundation.stage === 'create_vaultwarden_owner'
+            ? 'Vaultwarden step done — continue to Authentik'
+            : 'Infrastructure check resumed',
+      )
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
@@ -76,7 +82,7 @@ export function FoundationSetupCard() {
       <div>{components.map(component => <span key={component.id} className={component.ready ? 'ready' : ''}><i />{component.name}</span>)}</div>
       {foundation && <progress max={100} value={foundation.progress} />}
       {foundation?.status === 'user_action_required'
-        ? <button className="button-primary" onClick={resume} disabled={busy}>{busy ? <LoaderCircle className="animate-spin" /> : <Check />}{foundation.stage === 'create_owner' ? 'I finished this step' : 'Retry private route'}</button>
+        ? <button className="button-primary" onClick={resume} disabled={busy}>{busy ? <LoaderCircle className="animate-spin" /> : <Check />}{foundation.stage === 'create_owner' || foundation.stage === 'create_vaultwarden_owner' ? 'I finished this step' : 'Retry private route'}</button>
         : canStart
           ? <button className="button-primary" onClick={start} disabled={busy}>{busy ? <LoaderCircle className="animate-spin" /> : foundation?.status === 'ready' ? <RefreshCcw /> : <ShieldCheck />}{foundation?.status === 'ready' ? 'Repair infrastructure' : 'Start identity setup'}</button>
           : foundation?.status === 'ready' && runtimeReady

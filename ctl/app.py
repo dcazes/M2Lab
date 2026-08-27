@@ -1204,7 +1204,10 @@ async def _run_foundation_job(job_id: str) -> None:
         changed = await asyncio.to_thread(_prepare_identity_foundation)
         update_job(job_id, status="preparing", stage="secrets_ready", progress=10,
                    summary="Security files prepared", message=f"Prepared {len(changed)} protected settings; values were not exposed")
-        await _start_setup_service(job_id, "authentik", 25)
+        # Boot Vaultwarden first so the user can create its master password and
+        # store provider API keys while Authentik configures itself asynchronously.
+        await _start_setup_service(job_id, "vaultwarden", 18)
+        await _start_setup_service(job_id, "authentik", 30)
         update_job(job_id, status="verifying", stage="validate_caddy", progress=48,
                    summary="Validating private ingress", message="Checking every Caddy listener before it can receive traffic")
         await _validate_caddy()
@@ -1221,9 +1224,9 @@ async def _run_foundation_job(job_id: str) -> None:
                    summary="Verifying Authentik", message="Checking the complete Tailscale, Caddy, and Authentik path")
         if not await _verify_external_authentik():
             raise RuntimeError("Authentik started locally, but its private 8462 URL did not pass the end-to-end health check.")
-        update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
-                   summary="Create your M2Lab owner", message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
-                   action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
+        update_job(job_id, status="user_action_required", stage="create_vaultwarden_owner", progress=84,
+                   summary="Create your Vaultwarden master password", message="Vaultwarden is ready. Create its master account now so you can store provider API keys while Authentik finishes configuring.",
+                   action={"kind": "open_url", "label": "Open Vaultwarden", "url": "http://127.0.0.1:8081"})
     except Exception as error:
         update_job(job_id, status="failed", stage="failed", progress=0,
                    summary="Core setup needs attention", message="Setup stopped safely at the failed stage.", error=str(error)[:500])
@@ -1355,19 +1358,28 @@ async def resume_setup_job(job_id: str, request: Request):
             raise HTTPException(409, route_error or "The Authentik route is not ready")
         if not await _verify_external_authentik():
             raise HTTPException(409, "The 8462 route exists, but Authentik is not reachable through it yet")
-        result = update_job(job_id, status="user_action_required", stage="create_owner", progress=86,
+        result = update_job(job_id, status="user_action_required", stage="create_vaultwarden_owner", progress=84,
+                            summary="Create your Vaultwarden master password",
+                            message="Vaultwarden is ready. Create its master account now so you can store provider API keys while Authentik finishes configuring.",
+                            action={"kind": "open_url", "label": "Open Vaultwarden", "url": "http://127.0.0.1:8081"})
+    elif job["target"] == "foundation" and job["stage"] == "create_vaultwarden_owner":
+        if not await _wait_for_service("vaultwarden", 10):
+            raise HTTPException(409, "Vaultwarden is not reachable yet")
+        result = update_job(job_id, status="user_action_required", stage="create_owner", progress=90,
                             summary="Create your M2Lab owner",
                             message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
                             action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
     elif job["target"] == "foundation" and job["stage"] == "create_owner":
         if not await _wait_for_service("authentik", 10) or not await _verify_external_authentik(10):
             raise HTTPException(409, "Authentik is not reachable yet")
-        try:
-            await _start_setup_service(job_id, "vaultwarden", 94)
-        except RuntimeError as error:
-            update_job(job_id, status="failed", stage="start_vaultwarden", progress=90,
-                       summary="Vaultwarden needs attention", message="Identity is ready, but Vaultwarden did not start.", error=str(error)[:500])
-            raise HTTPException(500, str(error)) from error
+        # Vaultwarden was started early in the foundation job; ensure it is still up.
+        if svc_state(service_by_id("vaultwarden"))["overall"] != "running":
+            try:
+                await _start_setup_service(job_id, "vaultwarden", 94)
+            except RuntimeError as error:
+                update_job(job_id, status="failed", stage="start_vaultwarden", progress=90,
+                           summary="Vaultwarden needs attention", message="Identity is ready, but Vaultwarden did not start.", error=str(error)[:500])
+                raise HTTPException(500, str(error)) from error
         result = update_job(job_id, status="ready", stage="ready", progress=100,
                             summary="Identity foundation is ready", message="Authentik, Caddy, Tailscale routing, and Vaultwarden are ready")
     elif job["status"] == "user_action_required":

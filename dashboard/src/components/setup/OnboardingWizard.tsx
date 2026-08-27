@@ -385,7 +385,15 @@ export function OnboardingWizard() {
                 Authentik provides single username & password access across M2Lab applications.
               </p>
 
-              {foundationJob?.action?.url && (
+              {foundationJob?.stage === 'create_vaultwarden_owner' && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
+                  <span className="text-xs text-white">Create your Vaultwarden master password first</span>
+                  <a href="http://127.0.0.1:8081" target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
+                    Open Vaultwarden <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              )}
+              {foundationJob?.stage === 'create_owner' && foundationJob?.action?.url && (
                 <div className="p-3 bg-accent/10 border border-accent/30 rounded flex items-center justify-between">
                   <span className="text-xs text-white">Create master admin in Authentik</span>
                   <a href={foundationJob.action.url} target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
@@ -398,7 +406,9 @@ export function OnboardingWizard() {
                 {!foundationJob ? (
                   <button className="button-primary text-xs" onClick={startFoundation}>Start Authentik Setup</button>
                 ) : foundationJob.status === 'user_action_required' ? (
-                  <button className="button-primary text-xs" onClick={resumeFoundation}>Confirm Admin Created</button>
+                  <button className="button-primary text-xs" onClick={resumeFoundation}>
+                    {foundationJob.stage === 'create_vaultwarden_owner' ? 'Confirm Vaultwarden Created' : 'Confirm Admin Created'}
+                  </button>
                 ) : (
                   <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Authentik Core Ready</span>
                 )}
@@ -412,8 +422,12 @@ export function OnboardingWizard() {
                   <span className="eyebrow text-emerald-400">Local Password Vault</span>
                   <h3 className="text-base font-bold text-white">Vaultwarden Vault</h3>
                 </div>
-                <span className="px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400">
-                  Ready
+                <span className={`px-2.5 py-1 rounded text-xs font-bold ${
+                  foundationJob?.stage === 'create_vaultwarden_owner'
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {foundationJob?.stage === 'create_vaultwarden_owner' ? 'Action needed' : 'Ready'}
                 </span>
               </div>
 

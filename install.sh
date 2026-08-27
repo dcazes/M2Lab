@@ -45,6 +45,18 @@ run() {
   fi
 }
 
+# docker_sudo: run docker, preferring the user's docker-group membership but
+# falling back to sudo when the group is not yet active in this session (e.g.
+# right after a fresh Docker install, before a re-login). This lets the
+# installer finish without forcing the user to log out and back in.
+docker_sudo() {
+  if id -nG | tr ' ' '\n' | grep -qx docker; then
+    docker "$@"
+  else
+    sudo docker "$@"
+  fi
+}
+
 for argument in "$@"; do
   case "$argument" in
     --yes) ASSUME_YES=true ;;
@@ -150,6 +162,30 @@ ansible_args=(
 )
 run "${ansible_args[@]}"
 
+# Enroll the installing user in the docker group so the dashboard (and the
+# user) can talk to the Docker socket. A fresh Docker install leaves the group
+# change pending until the next login, which would otherwise break the
+# onboarding wizard's socket access. We detect whether the membership is live
+# in this session and, if not, fall back to `sudo docker` for the rest of the
+# run so setup can complete without a logout.
+if ! "$DRY_RUN"; then
+  info "Enrolling $install_user in the docker group"
+  if ! id -nG | tr ' ' '\n' | grep -qx docker; then
+    run sudo usermod -aG docker "$USER"
+  fi
+  if id -nG | tr ' ' '\n' | grep -qx docker; then
+    success "Docker group membership is active in this session"
+  else
+    warn "Docker group membership is not yet active in this session."
+    warn "Run 'newgrp docker' (or log out and back in) before using 'docker' directly."
+    warn "This installer will use 'sudo docker' so the rest of setup can finish now."
+  fi
+  info "Verifying Docker access"
+  if ! docker_sudo info >/dev/null 2>&1; then
+    die "Docker is installed but the daemon is not reachable. Start Docker (e.g. 'sudo systemctl start docker') and re-run ./install.sh."
+  fi
+fi
+
 info "Preparing the Python environment"
 if [[ ! -x "$OMNILAB_ROOT/.venv/bin/python" ]]; then
   run python3 -m venv "$OMNILAB_ROOT/.venv"
@@ -208,8 +244,8 @@ printf '  Dashboard:   http://127.0.0.1:8787\n'
 printf '  Start later: %s/start.sh\n' "$OMNILAB_ROOT"
 printf '  Logs:        journalctl --user -u homelab-ctl -f\n'
 
-if ! docker info >/dev/null 2>&1; then
-  warn "Your current login does not yet have Docker access. Sign out and back in once, then run ./start.sh."
+if ! docker_sudo info >/dev/null 2>&1; then
+  warn "Your current login does not yet have Docker access. Run 'newgrp docker' (or log out and back in), then run ./start.sh."
 fi
 
 printf '\nNext step: Open the dashboard in your browser to complete first-time setup:\n'
