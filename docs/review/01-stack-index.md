@@ -23,7 +23,7 @@
   `/api/services/{id}/destroy` (requires body `{"confirm":"<id>"}`),
   `/api/system` (host stats). **No authentication** beyond the destroy
   double-confirm and loopback binding.
-- **Portainer shim:** `portainer-proxy/proxy.py` on `127.0.0.1:8788` injects the
+- **Portainer shim:** `scripts/portainer-proxy.py` on `127.0.0.1:8788` injects the
   Portainer API key and adds CORS; Homepage's `custom.js` calls it.
 - **Exposure model:** every published port binds `127.0.0.1`; the only public
   door is **Tailscale Serve**:

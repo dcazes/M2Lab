@@ -53,7 +53,7 @@ class CatalogTests(unittest.TestCase):
         import yaml
         from ctl.registry import ROOT
 
-        compose = yaml.safe_load((ROOT / "authentik" / "docker-compose.yml").read_text())
+        compose = yaml.safe_load((ROOT / "core" / "authentik" / "docker-compose.yml").read_text())
         for service_id in ("server", "worker"):
             mounts = compose["services"][service_id]["volumes"]
             self.assertIn("./blueprints/omnilab.yaml:/blueprints/omnilab.yaml:ro", mounts)

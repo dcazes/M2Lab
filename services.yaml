@@ -13,7 +13,7 @@ services:
     visibility: system
     lifecycle: always_on
     icon: "🪪"
-    dir: authentik
+    dir: core/authentik
     project: authentik
     port: 9001
     tailnet_port: 8462
@@ -37,7 +37,7 @@ services:
     visibility: system
     lifecycle: always_on
     icon: "🚪"
-    dir: ingress
+    dir: core/ingress
     project: ingress
     port: 19460
     url: http://localhost:19460
@@ -54,7 +54,7 @@ services:
     description: AI research / knowledge base
     category: web-research
     icon: "🧠"
-    dir: surfsense
+    dir: apps/surfsense
     project: surfsense
     compose_files:
       - docker-compose.gpu.yml
@@ -80,7 +80,7 @@ services:
     description: Photo library
     category: media
     icon: "📷"
-    dir: immich-app
+    dir: apps/immich-app
     project: immich
     port: 2283
     tailnet_port: 8443
@@ -101,7 +101,7 @@ services:
     description: LLM gateway / model router (OpenAI-compatible)
     category: infrastructure
     icon: "🧭"
-    dir: litellm
+    dir: core/litellm
     project: litellm
     port: 4000
     tailnet_port: 8445
@@ -119,7 +119,7 @@ services:
     description: Password manager (Bitwarden-compatible)
     category: infrastructure
     icon: "🔐"
-    dir: vaultwarden
+    dir: core/vaultwarden
     project: vaultwarden
     port: 8081
     tailnet_port: 8446
@@ -137,7 +137,7 @@ services:
     description: Graph visualizer for SurfSense PostgreSQL
     category: web-research
     icon: "📊"
-    dir: puppygraph
+    dir: apps/puppygraph
     project: puppygraph
     port: 8082
     tailnet_port: 8448
@@ -155,7 +155,7 @@ services:
     description: Recipe manager
     category: productivity
     icon: "🍳"
-    dir: mealie
+    dir: apps/mealie
     project: mealie
     port: 9000
     tailnet_port: 8455
@@ -173,7 +173,7 @@ services:
     description: Local-first budgeting
     category: productivity
     icon: "💰"
-    dir: actual-budget
+    dir: apps/actual-budget
     project: actual-budget
     port: 5006
     tailnet_port: 8452
@@ -191,7 +191,7 @@ services:
     description: Server monitoring (hub + agent)
     category: infrastructure
     icon: "📈"
-    dir: beszel
+    dir: apps/beszel
     project: beszel
     port: 8090
     tailnet_port: 8450
@@ -211,7 +211,7 @@ services:
     description: Document archive / OCR
     category: media
     icon: "📄"
-    dir: paperless-ngx
+    dir: apps/paperless-ngx
     project: paperless-ngx
     port: 8010
     tailnet_port: 8451
@@ -233,7 +233,7 @@ services:
     description: Travel tracker & trip planner
     category: productivity
     icon: "🧭"
-    dir: adventurelog
+    dir: apps/adventurelog
     project: adventurelog
     port: 8015
     tailnet_port: 8454
@@ -255,7 +255,7 @@ services:
     description: Files & sync
     category: media
     icon: "☁️"
-    dir: nextcloud
+    dir: apps/nextcloud
     project: nextcloud
     port: 8020
     tailnet_port: 8453
@@ -279,7 +279,7 @@ services:
     description: Docker management UI + control API
     category: infrastructure
     icon: "🐳"
-    dir: portainer
+    dir: apps/portainer
     project: portainer
     port: 9090
     tailnet_port: 9090
@@ -297,7 +297,7 @@ services:
     description: Local LLM runner (GPU accelerated)
     category: ai
     icon: "🦙"
-    dir: ollama
+    dir: core/ollama
     project: ollama
     compose_files:
       - docker-compose.gpu.yml
@@ -319,7 +319,7 @@ services:
     description: Self-hosted AI chat with agents, RAG, and tools
     category: ai
     icon: "🤖"
-    dir: open-webui
+    dir: core/open-webui
     project: open-webui
     port: 8084
     tailnet_port: 8456
@@ -337,7 +337,7 @@ services:
     description: Web scraping and crawling API (LLM-ready output)
     category: web-research
     icon: "🕷️"
-    dir: firecrawl
+    dir: apps/firecrawl
     project: firecrawl
     port: 3002
     tailnet_port: 8458
@@ -355,7 +355,7 @@ services:
     description: Free-LLM aggregator (OpenAI-compatible, model ordering/failover)
     category: infrastructure
     icon: "🔀"
-    dir: FreeLLMAPI
+    dir: apps/FreeLLMAPI
     project: freellmapi
     port: 3001
     tailnet_port: 8459

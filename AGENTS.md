@@ -11,7 +11,7 @@ production UI build, valid compose configs, and CI security scans.
 services.yaml          ← source of truth for all services
 catalog.yaml           ← app catalog, profiles, workflows, MCP manifests
 ctl/                   ← Python control plane (registry, MCP server, catalog, dashboard)
-ctl-web-next/          ← React/Vite dashboard (served by ctl.app on :8787)
+dashboard/             ← React/Vite dashboard (served by ctl.app on :8787)
 ctl/mcp_server.py      ← homelab-ctl MCP: lifecycle + discovery tools
 ctl/mcp_registry.py    ← federated MCP registry, health checks, harness exports
 ctl/app_mcp.py         ← read-focused MCP adapters for firecrawl, paperless, immich, ollama
@@ -26,7 +26,7 @@ opencode.json          ← agent harness config (MCP server wiring)
 
 - `services.yaml` is the single source of truth: service ids, dirs, ports,
   health checks, backup definitions, dashboard settings. `id` and `dir` can
-  differ (`immich` → `immich-app/`, `freellmapi` → `FreeLLMAPI/`).
+  differ (`immich` → `apps/immich-app/`, `freellmapi` → `apps/FreeLLMAPI/`).
 - The Makefile is a thin wrapper over `ctl/registry.py`. Generic verbs work
   for any registered id with no Makefile edit:
   `make up|stop|restart|logs|pull|update SERVICE=<id>`.
@@ -38,7 +38,7 @@ opencode.json          ← agent harness config (MCP server wiring)
   / `registry.py` rather than raw `docker compose` inside a service dir, or
   you'll silently miss overlays.
 - Dashboard: `.venv/bin/python -m ctl.app` → FastAPI on 127.0.0.1:8787
-  serving `ctl-web-next/dist/`; deployed as systemd user unit
+  serving `dashboard/dist/`; deployed as systemd user unit
   `deploy/homelab-ctl.service`. Mutations require short-lived approval
   tokens; destroy also requires body `{"confirm":"<service-id>"}`.
 - Backups: `./scripts/backup.sh [service-id|all]`, driven by each service's
@@ -175,7 +175,7 @@ over the whole repo, Trivy config+fs scans (HIGH/CRITICAL), ansible-lint on
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
-cd ctl-web-next && npm run build
+cd dashboard && npm run build
 yamllint .
 gitleaks detect --no-banner
 ansible-lint ansible/            # when touching ansible/
@@ -193,7 +193,7 @@ idempotently — dry-run first:
 ## Repo conventions
 
 - Data dirs (bind mounts like `*/data`, `nextcloud/html`,
-  `immich-app/library`) are gitignored — configs are tracked, runtime data
+  `apps/immich-app/library`) are gitignored — configs are tracked, runtime data
   never is.
 - Historical change records live in `docs/documentation/` (`PHASE_*.md`) —
   local-only, gitignored, never pushed.

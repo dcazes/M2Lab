@@ -1601,10 +1601,10 @@ async def calendar_events(request: Request, start: str, end: str):
 
 
 # ---------- static UI ----------
-dist = ROOT / "ctl-web-next" / "dist"
+dist = ROOT / "dashboard" / "dist"
 if not dist.is_dir():
     raise RuntimeError(
-        f"Dashboard bundle missing: {dist} — run `npm run build` in ctl-web-next/"
+        f"Dashboard bundle missing: {dist} — run `npm run build` in dashboard/"
     )
 app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
 

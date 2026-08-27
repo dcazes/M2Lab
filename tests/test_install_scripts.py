@@ -47,7 +47,7 @@ class InstallScriptTests(unittest.TestCase):
             self.assertNotIn("Desktop/Programs/HomeServer", unit)
 
     def test_committed_dashboard_bundle_is_complete(self):
-        index = ROOT / "ctl-web-next" / "dist" / "index.html"
+        index = ROOT / "dashboard" / "dist" / "index.html"
         self.assertTrue(index.is_file())
         html = index.read_text(encoding="utf-8")
         for marker in ('src="/assets/', 'href="/assets/'):
