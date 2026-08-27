@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check, Cpu, ExternalLink, Layers, LoaderCircle, Rocket, ShieldCheck, Sparkles, Terminal, ArrowRight, Lock, KeyRound
@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { useCatalog } from '../../hooks/useCatalog'
 import {
   fetchSystemStats, fetchSetupJobs, wireModelPipeline, createSetupApproval, startSetupTarget,
-  resumeSetupJob
+  resumeSetupJob, ollamaPullStreamUrl
 } from '../../lib/api'
 import type { SetupJob } from '../../lib/types'
 
@@ -26,6 +26,14 @@ export function OnboardingWizard() {
   const [pullEmbeddings, setPullEmbeddings] = useState(true)
   const [wiringBusy, setWiringBusy] = useState(false)
   const [wiredDone, setWiredDone] = useState(false)
+
+  // Live Ollama embedding pull state (streamed via Server-Sent-Events)
+  const [pulling, setPulling] = useState(false)
+  const [pullProgress, setPullProgress] = useState(0)
+  const [pullLog, setPullLog] = useState<string[]>([])
+  const [pullError, setPullError] = useState<string | null>(null)
+  const [pullDone, setPullDone] = useState(false)
+  const pullSourceRef = useRef<EventSource | null>(null)
 
   // System & Services queries
   const systemQuery = useQuery({ queryKey: ['system-stats'], queryFn: fetchSystemStats })
@@ -71,6 +79,7 @@ export function OnboardingWizard() {
 
   const handleWireModels = async () => {
     setWiringBusy(true)
+    setPullError(null)
     try {
       const approval = await createSetupApproval('models', 'model-wire')
       const res = await wireModelPipeline({
@@ -80,18 +89,71 @@ export function OnboardingWizard() {
       }, approval)
       if (res.ok) {
         setWiredDone(true)
-        const embedNote =
-          res.embedding_status === 'pulled'
-            ? 'Embedding model pulled successfully.'
-            : res.embedding_status === 'skipped'
-              ? 'Embedding pull skipped (Ollama not running yet — will pull when launched).'
-              : 'Embedding pull failed — check Ollama after launch.'
-        toast.success(`Model pipeline wired! ${embedNote}`)
+        toast.success('Model pipeline wired! LiteLLM config generated instantly.')
+        if (pullEmbeddings) {
+          await startOllamaPull()
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setWiringBusy(false)
+    }
+  }
+
+  const startOllamaPull = async () => {
+    setPulling(true)
+    setPullProgress(0)
+    setPullLog([])
+    setPullDone(false)
+    setPullError(null)
+    let finished = false
+    try {
+      const approval = await createSetupApproval('ollama', 'model-pull')
+      const source = new EventSource(ollamaPullStreamUrl('nomic-embed-text', approval))
+      pullSourceRef.current = source
+      source.onmessage = (event) => {
+        let payload: Record<string, unknown>
+        try {
+          payload = JSON.parse(event.data)
+        } catch {
+          return
+        }
+        const status = typeof payload.status === 'string' ? payload.status : ''
+        const completed = typeof payload.completed === 'number' ? payload.completed : null
+        const total = typeof payload.total === 'number' ? payload.total : null
+        setPullLog((prev) => [...prev, status || JSON.stringify(payload)].slice(-200))
+        if (completed != null && total && total > 0) {
+          setPullProgress(Math.min(100, Math.round((completed / total) * 100)))
+        }
+        if (status === 'success') {
+          finished = true
+          setPullDone(true)
+          setPulling(false)
+          source.close()
+          toast.success('Embedding model pulled successfully.')
+        } else if (status === 'skipped') {
+          finished = true
+          setPulling(false)
+          source.close()
+          toast.info('Ollama is not running yet — the embedding pull will run when Ollama launches.')
+        } else if (status === 'error') {
+          finished = true
+          setPullError(typeof payload.error === 'string' ? payload.error : 'Pull failed')
+          setPulling(false)
+          source.close()
+        }
+      }
+      source.onerror = () => {
+        if (!finished) {
+          setPullError('Connection to the pull stream was lost. Retry the pull.')
+          setPulling(false)
+        }
+        source.close()
+      }
+    } catch (err) {
+      setPullError(err instanceof Error ? err.message : String(err))
+      setPulling(false)
     }
   }
 
@@ -527,6 +589,33 @@ export function OnboardingWizard() {
               {wiredDone ? 'Re-wire Model Pipeline' : 'Approve & Wire Model Pipeline'}
             </button>
           </div>
+
+          {pulling && (
+            <div className="space-y-2 bg-surface-2 p-4 border border-border rounded-lg">
+              <div className="flex items-center justify-between text-xs text-white">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Pulling nomic-embed-text…
+                </span>
+                <span className="font-mono">{pullProgress}%</span>
+              </div>
+              <div className="w-full h-2 bg-bg-base rounded overflow-hidden">
+                <div className="h-full bg-accent transition-all duration-300" style={{ width: `${pullProgress}%` }} />
+              </div>
+              <pre className="text-[10px] text-unknown max-h-32 overflow-auto font-mono whitespace-pre-wrap">{pullLog.join('\n')}</pre>
+            </div>
+          )}
+
+          {pullDone && !pulling && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold flex items-center gap-1">
+              <Check className="h-3.5 w-3.5" /> Embedding model pulled successfully.
+            </div>
+          )}
+
+          {pullError && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded text-xs text-rose-400 font-semibold">
+              Embedding pull issue: {pullError}
+            </div>
+          )}
 
           {wiredDone && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold flex items-center justify-between">
