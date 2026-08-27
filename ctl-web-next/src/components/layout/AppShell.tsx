@@ -4,8 +4,9 @@ import { TabNav } from './TabNav'
 import { ServicesTab } from '../services/ServicesTab'
 import { SystemTab } from '../system/SystemTab'
 import { SetupTab } from '../setup/SetupTab'
+import { OnboardingWizard } from '../setup/OnboardingWizard'
 
-export type AppTab = 'workspace' | 'system' | 'settings'
+export type AppTab = 'workspace' | 'onboarding' | 'settings' | 'system'
 
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<AppTab>('workspace')
@@ -25,6 +26,7 @@ export function AppShell() {
         <TabNav activeTab={activeTab} onChange={setActiveTab} />
         <div className="mt-6 animate-in fade-in duration-200">
           {activeTab === 'workspace' && <ServicesTab onOpenSettings={openSettings} onOpenSystem={() => setActiveTab('system')} />}
+          {activeTab === 'onboarding' && <OnboardingWizard />}
           {activeTab === 'system' && <SystemTab />}
           {activeTab === 'settings' && <SetupTab initialSelectedId={settingsServiceId} initialSection={settingsSection} />}
         </div>

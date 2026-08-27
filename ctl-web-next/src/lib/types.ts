@@ -183,6 +183,10 @@ export interface CatalogApp {
     notes?: string[]
   }
   links?: { homepage?: string; source?: string }
+  mcp_summary?: {
+    summary: string
+    example_prompts: string[]
+  }
   capabilities: CatalogCapability[]
 }
 
