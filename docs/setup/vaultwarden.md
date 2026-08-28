@@ -40,6 +40,9 @@ Create one Authentik **Proxy** provider and attach it to the embedded outpost:
 - internal host: `http://127.0.0.1:8081`
 - mode: **Forward Single**
 - application slug: `vaultwarden`
+- grant type: **Authorization code**
+- allowed redirect URI:
+  `https://your-tailnet-host.example.ts.net:8446/outpost.goauthentik.io/callback?X-authentik-auth-callback=true`
 
 Caddy's HTTPS Vaultwarden route performs Authentik forward authentication.
 Opening it redirects unauthenticated visitors to Authentik and returns an
