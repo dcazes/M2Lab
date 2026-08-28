@@ -70,6 +70,11 @@ def prepare_environment(
             changed.extend(["NEXTCLOUD_ADMIN_USER", "NEXTCLOUD_ADMIN_PASSWORD"])
     elif service_id == "surfsense":
         ensure("SECRET_KEY")
+        ensure("DB_PASSWORD", 24)
+        ensure("SEARXNG_SECRET", 24)
+        ensure("OPENSANDBOX_API_KEY", 24)
+        if not identity:
+            ensure("ZERO_ADMIN_PASSWORD", 24)
         if "EMBEDDING_MODEL" not in current:
             values["EMBEDDING_MODEL"] = "litellm://ollama/nomic-embed-text"
             values["EMBEDDING_BASE_URL"] = "http://host.docker.internal:11434"

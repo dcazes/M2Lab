@@ -69,6 +69,14 @@ class InitiateTests(unittest.TestCase):
         self.assertEqual(values["ZERO_ADMIN_PASSWORD"], "shared-password")
         self.assertNotIn("OMNILAB_IDENTITY_EMAIL", values)
 
+    def test_surfsense_generates_required_infrastructure_secrets(self):
+        values, changed = prepare_environment(
+            "surfsense", {}, {}, token_factory=self.token,
+        )
+        for key in ("SECRET_KEY", "DB_PASSWORD", "SEARXNG_SECRET", "OPENSANDBOX_API_KEY", "ZERO_ADMIN_PASSWORD"):
+            self.assertEqual(values[key], "generated-24" if key != "SECRET_KEY" else "generated-32")
+            self.assertIn(key, changed)
+
     def test_new_core_placeholders_are_replaced(self):
         freellm, _ = prepare_environment(
             "freellmapi",
