@@ -374,6 +374,19 @@ def _generate_temp_password(length: int = 18) -> str:
     return "".join(secrets.choice(pool) for _ in range(length))
 
 
+def _authentik_temp_password_already_issued() -> bool:
+    """Prevent refreshing the onboarding page from silently rotating access."""
+    if not _AUDIT_PATH.exists():
+        return False
+    for line in reversed(_AUDIT_PATH.read_text(encoding="utf-8").splitlines()):
+        try:
+            if json.loads(line).get("event") == "identity.authentik_admin_temp_password":
+                return True
+        except json.JSONDecodeError:
+            continue
+    return False
+
+
 @app.post("/api/identity/authentik-admin/temp-password")
 async def create_authentik_admin_temp_password(request: Request):
     """Set a single-use, change-on-login temp password for the built-in akadmin.
@@ -384,6 +397,8 @@ async def create_authentik_admin_temp_password(request: Request):
     first signed-in visit, and returns it to the host-local owner exactly once.
     """
     require_trusted_request(request)
+    if _authentik_temp_password_already_issued():
+        raise HTTPException(409, "A temporary Authentik password was already issued. Use it, or reset the account from Authentik's admin UI.")
     payload = _authentik_admin_payload()
     if not payload:
         raise HTTPException(409, "Authentik bootstrap token is not configured")

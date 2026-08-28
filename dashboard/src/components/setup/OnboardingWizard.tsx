@@ -8,7 +8,7 @@ import { useCatalog } from '../../hooks/useCatalog'
 import { useServices } from '../../hooks/useServices'
 import {
   fetchSystemStats, fetchSetupJobs, wireModelPipeline, createSetupApproval, startSetupTarget,
-  resumeSetupJob, ollamaPullStreamUrl, createAuthentikTempPassword
+  resumeSetupJob, ollamaPullStreamUrl, createAuthentikTempPassword, fetchAudit
 } from '../../lib/api'
 import type { SetupJob, CatalogApp, AuthentikTempPassword } from '../../lib/types'
 
@@ -141,6 +141,7 @@ export function OnboardingWizard() {
   const catalogQuery = useCatalog()
   const servicesQuery = useServices()
   const jobsQuery = useQuery({ queryKey: ['setup-jobs'], queryFn: fetchSetupJobs, refetchInterval: 2000 })
+  const auditQuery = useQuery({ queryKey: ['audit'], queryFn: fetchAudit, refetchInterval: 5000 })
   const queryClient = useQueryClient()
 
   const apps = catalogQuery.data?.apps || []
@@ -337,6 +338,7 @@ export function OnboardingWizard() {
 
   const foundationReady = foundationJob?.status === 'ready'
   const authentikActionNeeded = foundationJob?.status === 'user_action_required' && foundationJob.stage === 'create_owner'
+  const tempPasswordIssued = auditQuery.data?.events.some(event => event.event === 'identity.authentik_admin_temp_password') === true
   const vaultwardenActionNeeded = foundationJob?.status === 'user_action_required' && foundationJob.stage === 'create_vaultwarden_owner'
   const authentikCardReady = authentikService?.state === 'running' && authentikService.healthy !== false && !authentikActionNeeded
   const vaultwardenCardReady = vaultwardenService?.state === 'running' && vaultwardenService.healthy !== false && !vaultwardenActionNeeded
@@ -489,7 +491,7 @@ export function OnboardingWizard() {
                 }`}>
                   {authentikCardReady ? 'Ready'
                     : foundationJob?.status === 'failed' ? 'Failed'
-                    : authentikActionNeeded ? 'Action needed'
+                    : authentikActionNeeded ? 'Confirm setup'
                     : !foundationJob ? 'Not Started' : 'Installing…'}
                 </span>
               </div>
@@ -518,12 +520,14 @@ export function OnboardingWizard() {
                       </a>
                       <p className="text-[11px] text-unknown">Authentik will require a new password immediately after you sign in. Choose at least {tempAdmin.requirements.min_length} characters.</p>
                     </div>
+                  ) : tempPasswordIssued ? (
+                    <span className="text-[11px] text-unknown">A temporary password was already issued. It is intentionally unavailable here so this page cannot overwrite it.</span>
                   ) : (
                     <div className="space-y-2">
-                      <span className="text-[11px] text-unknown">Not generated yet.</span>
+                      <span className="text-[11px] text-unknown">Generate this only before the first Authentik sign-in. It cannot be rotated from this page after issuance.</span>
                       <button className="button-secondary text-xs flex items-center gap-1 w-full" onClick={generateTempAdmin} disabled={tempAdminBusy}>
                         {tempAdminBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
-                        Generate temp password
+                        Generate one-time password
                       </button>
                     </div>
                   )}
@@ -535,7 +539,7 @@ export function OnboardingWizard() {
                 {!foundationJob ? (
                   <button className="button-primary text-xs" onClick={startFoundation}>Start Authentik Setup</button>
                 ) : foundationJob.status === 'user_action_required' ? (
-                  authentikActionNeeded && <button className="button-primary text-xs" onClick={resumeFoundation}>Admin account created</button>
+                  authentikActionNeeded && <button className="button-primary text-xs" onClick={resumeFoundation}>I changed the Authentik password — continue</button>
                 ) : foundationJob.status === 'failed' ? (
                   <div className="space-y-3">
                     <SetupTraceTerminal job={foundationJob} />
