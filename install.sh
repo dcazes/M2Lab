@@ -244,10 +244,13 @@ printf '  Dashboard:   http://127.0.0.1:8787\n'
 printf '  Start later: %s/start.sh\n' "$OMNILAB_ROOT"
 printf '  Logs:        journalctl --user -u homelab-ctl -f\n'
 
-if ! docker_sudo info >/dev/null 2>&1; then
-  warn "Your current login does not yet have Docker access. Run 'newgrp docker' (or log out and back in), then run ./start.sh."
+if docker info >/dev/null 2>&1; then
+  printf '\nNext step: your user already has Docker access. Start the dashboard with:\n'
+  printf '  → %s/start.sh\n' "$OMNILAB_ROOT"
+else
+  warn "Your user is not yet in the active docker group, so the dashboard won't start yet."
+  printf '\nNext step: log out and back in (or run "newgrp docker") to activate Docker access,\n'
+  printf 'then start the dashboard with:\n'
+  printf '  → %s/start.sh\n' "$OMNILAB_ROOT"
 fi
-
-printf '\nNext step: log out and back in (or run "newgrp docker") so your user\n'
-printf 'can access Docker, then open the dashboard to complete first-time setup:\n'
-printf '  → http://127.0.0.1:8787 (Click the "Onboarding" tab)\n\n'
+printf '  Dashboard:   http://127.0.0.1:8787 (Click the "Onboarding" tab)\n\n'
