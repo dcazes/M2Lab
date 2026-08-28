@@ -192,8 +192,8 @@ if [[ ! -x "$OMNILAB_ROOT/.venv/bin/python" ]]; then
 fi
 run "$OMNILAB_ROOT/.venv/bin/pip" install --disable-pip-version-check --quiet -r "$OMNILAB_ROOT/ctl/requirements.txt"
 
-if [[ ! -f "$OMNILAB_ROOT/ctl-web-next/dist/index.html" ]]; then
-  die "The production dashboard bundle is missing. Re-download the repository or run 'npm ci && npm run build' in ctl-web-next."
+if [[ ! -f "$OMNILAB_ROOT/dashboard/dist/index.html" ]]; then
+  die "The production dashboard bundle is missing. Re-download the repository or run 'npm ci && npm run build' in dashboard."
 fi
 success "Production dashboard bundle is present; Node.js is not required on this host"
 

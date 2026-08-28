@@ -24,7 +24,7 @@ for argument in "$@"; do
 done
 
 [[ -x "$OMNILAB_ROOT/.venv/bin/python" ]] || { printf 'M2Lab is not installed. Run ./install.sh first.\n' >&2; exit 1; }
-[[ -f "$OMNILAB_ROOT/ctl-web-next/dist/index.html" ]] || { printf 'Dashboard bundle missing. Run ./install.sh again.\n' >&2; exit 1; }
+[[ -f "$OMNILAB_ROOT/dashboard/dist/index.html" ]] || { printf 'Dashboard bundle missing. Run ./install.sh again.\n' >&2; exit 1; }
 
 if ! command -v docker >/dev/null 2>&1; then
   printf 'Docker is not installed. Run ./install.sh first.\n' >&2
@@ -44,7 +44,8 @@ unit_path="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/homelab-ctl.service"
 [[ -f "$unit_path" ]] || { printf 'M2Lab systemd service is missing. Run ./install.sh again.\n' >&2; exit 1; }
 
 systemctl --user daemon-reload
-systemctl --user enable --now homelab-ctl.service homelab-ctl-mcp.service >/dev/null
+systemctl --user enable homelab-ctl.service homelab-ctl-mcp.service >/dev/null
+systemctl --user restart homelab-ctl.service homelab-ctl-mcp.service
 
 dashboard_url="http://127.0.0.1:8787"
 ready=false
