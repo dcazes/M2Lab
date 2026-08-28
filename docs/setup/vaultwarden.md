@@ -41,6 +41,7 @@ Create one Authentik **Proxy** provider and attach it to the embedded outpost:
 - mode: **Forward Single**
 - application slug: `vaultwarden`
 - grant type: **Authorization code**
+- authorization flow: **default-provider-authorization-implicit-consent**
 - allowed redirect URI:
   `https://your-tailnet-host.example.ts.net:8446/outpost.goauthentik.io/callback?X-authentik-auth-callback=true`
 
