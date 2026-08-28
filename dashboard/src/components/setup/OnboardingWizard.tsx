@@ -8,9 +8,9 @@ import { useCatalog } from '../../hooks/useCatalog'
 import { useServices } from '../../hooks/useServices'
 import {
   fetchSystemStats, fetchSetupJobs, wireModelPipeline, createSetupApproval, startSetupTarget,
-  resumeSetupJob, ollamaPullStreamUrl
+  resumeSetupJob, ollamaPullStreamUrl, createAuthentikTempPassword
 } from '../../lib/api'
-import type { SetupJob, CatalogApp } from '../../lib/types'
+import type { SetupJob, CatalogApp, AuthentikTempPassword } from '../../lib/types'
 
 function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
   targets: Set<string>
@@ -120,12 +120,18 @@ export function OnboardingWizard() {
   const drivenApps = apps.filter(a => a.category === 'agent_driven')
   const supportApps = apps.filter(a => a.category === 'agent_support')
 
-  // Authentik's login URL — the loopback address when Tailscale isn't required
-  // (first-run), otherwise its tailnet URL.
+  // Authentik's login URL — reached over local HTTPS via the Caddy ingress when
+  // Tailscale isn't required (first-run), otherwise its tailnet URL. Vaultwarden
+  // is likewise served over local HTTPS so OIDC SSO works machine-locally.
   const authentikService = servicesQuery.data?.services.find(s => s.id === 'authentik')
+  const localAuthentikHttps = 'https://127.0.0.1:19462'
+  const localVaultwardenHttps = 'https://127.0.0.1:19447'
   const authentikUrl = systemQuery.data?.tailscale_required
     ? (authentikService?.tailnet_url || 'http://127.0.0.1:9001')
-    : 'http://127.0.0.1:9001'
+    : localAuthentikHttps
+  const vaultwardenUrl = systemQuery.data?.tailscale_required
+    ? (servicesQuery.data?.services.find(s => s.id === 'vaultwarden')?.tailnet_url || 'http://127.0.0.1:8081')
+    : localVaultwardenHttps
 
   // Calculate required infrastructure dependencies based on selected driven apps
   const requiredDeps = useMemo(() => {
@@ -305,6 +311,28 @@ export function OnboardingWizard() {
 
   const foundationReady = foundationJob?.status === 'ready'
 
+  // Authentik's bootstrap token auto-creates the built-in 'akadmin' superuser at
+  // first start, which disables the initial-setup flow. The operator logs in with
+  // a temporary password (generated here) and changes it on the first prompt.
+  const [tempAdmin, setTempAdmin] = useState<AuthentikTempPassword | null>(null)
+  const [tempAdminBusy, setTempAdminBusy] = useState(false)
+  const [tempAdminError, setTempAdminError] = useState<string | null>(null)
+
+  const generateTempAdmin = async () => {
+    setTempAdminBusy(true)
+    setTempAdminError(null)
+    try {
+      setTempAdmin(await createAuthentikTempPassword())
+      toast.success('Temporary admin password ready — log in and change it on the first password prompt')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setTempAdminError(msg)
+      toast.error(msg)
+    } finally {
+      setTempAdminBusy(false)
+    }
+  }
+
   const handleNextFromSelection = async () => {
     if (!foundationReady) {
       toast.error('Complete Authentik & Vaultwarden setup on Step 1 first')
@@ -410,13 +438,13 @@ export function OnboardingWizard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Authentik Foundation Status Card */}
-            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Card 1: Authentik — SSO identity provider */}
+            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="eyebrow text-accent">Single Sign-On</span>
-                  <h3 className="text-base font-bold text-white">Authentik Master Account</h3>
+                  <span className="eyebrow text-accent">1 · Single Sign-On</span>
+                  <h3 className="text-base font-bold text-white">Authentik</h3>
                 </div>
                 <span className={`px-2.5 py-1 rounded text-xs font-bold ${
                   !foundationJob
@@ -442,50 +470,110 @@ export function OnboardingWizard() {
               </div>
 
               <p className="text-xs text-unknown">
-                Authentik provides single username & password access across M2Lab applications.
+                The identity provider. One sign-in authorizes every M2Lab app, including Vaultwarden SSO.
               </p>
 
-              <div className="p-3 bg-accent/10 border border-accent/30 rounded flex items-center justify-between gap-3">
-                <span className="text-xs text-unknown">
-                  Private login at <code className="text-white">{authentikUrl}</code>
-                </span>
+              <div className="p-2.5 bg-accent/10 border border-accent/30 rounded flex items-center justify-between gap-2">
+                <span className="text-[11px] text-unknown">Login at <code className="text-white">{authentikUrl}</code></span>
                 <a href={authentikUrl} target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1 shrink-0">
                   Open Authentik <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>
 
-              {foundationJob?.stage === 'create_owner' && foundationJob?.action?.url && (
-                <div className="p-3 bg-accent/10 border border-accent/30 rounded flex items-center justify-between">
-                  <span className="text-xs text-white">Create master admin in Authentik</span>
-                  <a href={foundationJob.action.url} target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
-                    Authentik Flow <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
+              {foundationJob?.status === 'user_action_required' && (
+                <div className="p-2.5 bg-accent/10 border border-accent/30 rounded space-y-2">
+                  <p className="text-xs text-white">
+                    Log in as <code className="text-accent">akadmin</code> with the temporary password below.
+                  </p>
+                  {tempAdmin ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <code className="text-xs text-white font-mono break-all select-all">{tempAdmin.temp_password}</code>
+                        <a href={tempAdmin.login_url} target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1 shrink-0">
+                          Log in &amp; change <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                      <p className="text-[11px] text-unknown">
+                        At least {tempAdmin.requirements.min_length} characters{tempAdmin.requirements.change_on_login ? ' · change on first login' : ''}.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-unknown">Not generated yet.</span>
+                      <button className="button-secondary text-xs flex items-center gap-1 shrink-0" onClick={generateTempAdmin} disabled={tempAdminBusy}>
+                        {tempAdminBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+                        Generate temp password
+                      </button>
+                    </div>
+                  )}
+                  {tempAdminError && <p className="text-[11px] text-rose-400">{tempAdminError}</p>}
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-1">
                 {!foundationJob ? (
                   <button className="button-primary text-xs" onClick={startFoundation}>Start Authentik Setup</button>
                 ) : foundationJob.status === 'user_action_required' ? (
                   <button className="button-primary text-xs" onClick={resumeFoundation}>
-                    {foundationJob.stage === 'create_vaultwarden_owner' ? 'Confirm Vaultwarden Created' : 'Confirm Admin Created'}
+                    {foundationJob.stage === 'create_vaultwarden_owner' ? 'Confirm Vaultwarden Created' : 'Confirm Authentik Access'}
                   </button>
                 ) : foundationJob.status === 'failed' ? (
                   <button className="button-primary text-xs" onClick={startFoundation}>Retry Authentik Setup</button>
                 ) : foundationJob.status === 'ready' ? (
-                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Authentik Core Ready</span>
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Authentik Ready</span>
                 ) : (
                   <span className="text-xs text-amber-400 font-bold flex items-center gap-1"><LoaderCircle className="h-4 w-4 animate-spin" /> Setting up…</span>
                 )}
               </div>
             </div>
 
-            {/* Vaultwarden Local Credentials Vault */}
-            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
+            {/* Card 2: Tailscale — HTTPS door */}
+            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="eyebrow text-emerald-400">Local Password Vault</span>
-                  <h3 className="text-base font-bold text-white">Vaultwarden Vault</h3>
+                  <span className="eyebrow text-amber-400">2 · HTTPS Door</span>
+                  <h3 className="text-base font-bold text-white">Tailscale Access</h3>
+                </div>
+                {systemQuery.data?.tailscale_required ? (
+                  <span className={`px-2.5 py-1 rounded text-xs font-bold ${
+                    systemQuery.data?.tailscale?.connected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                  }`}>
+                    {systemQuery.data?.tailscale?.connected ? 'Connected' : 'Required'}
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400">Loopback HTTPS</span>
+                )}
+              </div>
+
+              <p className="text-xs text-unknown">
+                The network door. Caddy serves Authentik and Vaultwarden over a machine-local HTTPS port now; Tailscale opens the same URLs to your other devices later.
+              </p>
+
+              {!systemQuery.data?.tailscale_required ? (
+                <div className="text-[11px] text-unknown space-y-1">
+                  <p className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    Local HTTPS via Caddy is active at <code className="text-white">127.0.0.1</code>.
+                  </p>
+                  <p className="flex items-start gap-1.5"><KeyRound className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                    For a green padlock, trust Caddy's root CA in this machine's browser (see <code className="text-white">.state/caddy-local-root.crt</code>).
+                  </p>
+                  <p className="flex items-start gap-1.5"><ExternalLink className="h-3.5 w-3.5 text-unknown shrink-0" />
+                    Logging into Tailscale itself with Authentik would require Headscale — out of scope here.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-[11px] text-unknown">
+                  Tailscale must be connected and serving the tailnet HTTPS ports before apps are exposed.
+                </div>
+              )}
+            </div>
+
+            {/* Card 3: Vaultwarden — password vault with SSO */}
+            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="eyebrow text-emerald-400">3 · Password Vault</span>
+                  <h3 className="text-base font-bold text-white">Vaultwarden</h3>
                 </div>
                 <span className={`px-2.5 py-1 rounded text-xs font-bold ${
                   !foundationJob
@@ -507,12 +595,12 @@ export function OnboardingWizard() {
               </div>
 
               <p className="text-xs text-unknown">
-                Vaultwarden stores your NVIDIA NIM, Google Gemini, or OpenAI API keys locally as secure notes so you can easily copy them into Step 3.
+                SSO-enabled via Authentik. Stores your provider API keys as secure notes; the vault still unlocks with your master password.
               </p>
 
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
-                <span className="text-xs text-white">Open local Vaultwarden vault</span>
-                <a href="http://127.0.0.1:8081" target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1">
+              <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between gap-2">
+                <span className="text-[11px] text-white">Open local vault</span>
+                <a href={vaultwardenUrl} target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1 shrink-0">
                   Open Vault <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>

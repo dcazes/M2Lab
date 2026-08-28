@@ -66,6 +66,16 @@ export interface SystemStats {
   load_avg: [number, number, number]
 }
 
+export interface AuthentikTempPassword {
+  username: string
+  temp_password: string
+  login_url: string
+  requirements: {
+    min_length: number
+    change_on_login: boolean
+  }
+}
+
 export type LogEventType = 'meta' | 'log'
 
 export interface LogMetaEvent {

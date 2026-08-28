@@ -17,6 +17,7 @@ import type {
   SetupJob,
   SetupJobsResponse,
   ModelAccessResponse,
+  AuthentikTempPassword,
 } from './types'
 
 const API_BASE = '/api'
@@ -165,6 +166,12 @@ export async function serviceDestroy(id: string, confirm: string): Promise<Destr
 
 export async function fetchSystemStats(): Promise<SystemStats> {
   return fetchJson<SystemStats>(`${API_BASE}/system`)
+}
+
+export async function createAuthentikTempPassword(): Promise<AuthentikTempPassword> {
+  return fetchJson<AuthentikTempPassword>(`${API_BASE}/identity/authentik-admin/temp-password`, {
+    method: 'POST',
+  })
 }
 
 export async function fetchCatalog(): Promise<CatalogResponse> {
