@@ -299,11 +299,17 @@ export function OnboardingWizard() {
 
   // Launch plan: required infrastructure + selected driven apps + selected support items
   const launchTargets = useMemo(() => {
-    const targets = new Set<string>(requiredDeps)
-    for (const app of drivenApps) if (selectedApps.has(app.id)) targets.add(app.id)
-    for (const app of supportApps) if (selectedSupport.has(app.id)) targets.add(app.id)
+    const appById = new Map(apps.map(app => [app.id, app]))
+    const targets = new Set<string>()
+    const addServiceTarget = (appId: string) => {
+      const serviceId = appById.get(appId)?.service_id
+      if (serviceId) targets.add(serviceId)
+    }
+    for (const appId of requiredDeps) addServiceTarget(appId)
+    for (const app of drivenApps) if (selectedApps.has(app.id)) addServiceTarget(app.id)
+    for (const app of supportApps) if (selectedSupport.has(app.id)) addServiceTarget(app.id)
     return targets
-  }, [requiredDeps, selectedApps, selectedSupport, drivenApps, supportApps])
+  }, [apps, requiredDeps, selectedApps, selectedSupport, drivenApps, supportApps])
 
   // Live setup-job status keyed by target, for honest step-5 status chips
   const jobByTarget = useMemo(() => {
