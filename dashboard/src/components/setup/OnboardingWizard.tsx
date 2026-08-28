@@ -12,6 +12,33 @@ import {
 } from '../../lib/api'
 import type { SetupJob, CatalogApp, AuthentikTempPassword } from '../../lib/types'
 
+function SetupTraceTerminal({ job }: { job: SetupJob }) {
+  const lines = job.events.slice(-6)
+  const active = ['queued', 'preparing', 'starting', 'waiting', 'configuring', 'verifying'].includes(job.status)
+  const elapsed = Math.max(0, Math.floor((Date.now() - new Date(job.created_at).getTime()) / 1000))
+  const elapsedLabel = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`
+  return <div className="setup-trace-terminal" role="status" aria-live="polite" aria-label="Current Authentik setup trace">
+    <div><Terminal className="h-3.5 w-3.5" /> <span>live setup trace</span><span className="setup-trace-stage">{job.stage}</span></div>
+    <div className="setup-trace-progress"><span>{job.summary}</span><strong>{job.progress}% · {active ? `running ${elapsedLabel}` : job.status}</strong><i><b style={{ width: `${job.progress}%` }} /></i></div>
+    {lines.length > 0
+      ? lines.map((event, index) => <p key={`${event.timestamp}-${index}`}><span>$</span> {event.message}</p>)
+      : <p><span>$</span> Waiting for the first setup event…</p>}
+    {job.error && <p className="setup-trace-error"><span>!</span> {job.error}</p>}
+  </div>
+}
+
+function UsageMeter({ label, total, percent }: { label: string, total: string, percent: number }) {
+  const bounded = Math.max(0, Math.min(100, percent))
+  const color = bounded >= 90 ? 'bg-rose-500' : bounded >= 75 ? 'bg-amber-400' : 'bg-accent'
+  return <div className="usage-meter">
+    <div><span>{label}</span><strong>{bounded.toFixed(1)}% <em>in use</em></strong></div>
+    <div className="usage-meter-track" aria-label={`${label}: ${bounded.toFixed(1)}% in use`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={bounded}>
+      <span className={color} style={{ width: `${bounded}%` }} />
+    </div>
+    <small>{total} total</small>
+  </div>
+}
+
 function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
   targets: Set<string>
   jobByTarget: Map<string, SetupJob>
@@ -120,18 +147,16 @@ export function OnboardingWizard() {
   const drivenApps = apps.filter(a => a.category === 'agent_driven')
   const supportApps = apps.filter(a => a.category === 'agent_support')
 
-  // Authentik's login URL — reached over local HTTPS via the Caddy ingress when
-  // Tailscale isn't required (first-run), otherwise its tailnet URL. Vaultwarden
-  // is likewise served over local HTTPS so OIDC SSO works machine-locally.
+  // During setup, use Authentik's own listener. Caddy's local HTTPS endpoint is
+  // intentionally not advertised until the ingress container has been started.
   const authentikService = servicesQuery.data?.services.find(s => s.id === 'authentik')
-  const localAuthentikHttps = 'https://127.0.0.1:19462'
-  const localVaultwardenHttps = 'https://127.0.0.1:19447'
   const authentikUrl = systemQuery.data?.tailscale_required
     ? (authentikService?.tailnet_url || 'http://127.0.0.1:9001')
-    : localAuthentikHttps
+    : (authentikService?.url || 'http://127.0.0.1:9001')
+  const authentikAvailable = authentikService?.state === 'running' && authentikService.healthy !== false
   const vaultwardenUrl = systemQuery.data?.tailscale_required
     ? (servicesQuery.data?.services.find(s => s.id === 'vaultwarden')?.tailnet_url || 'http://127.0.0.1:8081')
-    : localVaultwardenHttps
+    : (servicesQuery.data?.services.find(s => s.id === 'vaultwarden')?.url || 'http://localhost:8081')
 
   // Calculate required infrastructure dependencies based on selected driven apps
   const requiredDeps = useMemo(() => {
@@ -310,6 +335,11 @@ export function OnboardingWizard() {
   }
 
   const foundationReady = foundationJob?.status === 'ready'
+  const authentikActionNeeded = foundationJob?.status === 'user_action_required' && foundationJob.stage === 'create_owner'
+  const vaultwardenActionNeeded = foundationJob?.status === 'user_action_required' && foundationJob.stage === 'create_vaultwarden_owner'
+  const authentikCardReady = authentikService?.state === 'running' && authentikService.healthy !== false && !authentikActionNeeded
+  const vaultwardenService = servicesQuery.data?.services.find(s => s.id === 'vaultwarden')
+  const vaultwardenCardReady = vaultwardenService?.state === 'running' && vaultwardenService.healthy !== false && !vaultwardenActionNeeded
 
   // Authentik's bootstrap token auto-creates the built-in 'akadmin' superuser at
   // first start, which disables the initial-setup flow. The operator logs in with
@@ -385,12 +415,16 @@ export function OnboardingWizard() {
       {/* STEP 1: Host & Identity Foundation */}
       {step === 1 && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div>
-            <h2 className="text-xl font-bold text-white">1. Host & Identity Foundation</h2>
-            <p className="text-sm text-unknown mt-1">Verify your system requirements and establish your identity foundation before selecting apps.</p>
-          </div>
+          <section className="host-foundation-panel">
+            <div className="host-foundation-intro">
+              <ShieldCheck className="h-6 w-6 text-accent shrink-0" />
+              <div>
+                <h2 className="text-lg font-bold text-white">Host readiness</h2>
+                <p>Local Docker access, available capacity, and private networking.</p>
+              </div>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 bg-surface-2 border border-border rounded-lg space-y-2">
               <span className="text-xs font-mono text-unknown">Docker Engine</span>
               <div className="flex items-center justify-between">
@@ -399,13 +433,22 @@ export function OnboardingWizard() {
                   {systemQuery.data?.docker_ok ? 'Ready' : 'Not Connected'}
                 </span>
               </div>
+              <p className={`text-xs ${systemQuery.data?.docker_group?.active ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {systemQuery.data?.docker_group
+                  ? systemQuery.data.docker_group.active
+                    ? `${systemQuery.data.docker_group.user} is active in the docker group`
+                    : systemQuery.data.docker_group.member
+                      ? `${systemQuery.data.docker_group.user} is in the docker group; sign out/in to activate it`
+                      : `${systemQuery.data.docker_group.user} is not in the docker group`
+                  : 'Checking docker group access…'}
+              </p>
             </div>
 
             <div className="p-4 bg-surface-2 border border-border rounded-lg space-y-2">
               <span className="text-xs font-mono text-unknown">Memory & Storage</span>
-              <div className="text-sm font-semibold text-white">
-                RAM: {systemQuery.data?.mem ? Math.round(systemQuery.data.mem.total / 1073741824) : '--'} GB | Disk: {systemQuery.data?.disk ? systemQuery.data.disk.percent : '--'}%
-              </div>
+              {systemQuery.data?.mem && systemQuery.data?.disk
+                ? <div className="space-y-2"><UsageMeter label="RAM" total={`${Math.round(systemQuery.data.mem.total / 1073741824)} GB`} percent={systemQuery.data.mem.percent} /><UsageMeter label="Disk" total={`${Math.round(systemQuery.data.disk.total / 1073741824)} GB`} percent={systemQuery.data.disk.percent} /></div>
+                : <span className="text-sm text-unknown">Checking resource usage…</span>}
             </div>
 
             <div className="p-4 bg-surface-2 border border-border rounded-lg space-y-2">
@@ -426,17 +469,8 @@ export function OnboardingWizard() {
                 <p className="text-xs text-unknown">Running on 127.0.0.1 — Tailscale not required.</p>
               )}
             </div>
-          </div>
-
-          <div className="p-5 bg-accent/5 border border-accent/20 rounded-lg flex items-start gap-4">
-            <ShieldCheck className="h-6 w-6 text-accent shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h4 className="text-sm font-bold text-white">Security & Environment Guarantee</h4>
-              <p className="text-xs text-unknown leading-relaxed">
-                M2Lab runs host-integrated containers bound exclusively to <code>127.0.0.1</code>. Secrets are generated directly into mode-0600 <code>.env</code> files and never leave your host or return to the browser.
-              </p>
             </div>
-          </div>
+          </section>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Card 1: Authentik — SSO identity provider */}
@@ -447,25 +481,16 @@ export function OnboardingWizard() {
                   <h3 className="text-base font-bold text-white">Authentik</h3>
                 </div>
                 <span className={`px-2.5 py-1 rounded text-xs font-bold ${
-                  !foundationJob
-                    ? 'bg-surface-1/60 text-unknown border border-border'
-                    : foundationJob.status === 'ready'
-                      ? 'bg-emerald-500/20 text-emerald-400'
-                      : foundationJob.status === 'failed'
-                        ? 'bg-rose-500/20 text-rose-400'
-                        : foundationJob.status === 'user_action_required'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : 'bg-amber-500/20 text-amber-400'
+                  authentikCardReady ? 'bg-emerald-500/20 text-emerald-400'
+                    : foundationJob?.status === 'failed' ? 'bg-rose-500/20 text-rose-400'
+                    : authentikActionNeeded ? 'bg-blue-500/20 text-blue-400'
+                    : !foundationJob ? 'bg-surface-1/60 text-unknown border border-border'
+                    : 'bg-amber-500/20 text-amber-400'
                 }`}>
-                  {!foundationJob
-                    ? 'Not Started'
-                    : foundationJob.status === 'ready'
-                      ? 'Ready'
-                      : foundationJob.status === 'failed'
-                        ? 'Failed'
-                        : foundationJob.status === 'user_action_required'
-                          ? 'Action needed'
-                          : 'Installing…'}
+                  {authentikCardReady ? 'Ready'
+                    : foundationJob?.status === 'failed' ? 'Failed'
+                    : authentikActionNeeded ? 'Action needed'
+                    : !foundationJob ? 'Not Started' : 'Installing…'}
                 </span>
               </div>
 
@@ -473,34 +498,30 @@ export function OnboardingWizard() {
                 The identity provider. One sign-in authorizes every M2Lab app, including Vaultwarden SSO.
               </p>
 
-              <div className="p-2.5 bg-accent/10 border border-accent/30 rounded flex items-center justify-between gap-2">
-                <span className="text-[11px] text-unknown">Login at <code className="text-white">{authentikUrl}</code></span>
-                <a href={authentikUrl} target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1 shrink-0">
-                  Open Authentik <ExternalLink className="h-3.5 w-3.5" />
-                </a>
+              <div className="p-2.5 bg-accent/10 border border-accent/30 rounded flex flex-col items-stretch gap-2">
+                <span className="min-w-0 text-[11px] text-unknown break-words">Login at <code className="text-white break-all">{authentikUrl}</code></span>
+                {authentikAvailable
+                  ? <a href={authentikUrl} target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1 w-full">Open Authentik <ExternalLink className="h-3.5 w-3.5" /></a>
+                  : <span className="text-[11px] text-unknown">Authentik will become available here once its container is healthy.</span>}
               </div>
 
-              {foundationJob?.status === 'user_action_required' && (
+              {authentikActionNeeded && (
                 <div className="p-2.5 bg-accent/10 border border-accent/30 rounded space-y-2">
                   <p className="text-xs text-white">
                     Log in as <code className="text-accent">akadmin</code> with the temporary password below.
                   </p>
                   {tempAdmin ? (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <code className="text-xs text-white font-mono break-all select-all">{tempAdmin.temp_password}</code>
-                        <a href={tempAdmin.login_url} target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1 shrink-0">
-                          Log in &amp; change <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      </div>
-                      <p className="text-[11px] text-unknown">
-                        At least {tempAdmin.requirements.min_length} characters{tempAdmin.requirements.change_on_login ? ' · change on first login' : ''}.
-                      </p>
+                    <div className="space-y-2">
+                      <code className="block w-full overflow-x-auto whitespace-nowrap text-xs text-white font-mono select-all">{tempAdmin.temp_password}</code>
+                      <a href={tempAdmin.login_url} target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1 w-full">
+                        Log in to Authentik <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                      <p className="text-[11px] text-unknown">Authentik will require a new password immediately after you sign in. Choose at least {tempAdmin.requirements.min_length} characters.</p>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-2">
                       <span className="text-[11px] text-unknown">Not generated yet.</span>
-                      <button className="button-secondary text-xs flex items-center gap-1 shrink-0" onClick={generateTempAdmin} disabled={tempAdminBusy}>
+                      <button className="button-secondary text-xs flex items-center gap-1 w-full" onClick={generateTempAdmin} disabled={tempAdminBusy}>
                         {tempAdminBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
                         Generate temp password
                       </button>
@@ -510,20 +531,19 @@ export function OnboardingWizard() {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-1">
+              <div className="pt-1">
                 {!foundationJob ? (
                   <button className="button-primary text-xs" onClick={startFoundation}>Start Authentik Setup</button>
                 ) : foundationJob.status === 'user_action_required' ? (
-                  <button className="button-primary text-xs" onClick={resumeFoundation}>
-                    {foundationJob.stage === 'create_vaultwarden_owner' ? 'Confirm Vaultwarden Created' : 'Confirm Authentik Access'}
-                  </button>
+                  authentikActionNeeded && <button className="button-primary text-xs" onClick={resumeFoundation}>Admin account created</button>
                 ) : foundationJob.status === 'failed' ? (
-                  <button className="button-primary text-xs" onClick={startFoundation}>Retry Authentik Setup</button>
+                  <div className="space-y-3">
+                    <SetupTraceTerminal job={foundationJob} />
+                    <button className="button-primary text-xs" onClick={startFoundation}>Retry Authentik Setup</button>
+                  </div>
                 ) : foundationJob.status === 'ready' ? (
-                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Authentik Ready</span>
-                ) : (
-                  <span className="text-xs text-amber-400 font-bold flex items-center gap-1"><LoaderCircle className="h-4 w-4 animate-spin" /> Setting up…</span>
-                )}
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Admin account created</span>
+                ) : <SetupTraceTerminal job={foundationJob} />}
               </div>
             </div>
 
@@ -551,14 +571,11 @@ export function OnboardingWizard() {
 
               {!systemQuery.data?.tailscale_required ? (
                 <div className="text-[11px] text-unknown space-y-1">
-                  <p className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                    Local HTTPS via Caddy is active at <code className="text-white">127.0.0.1</code>.
+                  <p className="flex items-start gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <span>Local HTTPS via Caddy is active.<code className="block mt-1 text-white">127.0.0.1</code></span>
                   </p>
                   <p className="flex items-start gap-1.5"><KeyRound className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                    For a green padlock, trust Caddy's root CA in this machine's browser (see <code className="text-white">.state/caddy-local-root.crt</code>).
-                  </p>
-                  <p className="flex items-start gap-1.5"><ExternalLink className="h-3.5 w-3.5 text-unknown shrink-0" />
-                    Logging into Tailscale itself with Authentik would require Headscale — out of scope here.
+                    <span>To remove the browser's local HTTPS warning, trust Caddy's root certificate:<code className="block mt-1 text-white whitespace-nowrap">.state/caddy-local-root.crt</code></span>
                   </p>
                 </div>
               ) : (
@@ -576,21 +593,14 @@ export function OnboardingWizard() {
                   <h3 className="text-base font-bold text-white">Vaultwarden</h3>
                 </div>
                 <span className={`px-2.5 py-1 rounded text-xs font-bold ${
-                  !foundationJob
-                    ? 'bg-surface-1/60 text-unknown border border-border'
-                    : foundationJob.stage === 'create_vaultwarden_owner'
-                      ? 'bg-blue-500/20 text-blue-400'
-                      : foundationJob.status === 'ready'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-amber-500/20 text-amber-400'
+                  vaultwardenCardReady ? 'bg-emerald-500/20 text-emerald-400'
+                    : vaultwardenActionNeeded ? 'bg-blue-500/20 text-blue-400'
+                    : !foundationJob ? 'bg-surface-1/60 text-unknown border border-border'
+                    : 'bg-amber-500/20 text-amber-400'
                 }`}>
-                  {!foundationJob
-                    ? 'Not Started'
-                    : foundationJob.stage === 'create_vaultwarden_owner'
-                      ? 'Action needed'
-                      : foundationJob.status === 'ready'
-                        ? 'Ready'
-                        : 'Installing…'}
+                  {vaultwardenCardReady ? 'Ready'
+                    : vaultwardenActionNeeded ? 'Action needed'
+                    : !foundationJob ? 'Not Started' : 'Installing…'}
                 </span>
               </div>
 
@@ -599,11 +609,17 @@ export function OnboardingWizard() {
               </p>
 
               <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between gap-2">
-                <span className="text-[11px] text-white">Open local vault</span>
+                <span className="text-[11px] text-white">Open local vault setup</span>
                 <a href={vaultwardenUrl} target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1 shrink-0">
                   Open Vault <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>
+              {vaultwardenActionNeeded && (
+                <div className="space-y-2">
+                  <p className="text-xs text-unknown">Create your vault account and master password here, then continue. This initial local page avoids the browser certificate warning.</p>
+                  <button className="button-primary text-xs w-full" onClick={resumeFoundation}>Confirm Vaultwarden Created</button>
+                </div>
+              )}
             </div>
           </div>
 

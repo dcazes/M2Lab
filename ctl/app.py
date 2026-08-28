@@ -1,7 +1,9 @@
 import asyncio
+import grp
 import base64
 import json
 import os
+import pwd
 import re
 import secrets
 import select
@@ -818,11 +820,19 @@ async def service_update_status(sid: str, request: Request):
 @app.get("/api/system")
 def system():
     du = psutil.disk_usage(ROOT.anchor or "/")
+    user = pwd.getpwuid(os.geteuid()).pw_name
+    try:
+        docker_group = grp.getgrnam("docker")
+        docker_group_active = docker_group.gr_gid in os.getgroups() or os.getgid() == docker_group.gr_gid
+        docker_group_member = user in docker_group.gr_mem or docker_group_active
+    except KeyError:
+        docker_group_member = docker_group_active = False
     return {
         "cpu_percent": psutil.cpu_percent(interval=0.2),
         "mem": psutil.virtual_memory()._asdict(),
         "disk": {"total": du.total, "used": du.used, "percent": du.percent},
         "docker_ok": _docker_available(),
+        "docker_group": {"user": user, "member": docker_group_member, "active": docker_group_active},
         "tailscale": _tailscale_snapshot(),
         "tailscale_required": tailscale_required(),
         "uptime_seconds": time.time() - psutil.boot_time(),
@@ -1212,14 +1222,34 @@ def _prepare_identity_foundation() -> list[str]:
     return changed
 
 
-async def _wait_for_service(sid: str, timeout: int = 180) -> bool:
+def _check_vaultwarden_data_directory() -> None:
+    """Fail early when Vaultwarden's unprivileged container cannot write its bind."""
+    data_dir = ROOT / service_by_id("vaultwarden")["dir"] / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    if not os.access(data_dir, os.W_OK | os.X_OK):
+        raise RuntimeError(
+            "Vaultwarden's data directory is not writable by the dashboard user. "
+            "Run `sudo chown -R $(id -u):$(id -g) core/vaultwarden/data`, then retry setup."
+        )
+
+
+async def _wait_for_service(sid: str, timeout: int = 180, *, job_id: str | None = None,
+                            stage: str | None = None, progress: int | None = None) -> bool:
     deadline = time.monotonic() + timeout
     service = service_by_id(sid)
+    next_heartbeat = time.monotonic() + 10
     while time.monotonic() < deadline:
         state = await asyncio.to_thread(svc_state, service)
         application_health = await asyncio.to_thread(http_health, service)
         if state["overall"] == "running" and application_health is not False:
             return True
+        if job_id and time.monotonic() >= next_heartbeat:
+            container_state = state["overall"].replace("_", " ")
+            health_state = "not reported yet" if application_health is None else "not healthy yet"
+            update_job(job_id, status="waiting", stage=stage or f"wait_{sid}", progress=progress or 0,
+                       summary=f"Waiting for {service['display_name']}",
+                       message=f"Still waiting for {service['display_name']}: container is {container_state}; health is {health_state}")
+            next_heartbeat = time.monotonic() + 10
         await asyncio.sleep(2)
     return False
 
@@ -1240,7 +1270,7 @@ async def _start_setup_service(job_id: str, sid: str, progress: int) -> None:
         raise RuntimeError(f"{service['display_name']} could not be started. Open its sanitized service logs for details.")
     update_job(job_id, status="waiting", stage=f"wait_{sid}", progress=progress,
                summary=f"Waiting for {service['display_name']}", message=f"Containers started; waiting for {service['display_name']} health")
-    if not await _wait_for_service(sid):
+    if not await _wait_for_service(sid, job_id=job_id, stage=f"wait_{sid}", progress=progress):
         raise RuntimeError(f"{service['display_name']} did not become ready before the setup timeout.")
 
 
@@ -1329,6 +1359,7 @@ async def _run_foundation_job(job_id: str) -> None:
         changed = await asyncio.to_thread(_prepare_identity_foundation)
         update_job(job_id, status="preparing", stage="secrets_ready", progress=10,
                    summary="Security files prepared", message=f"Prepared {len(changed)} protected settings; values were not exposed")
+        await asyncio.to_thread(_check_vaultwarden_data_directory)
         # Boot Vaultwarden first so the user can create its master password and
         # store provider API keys while Authentik configures itself asynchronously.
         await _start_setup_service(job_id, "vaultwarden", 18)

@@ -55,6 +55,11 @@ export interface SystemStats {
     percent: number
   }
   docker_ok: boolean
+  docker_group: {
+    user: string
+    member: boolean
+    active: boolean
+  }
   tailscale: {
     installed: boolean
     connected: boolean

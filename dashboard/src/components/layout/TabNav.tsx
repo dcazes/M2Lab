@@ -1,19 +1,23 @@
-import { Monitor, Server, Settings, Sparkles } from 'lucide-react'
+import { MessageSquare, Monitor, Server, Settings, Sparkles } from 'lucide-react'
 import type { AppTab } from './AppShell'
 
 interface TabNavProps {
   activeTab: AppTab
   onChange: (tab: AppTab) => void
+  showSysAdminChat: boolean
 }
 
-const tabs = [
-  { id: 'workspace' as const, label: 'Workspace', icon: Monitor },
+const baseTabs = [
   { id: 'onboarding' as const, label: 'Onboarding', icon: Sparkles },
+  { id: 'workspace' as const, label: 'Workspace', icon: Monitor },
   { id: 'settings' as const, label: 'Settings', icon: Settings },
   { id: 'system' as const, label: 'System', icon: Server },
 ] as const
 
-export function TabNav({ activeTab, onChange }: TabNavProps) {
+export function TabNav({ activeTab, onChange, showSysAdminChat }: TabNavProps) {
+  const tabs = showSysAdminChat
+    ? [...baseTabs.slice(0, 2), { id: 'sysadmin-chat' as const, label: 'SysAdmin Chat', icon: MessageSquare }, ...baseTabs.slice(2)]
+    : baseTabs
   return (
     <nav className="tab-strip flex gap-1 overflow-x-auto bg-surface-1/80 rounded-card p-1 border border-border shadow-[0_16px_60px_rgba(0,0,0,.18)]" role="tablist" aria-label="Main navigation">
       {tabs.map(({ id, label, icon: Icon }) => (
