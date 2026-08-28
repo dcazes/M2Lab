@@ -42,6 +42,7 @@ services:
       BLOCK_MEDIA: ${BLOCK_MEDIA:-true}
       MAX_CONCURRENT_PAGES: "10"
     networks:
+      - frontend
       - backend
     security_opt:
       - no-new-privileges:true
@@ -87,6 +88,7 @@ services:
     ports:
       - "127.0.0.1:3002:3002"
     networks:
+      - frontend
       - backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -153,6 +155,9 @@ services:
     restart: unless-stopped
 
 networks:
+  frontend:
+    external: true
+    name: homelab_frontend
   backend:
     external: true
     name: homelab_backend

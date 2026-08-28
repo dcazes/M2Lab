@@ -134,6 +134,10 @@
   .setup-trace-terminal p { overflow: hidden; margin: 0; padding: .22rem .55rem; text-overflow: ellipsis; white-space: nowrap; }
   .setup-trace-terminal p span { color: var(--color-accent); }
   .setup-trace-terminal p.setup-trace-error { overflow: visible; white-space: normal; color: #fda4a4; background: rgba(248,81,73,.1); }.setup-trace-terminal p.setup-trace-error span { color: #f85149; }
+  .setup-trace-terminal.download-trace { max-height: 18rem; overflow-y: auto; }
+  .setup-trace-terminal.download-trace > div { position: sticky; top: 0; z-index: 1; }
+  .setup-trace-terminal.download-trace p { overflow: visible; white-space: normal; }
+  .setup-trace-terminal.download-trace time { color: #71808e; }
 
   .host-foundation-panel { padding: 1rem; border: 1px solid rgba(97,231,200,.16); border-radius: .75rem; background: rgba(97,231,200,.035); }
   .host-foundation-intro { display: flex; align-items: center; gap: .65rem; margin-bottom: .75rem; }.host-foundation-intro p { margin-top: .15rem; color: var(--color-unknown); font-size: .72rem; line-height: 1.4; }

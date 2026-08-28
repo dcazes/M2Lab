@@ -47,7 +47,7 @@ function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
 }) {
   const entries = [...targets].map(t => ({ target: t, job: jobByTarget.get(t) }))
   const pct = entries.length
-    ? Math.round(entries.reduce((s, e) => s + (e.job?.progress ?? 0), 0) / entries.length)
+    ? Math.round(entries.reduce((s, e) => s + (e.job?.status === 'user_action_required' ? 100 : (e.job?.progress ?? 0)), 0) / entries.length)
     : 0
   const readyCount = entries.filter(e => e.job?.status === 'ready').length
   const failedCount = entries.filter(e => e.job?.status === 'failed').length
@@ -56,31 +56,37 @@ function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
     ['queued', 'preparing', 'starting', 'waiting', 'configuring', 'verifying'].includes(e.job?.status ?? '')
   ).length
   const notStartedCount = entries.filter(e => !e.job).length
-  const traceLines = entries
-    .flatMap(({ target, job }) => {
-      const app = apps.find(item => item.id === target)
-      const lastEvent = job?.events.at(-1)
-      if (!job) return [{ target, name: app?.name || target, status: 'queued', message: 'Waiting for download to start.' }]
-      return [{
-        target,
-        name: app?.name || target,
-        status: job.status,
-        message: job.error || lastEvent?.message || job.summary,
-      }]
-    })
-    .sort((a, b) => (a.status === 'failed' ? -1 : 0) - (b.status === 'failed' ? -1 : 0))
 
   const appById = useMemo(() => {
     const m = new Map<string, CatalogApp>()
     for (const a of apps) m.set(a.id, a)
     return m
   }, [apps])
+  const traceLines = entries
+    .flatMap(({ target, job }) => {
+      const name = appById.get(target)?.name || target
+      if (!job) return [{ key: `${target}-queued`, timestamp: '', name, status: 'queued', message: 'Waiting for download to start.' }]
+      const lines = job.events.slice(-4).map((event, index) => ({
+        key: `${target}-${event.timestamp}-${index}`,
+        timestamp: event.timestamp,
+        name,
+        status: event.status,
+        message: event.message,
+      }))
+      if (job.error && !lines.some(line => line.message === job.error)) {
+        lines.push({ key: `${target}-error`, timestamp: job.updated_at, name, status: 'failed', message: job.error })
+      }
+      return lines
+    })
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    .slice(-30)
+  const downloadedCount = readyCount + actionCount
 
   return (
     <div className="space-y-3 bg-surface-2 p-5 border border-border rounded-lg">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-bold text-white">Application Downloads</h4>
-        <span className="font-mono text-sm text-white">{pct}%</span>
+        <span className="font-mono text-sm text-white">{pct}% · {downloadedCount}/{entries.length} downloaded</span>
       </div>
       <div className="w-full h-2 bg-bg-base rounded overflow-hidden">
         <div className="h-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
@@ -100,7 +106,7 @@ function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
               : job.status === 'failed'
                 ? { label: 'Failed', cls: 'bg-rose-500/20 text-rose-400 border border-rose-500/30' }
                 : job.status === 'user_action_required'
-                  ? { label: 'Action needed', cls: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' }
+                  ? { label: 'Downloaded · setup next', cls: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' }
                   : { label: 'Starting…', cls: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
             : { label: 'Not started', cls: 'bg-surface-1/60 text-unknown border border-border' }
           return (
@@ -116,11 +122,13 @@ function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
         })}
       </div>
       {entries.length > 0 && (
-        <div className="setup-trace-terminal" role="status" aria-live="polite" aria-label="Application download trace">
-          <div><Terminal className="h-3.5 w-3.5" /> <span>download trace</span><span className="setup-trace-stage">live status</span></div>
-          {traceLines.map(({ target, name, status, message }) => (
-            <p key={target} className={status === 'failed' ? 'setup-trace-error' : undefined}>
-              <span>{status === 'failed' ? '!' : '$'}</span> <strong>{name}:</strong> {message}
+        <div className="setup-trace-terminal download-trace" role="status" aria-live="polite" aria-label="Application download trace">
+          <div><Terminal className="h-3.5 w-3.5" /> <span>download trace</span><span className="setup-trace-stage">{traceLines.length} recent events</span></div>
+          {traceLines.map(({ key, timestamp, name, status, message }) => (
+            <p key={key} className={status === 'failed' ? 'setup-trace-error' : undefined}>
+              <span>{status === 'failed' ? '!' : '$'}</span>{' '}
+              {timestamp && <time>{new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>}{' '}
+              <strong>{name}:</strong> {message}
             </p>
           ))}
         </div>

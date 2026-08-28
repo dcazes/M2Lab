@@ -47,6 +47,8 @@ _audit_lock = asyncio.Lock()
 _approvals: dict[str, dict] = {}
 _APPROVAL_TTL = 120
 _setup_tasks: dict[str, asyncio.Task] = {}
+_setup_service_locks: dict[str, asyncio.Lock] = {}
+_app_setup_slots = asyncio.Semaphore(2)
 recover_interrupted_jobs()
 _STATE_DIR = ROOT / ".state"
 _AUDIT_PATH = _STATE_DIR / "audit.jsonl"
@@ -1291,6 +1293,12 @@ def _check_service_setup_prerequisites(sid: str) -> None:
 
 
 async def _start_setup_service(job_id: str, sid: str, progress: int) -> None:
+    """Serialize shared dependency starts across concurrent application jobs."""
+    async with _setup_service_locks.setdefault(sid, asyncio.Lock()):
+        await _start_setup_service_locked(job_id, sid, progress)
+
+
+async def _start_setup_service_locked(job_id: str, sid: str, progress: int) -> None:
     service = service_by_id(sid)
     await asyncio.to_thread(_check_service_setup_prerequisites, sid)
     current_state = await asyncio.to_thread(svc_state, service)
@@ -1301,10 +1309,35 @@ async def _start_setup_service(job_id: str, sid: str, progress: int) -> None:
                    message=f"Reused the healthy {service['display_name']} installation")
         return
     update_job(job_id, status="starting", stage=f"start_{sid}", progress=progress,
-               summary=f"Starting {service['display_name']}", message=f"Starting {service['display_name']} and its backend processes")
-    rc, _output = await run_compose(service, ["up", "-d"])
+               summary=f"Starting {service['display_name']}",
+               message=f"Docker launch requested for {service['display_name']}; downloading missing images and creating containers")
+    compose_task = asyncio.create_task(run_compose(service, ["up", "-d"]))
+    started_at = time.monotonic()
+    while not compose_task.done():
+        done, _pending = await asyncio.wait({compose_task}, timeout=8)
+        if done:
+            break
+        elapsed = int(time.monotonic() - started_at)
+        update_job(job_id, status="starting", stage=f"start_{sid}", progress=progress,
+                   summary=f"Downloading and starting {service['display_name']}",
+                   message=f"Docker is still pulling images or creating containers for {service['display_name']} ({elapsed}s elapsed)")
+    rc, output = await compose_task
     if rc != 0:
         raise RuntimeError(f"{service['display_name']} could not be started. Open its sanitized service logs for details.")
+    pulled = sum(" Pulled" in line for line in output.splitlines())
+    created = sum(" Created" in line for line in output.splitlines())
+    started = sum(" Started" in line for line in output.splitlines())
+    activity = []
+    if pulled:
+        activity.append(f"{pulled} image{'s' if pulled != 1 else ''} downloaded")
+    if created:
+        activity.append(f"{created} container{'s' if created != 1 else ''} created")
+    if started:
+        activity.append(f"{started} container{'s' if started != 1 else ''} started")
+    detail = ", ".join(activity) if activity else "cached images and existing containers reused"
+    update_job(job_id, status="starting", stage=f"start_{sid}", progress=progress,
+               summary=f"Docker finished {service['display_name']} launch",
+               message=f"Docker launch completed for {service['display_name']}: {detail}")
     update_job(job_id, status="waiting", stage=f"wait_{sid}", progress=progress,
                summary=f"Waiting for {service['display_name']}", message=f"Containers started; waiting for {service['display_name']} health")
     if not await _wait_for_service(sid, job_id=job_id, stage=f"wait_{sid}", progress=progress):
@@ -1443,6 +1476,10 @@ def _foundation_ready() -> bool:
 
 
 async def _run_app_setup_job(job_id: str, sid: str) -> None:
+    update_job(job_id, status="queued", stage="launch_queue", progress=2,
+               summary=f"Queued {service_by_id(sid)['display_name']} download",
+               message="Download request accepted; waiting for an available setup slot")
+    await _app_setup_slots.acquire()
     try:
         if not _foundation_ready():
             raise RuntimeError("Complete Authentik core setup before onboarding a human-facing application.")
@@ -1488,10 +1525,9 @@ async def _run_app_setup_job(job_id: str, sid: str) -> None:
             if index < len(staggered_order) - 1:
                 await asyncio.sleep(1)
         identity_app = next((item for item in identity_app_inventory({sid: "running"}) if item["id"] == sid), None)
-        if identity_app and identity_app["mode"] != "machine_only":
-            note = ("Authentik protects access, but this app requires one local account handoff."
-                    if identity_app["mode"] == "access_gate_only" else
-                    "Complete the application identity handoff; M2Lab will verify it afterward.")
+        bootstrap = (target_app or {}).get("setup", {}).get("bootstrap", "none")
+        if identity_app and bootstrap == "first_login":
+            note = "The application is downloaded and healthy. Complete its one-time account setup to finish onboarding."
             update_job(job_id, status="user_action_required", stage="identity_handoff", progress=75,
                        summary=f"Finish {service_by_id(sid)['display_name']} sign-in", message=note,
                        action={"kind": "open_url", "label": f"Open {service_by_id(sid)['display_name']}", "url": identity_app["external_url"]})
@@ -1502,6 +1538,7 @@ async def _run_app_setup_job(job_id: str, sid: str) -> None:
         update_job(job_id, status="failed", stage="failed", progress=0,
                    summary=f"{service_by_id(sid)['display_name']} setup needs attention", message="Setup stopped safely.", error=str(error)[:500])
     finally:
+        _app_setup_slots.release()
         _setup_tasks.pop(job_id, None)
 
 
