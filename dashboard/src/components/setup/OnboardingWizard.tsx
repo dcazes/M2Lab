@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check, Cpu, ExternalLink, Layers, LoaderCircle, Rocket, ShieldCheck, Sparkles, Terminal, ArrowRight, Lock, KeyRound
@@ -311,6 +311,17 @@ export function OnboardingWizard() {
     if (ok) setStep(3)
   }
 
+  // Authentik & Vaultwarden are the foundation — install them by default as
+  // soon as onboarding opens, unless a foundation job already exists.
+  const autoStartedRef = useRef(false)
+  useEffect(() => {
+    if (autoStartedRef.current) return
+    if (!jobsQuery.data) return // wait for the first status poll
+    autoStartedRef.current = true
+    const hasFoundation = jobsQuery.data.jobs.some(j => j.target === 'foundation')
+    if (!hasFoundation) startFoundation()
+  }, [jobsQuery.data])
+
   return (
     <div className="mx-auto max-w-5xl bg-surface-1 border border-border rounded-xl p-6 md:p-8 shadow-2xl space-y-8">
       {/* Wizard Header Nav */}
@@ -395,8 +406,26 @@ export function OnboardingWizard() {
                   <span className="eyebrow text-accent">Single Sign-On</span>
                   <h3 className="text-base font-bold text-white">Authentik Master Account</h3>
                 </div>
-                <span className={`px-2.5 py-1 rounded text-xs font-bold ${foundationJob?.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                  {foundationJob?.status || 'Not Started'}
+                <span className={`px-2.5 py-1 rounded text-xs font-bold ${
+                  !foundationJob
+                    ? 'bg-surface-1/60 text-unknown border border-border'
+                    : foundationJob.status === 'ready'
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : foundationJob.status === 'failed'
+                        ? 'bg-rose-500/20 text-rose-400'
+                        : foundationJob.status === 'user_action_required'
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-amber-500/20 text-amber-400'
+                }`}>
+                  {!foundationJob
+                    ? 'Not Started'
+                    : foundationJob.status === 'ready'
+                      ? 'Ready'
+                      : foundationJob.status === 'failed'
+                        ? 'Failed'
+                        : foundationJob.status === 'user_action_required'
+                          ? 'Action needed'
+                          : 'Installing…'}
                 </span>
               </div>
 
@@ -437,8 +466,12 @@ export function OnboardingWizard() {
                   <button className="button-primary text-xs" onClick={resumeFoundation}>
                     {foundationJob.stage === 'create_vaultwarden_owner' ? 'Confirm Vaultwarden Created' : 'Confirm Admin Created'}
                   </button>
-                ) : (
+                ) : foundationJob.status === 'failed' ? (
+                  <button className="button-primary text-xs" onClick={startFoundation}>Retry Authentik Setup</button>
+                ) : foundationJob.status === 'ready' ? (
                   <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Authentik Core Ready</span>
+                ) : (
+                  <span className="text-xs text-amber-400 font-bold flex items-center gap-1"><LoaderCircle className="h-4 w-4 animate-spin" /> Setting up…</span>
                 )}
               </div>
             </div>
@@ -451,11 +484,21 @@ export function OnboardingWizard() {
                   <h3 className="text-base font-bold text-white">Vaultwarden Vault</h3>
                 </div>
                 <span className={`px-2.5 py-1 rounded text-xs font-bold ${
-                  foundationJob?.stage === 'create_vaultwarden_owner'
-                    ? 'bg-amber-500/20 text-amber-400'
-                    : 'bg-emerald-500/20 text-emerald-400'
+                  !foundationJob
+                    ? 'bg-surface-1/60 text-unknown border border-border'
+                    : foundationJob.stage === 'create_vaultwarden_owner'
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : foundationJob.status === 'ready'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-amber-500/20 text-amber-400'
                 }`}>
-                  {foundationJob?.stage === 'create_vaultwarden_owner' ? 'Action needed' : 'Ready'}
+                  {!foundationJob
+                    ? 'Not Started'
+                    : foundationJob.stage === 'create_vaultwarden_owner'
+                      ? 'Action needed'
+                      : foundationJob.status === 'ready'
+                        ? 'Ready'
+                        : 'Installing…'}
                 </span>
               </div>
 
