@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCatalog } from '../../hooks/useCatalog'
+import { useServices } from '../../hooks/useServices'
 import {
   fetchSystemStats, fetchSetupJobs, wireModelPipeline, createSetupApproval, startSetupTarget,
   resumeSetupJob, ollamaPullStreamUrl
@@ -111,12 +112,17 @@ export function OnboardingWizard() {
   // System & Services queries
   const systemQuery = useQuery({ queryKey: ['system-stats'], queryFn: fetchSystemStats })
   const catalogQuery = useCatalog()
+  const servicesQuery = useServices()
   const jobsQuery = useQuery({ queryKey: ['setup-jobs'], queryFn: fetchSetupJobs, refetchInterval: 2000 })
   const queryClient = useQueryClient()
 
   const apps = catalogQuery.data?.apps || []
   const drivenApps = apps.filter(a => a.category === 'agent_driven')
   const supportApps = apps.filter(a => a.category === 'agent_support')
+
+  // Authentik's private tailnet URL, so the wizard can point users at the login page
+  const authentikService = servicesQuery.data?.services.find(s => s.id === 'authentik')
+  const authentikUrl = authentikService?.tailnet_url || 'http://127.0.0.1:9001'
 
   // Calculate required infrastructure dependencies based on selected driven apps
   const requiredDeps = useMemo(() => {
@@ -397,6 +403,15 @@ export function OnboardingWizard() {
               <p className="text-xs text-unknown">
                 Authentik provides single username & password access across M2Lab applications.
               </p>
+
+              <div className="p-3 bg-accent/10 border border-accent/30 rounded flex items-center justify-between gap-3">
+                <span className="text-xs text-unknown">
+                  Private login at <code className="text-white">{authentikUrl}</code>
+                </span>
+                <a href={authentikUrl} target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1 shrink-0">
+                  Open Authentik <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
 
               {foundationJob?.stage === 'create_vaultwarden_owner' && (
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
