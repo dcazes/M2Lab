@@ -1,5 +1,8 @@
 {
-  auto_https off
+  # auto-HTTPS only for sites that explicitly request TLS via https:// + a
+  # local_certs (internal CA) cert; existing bare :PORT sites stay plain HTTP.
+  auto_https disable_redirects
+  local_certs
   admin off
 }
 
@@ -136,4 +139,28 @@
     # external scheme so Authentik builds correct HTTPS/WSS flow URLs.
     header_up X-Forwarded-Proto https
   }
+}
+
+# Local HTTPS via Caddy's internal CA so OIDC SSO works machine-locally
+# before Tailscale is available. The root CA at
+#   caddy-data/pki/authorities/local/root.crt
+# must be trusted by the local browser for these to be trusted. Tailscale
+# later maps the same backs to the tailnet HTTPS host for other devices.
+https://127.0.0.1:19462 {
+  tls internal
+  # Authentik infers its own OIDC issuer/report URLs from these headers, so
+  # the machine-local HTTPS origin must match the one Vaultwarden discovers.
+  reverse_proxy 127.0.0.1:9001 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Host 127.0.0.1:19462
+    header_up Host 127.0.0.1:19462
+  }
+}
+
+# Vaultwarden served over local HTTPS; Vaultwarden's OIDC redirect URI
+# (https://127.0.0.1:19447/identity/connect/oidc-signin) is registered on the
+# Authentik provider.
+https://127.0.0.1:19447 {
+  tls internal
+  reverse_proxy 127.0.0.1:8081
 }

@@ -17,9 +17,12 @@ export function FoundationSetupCard() {
   const [busy, setBusy] = useState(false)
   const foundation = jobs.data?.jobs.find(job => job.target === 'foundation')
   const serviceMap = new Map(services.data?.services.map(service => [service.id, service]) || [])
+  const tailRequired = system.data?.tailscale_required === true
   const components = [
     { id: 'docker', name: 'Docker', ready: system.data?.docker_ok === true },
-    { id: 'tailscale', name: 'Tailscale', ready: system.data?.tailscale.connected === true },
+    ...(tailRequired
+      ? [{ id: 'tailscale', name: 'Tailscale', ready: system.data?.tailscale.connected === true }]
+      : []),
     ...SERVICE_IDS.map(id => {
       const service = serviceMap.get(id)
       return { id, name: service?.display_name || id, ready: service?.state === 'running' && service.healthy !== false }
@@ -75,7 +78,9 @@ export function FoundationSetupCard() {
     <div className="settings-foundation-copy">
       <span className="eyebrow">Private access foundation</span>
       <h3>{foundation?.summary || 'Set up one identity before app accounts'}</h3>
-      <p>{foundation?.error || foundation?.events[foundation.events.length - 1]?.message || 'M2Lab checks Docker and Tailscale, then starts PostgreSQL, Authentik, Caddy, private routing, and Vaultwarden.'}</p>
+      <p>{foundation?.error || foundation?.events[foundation.events.length - 1]?.message || (tailRequired
+        ? 'M2Lab checks Docker and Tailscale, then starts PostgreSQL, Authentik, Caddy, private routing, and Vaultwarden.'
+        : 'M2Lab checks Docker, then starts PostgreSQL, Authentik, Caddy, and Vaultwarden on your localhost.')}</p>
       {foundation?.action?.url && <a href={foundation.action.url} target="_blank" rel="noreferrer">{foundation.action.label} <ExternalLink /></a>}
     </div>
     <div className="settings-foundation-progress">

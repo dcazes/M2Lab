@@ -6,6 +6,7 @@ import re
 import secrets
 import select
 import sqlite3
+import string
 import subprocess
 import time
 import urllib.request
@@ -30,7 +31,7 @@ from .mcp_registry import (
     harness_preview, mark_verified, registry_snapshot, update_server,
     write_harness_exports,
 )
-from .registry import ROOT, SERVICES, service_by_id, SETTINGS
+from .registry import ROOT, SERVICES, service_by_id, SETTINGS, tailscale_required
 from .setup_jobs import create_job, get_job, list_jobs, recover_interrupted_jobs, update_job
 
 DLI = docker.DockerClient.from_env()
@@ -351,6 +352,70 @@ async def verify_identity_application(sid: str, request: Request):
         raise HTTPException(404, "Unknown identity application") from None
     await audit_event(request, "identity.verify", service_id=sid, result=result["verification"])
     return result
+
+
+def _authentik_admin_payload() -> dict | None:
+    values = _parse_env_file(ROOT / service_by_id("authentik")["dir"] / ".env")
+    token = values.get("AUTHENTIK_BOOTSTRAP_TOKEN", "")
+    port = service_by_id("authentik").get("port") or 9001
+    return {"token": token, "port": port} if token else None
+
+
+def _authentik_login_url() -> str:
+    port = service_by_id("authentik").get("port") or 9001
+    return f"http://127.0.0.1:{port}/if/flow/default-authentication-flow/"
+
+
+def _generate_temp_password(length: int = 18) -> str:
+    """Random temp admin password meeting Authentik's default policy (min 8)."""
+    pool = string.ascii_letters + string.digits + "!@#$%*"
+    return "".join(secrets.choice(pool) for _ in range(length))
+
+
+@app.post("/api/identity/authentik-admin/temp-password")
+async def create_authentik_admin_temp_password(request: Request):
+    """Set a single-use, change-on-login temp password for the built-in akadmin.
+
+    Authentik's bootstrap token auto-creates a superuser during first start, which
+    disables the initial-setup flow and leaves the operator without known
+    credentials. This endpoint sets a fresh password that must be changed on the
+    first signed-in visit, and returns it to the host-local owner exactly once.
+    """
+    require_trusted_request(request)
+    payload = _authentik_admin_payload()
+    if not payload:
+        raise HTTPException(409, "Authentik bootstrap token is not configured")
+    base = f"http://127.0.0.1:{payload['port']}"
+    headers = {"Authorization": f"Bearer {payload['token']}", "Content-Type": "application/json"}
+    try:
+        request_obj = urllib.request.Request(f"{base}/api/v3/core/users/?username=akadmin", headers=headers)
+        with urllib.request.urlopen(request_obj, timeout=5) as response:
+            data = json.loads(response.read().decode())
+        results = data.get("results", [])
+        if not results:
+            raise HTTPException(409, "Authentik admin user 'akadmin' was not found")
+        uid = results[0]["pk"]
+        temp_password = _generate_temp_password()
+        set_body = json.dumps({"password": temp_password, "password_change_required": True}).encode()
+        set_request = urllib.request.Request(
+            f"{base}/api/v3/core/users/{uid}/set_password/", data=set_body,
+            headers=headers, method="POST")
+        with urllib.request.urlopen(set_request, timeout=5) as response:
+            if response.status != 204:
+                raise HTTPException(502, "Authentik did not accept the new password")
+    except HTTPException:
+        raise
+    except urllib.error.HTTPError as error:
+        raise HTTPException(502, f"Authentik rejected the request ({error.code})") from None
+    except urllib.error.URLError:
+        raise HTTPException(502, "Authentik is not reachable") from None
+    await audit_event(request, "identity.authentik_admin_temp_password")
+    return {
+        "username": "akadmin",
+        "temp_password": temp_password,
+        "login_url": _authentik_login_url(),
+        "requirements": {"min_length": 8, "change_on_login": True},
+    }
 
 
 @app.get("/api/services")
@@ -759,6 +824,7 @@ def system():
         "disk": {"total": du.total, "used": du.used, "percent": du.percent},
         "docker_ok": _docker_available(),
         "tailscale": _tailscale_snapshot(),
+        "tailscale_required": tailscale_required(),
         "uptime_seconds": time.time() - psutil.boot_time(),
         "load_avg": list(os.getloadavg()),
     }
@@ -1125,20 +1191,24 @@ def _prepare_identity_foundation() -> list[str]:
     root_values.setdefault("OMNILAB_REQUIRE_IDENTITY", "false")
     _write_env_file(ROOT / ".env", root_values)
 
-    authentik_values = _parse_env_file(ROOT / "authentik" / ".env")
+    authentik_dir = ROOT / service_by_id("authentik")["dir"]
+    authentik_values = _parse_env_file(authentik_dir / ".env")
     authentik_values.setdefault("AUTHENTIK_TAG", "2026.5.0")
     for key, size in (("AUTHENTIK_SECRET_KEY", 32), ("AUTHENTIK_POSTGRESQL__PASSWORD", 24),
                       ("AUTHENTIK_BOOTSTRAP_TOKEN", 32)):
         if _secret_missing(authentik_values.get(key)):
             authentik_values[key] = secrets.token_hex(size)
             changed.append(f"authentik {key.lower()}")
-    _write_env_file(ROOT / "authentik" / ".env", authentik_values)
+    authentik_dir.mkdir(parents=True, exist_ok=True)
+    _write_env_file(authentik_dir / ".env", authentik_values)
 
-    ingress_values = _parse_env_file(ROOT / "ingress" / ".env")
+    ingress_dir = ROOT / service_by_id("sso-ingress")["dir"]
+    ingress_values = _parse_env_file(ingress_dir / ".env")
     if ingress_values.get("OMNILAB_INGRESS_TOKEN") != ingress_token:
         ingress_values["OMNILAB_INGRESS_TOKEN"] = ingress_token
         changed.append("caddy ingress token")
-    _write_env_file(ROOT / "ingress" / ".env", ingress_values)
+    ingress_dir.mkdir(parents=True, exist_ok=True)
+    _write_env_file(ingress_dir / ".env", ingress_values)
     return changed
 
 
@@ -1187,6 +1257,8 @@ async def _foundation_preflight(job_id: str) -> None:
             missing_networks.append(network)
     if missing_networks:
         raise RuntimeError(f"Required Docker networks are missing: {', '.join(missing_networks)}. Run the host bootstrap, then retry.")
+    if not tailscale_required():
+        return
     tailscale = await asyncio.to_thread(_tailscale_snapshot)
     if not tailscale["installed"]:
         raise RuntimeError("Tailscale is not installed. Install it and sign in before continuing.")
@@ -1238,6 +1310,17 @@ async def _verify_external_authentik(timeout: int = 45) -> bool:
     return False
 
 
+def _authentik_setup_url() -> str:
+    """Point the user at Authentik's initial-setup flow for the active mode.
+
+    Without Tailscale we use the loopback address directly; with it required we
+    hand back the published tailnet URL.
+    """
+    if tailscale_required():
+        return f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"
+    return "http://127.0.0.1:9001/if/flow/initial-setup/"
+
+
 async def _run_foundation_job(job_id: str) -> None:
     try:
         await _foundation_preflight(job_id)
@@ -1254,18 +1337,19 @@ async def _run_foundation_job(job_id: str) -> None:
                    summary="Validating private ingress", message="Checking every Caddy listener before it can receive traffic")
         await _validate_caddy()
         await _start_setup_service(job_id, "sso-ingress", 58)
-        update_job(job_id, status="configuring", stage="tailscale", progress=72,
-                   summary="Publishing private Authentik URL", message="Connecting the existing tailnet URL to the identity gateway")
-        routed, route_error = await _route_authentik()
-        if not routed:
-            update_job(job_id, status="user_action_required", stage="tailscale_permission", progress=72,
-                       summary="Tailscale permission required", message=route_error or "Tailscale route needs attention",
-                       action={"kind": "tailscale_permission", "label": "Review host permission"}, error=route_error)
-            return
-        update_job(job_id, status="verifying", stage="verify_external_authentik", progress=80,
-                   summary="Verifying Authentik", message="Checking the complete Tailscale, Caddy, and Authentik path")
-        if not await _verify_external_authentik():
-            raise RuntimeError("Authentik started locally, but its private 8462 URL did not pass the end-to-end health check.")
+        if tailscale_required():
+            update_job(job_id, status="configuring", stage="tailscale", progress=72,
+                       summary="Publishing private Authentik URL", message="Connecting the existing tailnet URL to the identity gateway")
+            routed, route_error = await _route_authentik()
+            if not routed:
+                update_job(job_id, status="user_action_required", stage="tailscale_permission", progress=72,
+                           summary="Tailscale permission required", message=route_error or "Tailscale route needs attention",
+                           action={"kind": "tailscale_permission", "label": "Review host permission"}, error=route_error)
+                return
+            update_job(job_id, status="verifying", stage="verify_external_authentik", progress=80,
+                       summary="Verifying Authentik", message="Checking the complete Tailscale, Caddy, and Authentik path")
+            if not await _verify_external_authentik():
+                raise RuntimeError("Authentik started locally, but its private 8462 URL did not pass the end-to-end health check.")
         update_job(job_id, status="user_action_required", stage="create_vaultwarden_owner", progress=84,
                    summary="Create your Vaultwarden master password", message="Vaultwarden is ready. Create its master account now so you can store provider API keys while Authentik finishes configuring.",
                    action={"kind": "open_url", "label": "Open Vaultwarden", "url": "http://127.0.0.1:8081"})
@@ -1281,7 +1365,7 @@ def _foundation_ready() -> bool:
     completed = any(job["target"] == "foundation" and job["status"] == "ready" for job in snapshot["jobs"])
     if not completed:
         return False
-    if _tailscale_serve_proxies().get(8462) != "http://127.0.0.1:19062":
+    if tailscale_required() and _tailscale_serve_proxies().get(8462) != "http://127.0.0.1:19062":
         return False
     return all(
         svc_state(service_by_id(sid))["overall"] == "running"
@@ -1395,6 +1479,8 @@ async def resume_setup_job(job_id: str, request: Request):
     if not body.get("completed"):
         raise HTTPException(400, "Confirm the displayed handoff is complete before resuming")
     if job["target"] == "foundation" and job["stage"] == "tailscale_permission":
+        if not tailscale_required():
+            raise HTTPException(409, "Tailscale is not required in this install mode")
         routed, route_error = await _route_authentik()
         if not routed:
             raise HTTPException(409, route_error or "The Authentik route is not ready")
@@ -1408,11 +1494,16 @@ async def resume_setup_job(job_id: str, request: Request):
         if not await _wait_for_service("vaultwarden", 10):
             raise HTTPException(409, "Vaultwarden is not reachable yet")
         result = update_job(job_id, status="user_action_required", stage="create_owner", progress=90,
-                            summary="Create your M2Lab owner",
-                            message="Authentik is ready. Create the first owner, enroll MFA or a passkey, and save recovery codes.",
-                            action={"kind": "open_url", "label": "Open Authentik setup", "url": f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"})
+                            summary="Sign in to Authentik",
+                            message="Authentik auto-created the built-in 'akadmin' owner during first start, so the initial-setup flow is disabled. Log in with the temporary admin password, change it on first login, then enroll MFA or a passkey and save recovery codes.",
+                            action={"kind": "open_url", "label": "Open Authentik login", "url": _authentik_login_url()})
     elif job["target"] == "foundation" and job["stage"] == "create_owner":
-        if not await _wait_for_service("authentik", 10) or not await _verify_external_authentik(10):
+        if tailscale_required():
+            if not await _verify_external_authentik(10):
+                raise HTTPException(409, "Authentik is not reachable yet")
+            if not await _wait_for_service("authentik", 10):
+                raise HTTPException(409, "Authentik is not reachable yet")
+        elif not await _wait_for_service("authentik", 10):
             raise HTTPException(409, "Authentik is not reachable yet")
         # Vaultwarden was started early in the foundation job; ensure it is still up.
         if svc_state(service_by_id("vaultwarden"))["overall"] != "running":
@@ -1423,7 +1514,8 @@ async def resume_setup_job(job_id: str, request: Request):
                            summary="Vaultwarden needs attention", message="Identity is ready, but Vaultwarden did not start.", error=str(error)[:500])
                 raise HTTPException(500, str(error)) from error
         result = update_job(job_id, status="ready", stage="ready", progress=100,
-                            summary="Identity foundation is ready", message="Authentik, Caddy, Tailscale routing, and Vaultwarden are ready")
+                            summary="Identity foundation is ready", message="Authentik, Caddy, and Vaultwarden are ready"
+                            + (", with Tailscale routing" if tailscale_required() else " (loopback mode)"))
     elif job["status"] == "user_action_required":
         sid = job["target"]
         if not await _wait_for_service(sid, 10):
@@ -1660,6 +1752,23 @@ if not dist.is_dir():
     raise RuntimeError(
         f"Dashboard bundle missing: {dist} — run `npm run build` in dashboard/"
     )
+
+
+@app.middleware("http")
+async def no_cache_html(request, call_next):
+    """Prevent the browser from heuristically caching index.html.
+
+    The SPA entry document references content-hashed asset files; if the
+    browser serves a stale copy of index.html it keeps requesting old (now
+    deleted) bundles. Always revalidate the HTML document but let hashed
+    assets stay cacheable.
+    """
+    response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
 
 

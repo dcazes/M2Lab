@@ -61,6 +61,7 @@ export interface SystemStats {
     hostname: string | null
     serve_ports: number[]
   }
+  tailscale_required: boolean
   uptime_seconds: number
   load_avg: [number, number, number]
 }

@@ -120,9 +120,12 @@ export function OnboardingWizard() {
   const drivenApps = apps.filter(a => a.category === 'agent_driven')
   const supportApps = apps.filter(a => a.category === 'agent_support')
 
-  // Authentik's private tailnet URL, so the wizard can point users at the login page
+  // Authentik's login URL — the loopback address when Tailscale isn't required
+  // (first-run), otherwise its tailnet URL.
   const authentikService = servicesQuery.data?.services.find(s => s.id === 'authentik')
-  const authentikUrl = authentikService?.tailnet_url || 'http://127.0.0.1:9001'
+  const authentikUrl = systemQuery.data?.tailscale_required
+    ? (authentikService?.tailnet_url || 'http://127.0.0.1:9001')
+    : 'http://127.0.0.1:9001'
 
   // Calculate required infrastructure dependencies based on selected driven apps
   const requiredDeps = useMemo(() => {
@@ -381,10 +384,19 @@ export function OnboardingWizard() {
               <span className="text-xs font-mono text-unknown">Tailscale Support</span>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-white">{systemQuery.data?.tailscale?.hostname || 'Localhost'}</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-bold ${systemQuery.data?.tailscale?.connected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400'}`}>
-                  {systemQuery.data?.tailscale?.connected ? 'Connected' : 'Loopback'}
-                </span>
+                {systemQuery.data?.tailscale_required ? (
+                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${systemQuery.data?.tailscale?.connected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400'}`}>
+                    {systemQuery.data?.tailscale?.connected ? 'Connected' : 'Required'}
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Loopback
+                  </span>
+                )}
               </div>
+              {!systemQuery.data?.tailscale_required && (
+                <p className="text-xs text-unknown">Running on 127.0.0.1 — Tailscale not required.</p>
+              )}
             </div>
           </div>
 
@@ -442,14 +454,6 @@ export function OnboardingWizard() {
                 </a>
               </div>
 
-              {foundationJob?.stage === 'create_vaultwarden_owner' && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
-                  <span className="text-xs text-white">Create your Vaultwarden master password first</span>
-                  <a href="http://127.0.0.1:8081" target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
-                    Open Vaultwarden <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              )}
               {foundationJob?.stage === 'create_owner' && foundationJob?.action?.url && (
                 <div className="p-3 bg-accent/10 border border-accent/30 rounded flex items-center justify-between">
                   <span className="text-xs text-white">Create master admin in Authentik</span>

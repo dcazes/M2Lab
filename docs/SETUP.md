@@ -37,6 +37,16 @@ Firewall management is opt-in because changing the host's inbound policy can
 affect custom SSH configurations. M2Lab remains local-only without that option:
 all dashboard and application ports are bound to `127.0.0.1`.
 
+### Tailscale is optional for first-run
+
+The identity foundation (Authentik, Caddy, Vaultwarden) runs entirely on
+loopback and no longer requires Tailscale on the host. Onboarding proceeds
+without it and hands out `http://127.0.0.1:9001` links instead of tailnet URLs.
+
+To opt back into requiring an installed+connected Tailscale and publishing the
+private 8462 route, either set `tailscale_required: true` in `services.yaml` or
+export `OMNILAB_REQUIRE_TAILSCALE=true` before starting the dashboard.
+
 ## First start
 
 Open `http://127.0.0.1:8787` after installation. If Docker was installed during

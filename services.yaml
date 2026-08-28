@@ -2,6 +2,9 @@
 settings:
   dashboard_port: 8787
   compose_timeout_stop: 120
+  # First-run works without Tailscale. Set true (or OMNILAB_REQUIRE_TAILSCALE=true)
+  # to require an installed+connected tailnet and publish private routes.
+  tailscale_required: false
   tailnet_base: "https://home.taile2cc7a.ts.net"
 
 services:

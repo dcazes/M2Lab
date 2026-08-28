@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from .registry import SETTINGS, service_by_id
+from .registry import SETTINGS, service_by_id, tailscale_required
 
 
 NATIVE = "native_sso"
@@ -45,8 +45,11 @@ APPS: tuple[dict, ...] = (
 
 def external_url(service_id: str) -> str | None:
     service = service_by_id(service_id)
-    port = service.get("tailnet_port")
-    return f"{SETTINGS['tailnet_base']}:{port}/" if port else None
+    if tailscale_required():
+        port = service.get("tailnet_port")
+        return f"{SETTINGS['tailnet_base']}:{port}/" if port else None
+    port = service.get("port") or service.get("tailnet_port")
+    return f"http://127.0.0.1:{port}/" if port else None
 
 
 def app_inventory(states: dict[str, str] | None = None) -> list[dict]:
