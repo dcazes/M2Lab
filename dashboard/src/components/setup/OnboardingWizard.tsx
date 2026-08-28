@@ -680,17 +680,23 @@ export function OnboardingWizard() {
                   <p className="text-xs text-unknown line-clamp-2">{app.description}</p>
 
                   {app.mcp_summary && (
-                    <div className="p-2.5 bg-bg-base/60 rounded border border-border/50 text-xs space-y-1.5">
-                      <div className="font-semibold text-emerald-400 flex items-center gap-1">
+                    <details
+                      className="p-2.5 bg-bg-base/60 rounded border border-border/50 text-xs"
+                      onClick={event => event.stopPropagation()}
+                    >
+                      <summary className="cursor-pointer list-none font-semibold text-emerald-400 flex items-center gap-1">
                         <Terminal className="h-3 w-3" /> MCP Summary & Example Prompts
+                        <span className="ml-auto text-[10px] text-unknown font-normal">Show details</span>
+                      </summary>
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-unknown text-[11px]">{app.mcp_summary.summary}</p>
+                        {app.mcp_summary.example_prompts.map((promptText: string, idx: number) => (
+                          <div key={idx} className="text-[10px] text-emerald-300 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">
+                            "{promptText}"
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-unknown text-[11px]">{app.mcp_summary.summary}</p>
-                      {app.mcp_summary.example_prompts.map((promptText: string, idx: number) => (
-                        <div key={idx} className="text-[10px] text-emerald-300 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">
-                          "{promptText}"
-                        </div>
-                      ))}
-                    </div>
+                    </details>
                   )}
 
                   {app.links && (
