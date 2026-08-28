@@ -248,5 +248,6 @@ if ! docker_sudo info >/dev/null 2>&1; then
   warn "Your current login does not yet have Docker access. Run 'newgrp docker' (or log out and back in), then run ./start.sh."
 fi
 
-printf '\nNext step: Open the dashboard in your browser to complete first-time setup:\n'
+printf '\nNext step: log out and back in (or run "newgrp docker") so your user\n'
+printf 'can access Docker, then open the dashboard to complete first-time setup:\n'
 printf '  → http://127.0.0.1:8787 (Click the "Onboarding" tab)\n\n'
