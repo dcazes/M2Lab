@@ -36,7 +36,7 @@ Access at `https://your-domain/admin`
 ### 4. Authentik SSO wiring
 Create one Authentik **Proxy** provider and attach it to the embedded outpost:
 
-- external host: `https://127.0.0.1:19447`
+- external host: `https://your-tailnet-host.example.ts.net:8446`
 - internal host: `http://127.0.0.1:8081`
 - mode: **Forward Single**
 - application slug: `vaultwarden`
@@ -52,7 +52,8 @@ chooser.
 - **Tailscale:** tailnet HTTPS URL once connected
 
 ## SSO login
-Use `https://127.0.0.1:19447`. Do not use the plain `localhost:8081` login
+Use the configured Tailscale Caddy URL (for example,
+`https://your-tailnet-host.example.ts.net:8446`). Do not use the plain `localhost:8081` login
 page for normal access: it is outside Caddy and therefore cannot share the
 Authentik session. Vaultwarden is not exposed to any MCP/agent path.
 

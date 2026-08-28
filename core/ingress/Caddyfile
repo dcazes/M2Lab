@@ -18,6 +18,10 @@
     # The embedded outpost is reached over loopback, but it must see the
     # public Authentik host to generate a usable authorization redirect.
     header_up Host home.taile2cc7a.ts.net:8462
+    # The embedded outpost reaches Authentik on its private listener. Keep
+    # browser navigation on the public Caddy/Tailscale origin so one session
+    # is shared by every gated application.
+    header_down Location http://127.0.0.1:9001 https://home.taile2cc7a.ts.net:8462
     copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Uid
   }
 }
@@ -127,6 +131,8 @@
   reverse_proxy 127.0.0.1:2283
 }
 :19446 {
+  import authentik_outpost
+  import authentik_gate
   reverse_proxy 127.0.0.1:8081
 }
 :19448 {

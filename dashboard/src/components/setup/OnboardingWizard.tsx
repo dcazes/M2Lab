@@ -150,12 +150,13 @@ export function OnboardingWizard() {
   // Use the canonical Caddy HTTPS origin once ingress is available. This keeps
   // the browser's Authentik session shared with every protected local app.
   const authentikService = servicesQuery.data?.services.find(s => s.id === 'authentik')
+  const vaultwardenService = servicesQuery.data?.services.find(s => s.id === 'vaultwarden')
   const authentikAvailable = authentikService?.state === 'running' && authentikService.healthy !== false
-  const authentikUrl = systemQuery.data?.tailscale_required
-    ? (authentikService?.tailnet_url || 'http://127.0.0.1:9001')
+  const authentikUrl = authentikService?.tailnet_route_active
+    ? (authentikService.tailnet_url || 'http://127.0.0.1:9001')
     : (authentikAvailable ? 'https://127.0.0.1:19462' : (authentikService?.url || 'http://127.0.0.1:9001'))
-  const vaultwardenUrl = systemQuery.data?.tailscale_required
-    ? (servicesQuery.data?.services.find(s => s.id === 'vaultwarden')?.tailnet_url || 'http://127.0.0.1:8081')
+  const vaultwardenUrl = vaultwardenService?.tailnet_route_active
+    ? (vaultwardenService.tailnet_url || 'http://127.0.0.1:8081')
     : 'https://127.0.0.1:19447'
 
   // Calculate required infrastructure dependencies based on selected driven apps
@@ -338,7 +339,6 @@ export function OnboardingWizard() {
   const authentikActionNeeded = foundationJob?.status === 'user_action_required' && foundationJob.stage === 'create_owner'
   const vaultwardenActionNeeded = foundationJob?.status === 'user_action_required' && foundationJob.stage === 'create_vaultwarden_owner'
   const authentikCardReady = authentikService?.state === 'running' && authentikService.healthy !== false && !authentikActionNeeded
-  const vaultwardenService = servicesQuery.data?.services.find(s => s.id === 'vaultwarden')
   const vaultwardenCardReady = vaultwardenService?.state === 'running' && vaultwardenService.healthy !== false && !vaultwardenActionNeeded
 
   // Authentik's bootstrap token auto-creates the built-in 'akadmin' superuser at
