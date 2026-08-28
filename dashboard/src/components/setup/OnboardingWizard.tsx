@@ -56,6 +56,19 @@ function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
     ['queued', 'preparing', 'starting', 'waiting', 'configuring', 'verifying'].includes(e.job?.status ?? '')
   ).length
   const notStartedCount = entries.filter(e => !e.job).length
+  const traceLines = entries
+    .flatMap(({ target, job }) => {
+      const app = apps.find(item => item.id === target)
+      const lastEvent = job?.events.at(-1)
+      if (!job) return [{ target, name: app?.name || target, status: 'queued', message: 'Waiting for download to start.' }]
+      return [{
+        target,
+        name: app?.name || target,
+        status: job.status,
+        message: job.error || lastEvent?.message || job.summary,
+      }]
+    })
+    .sort((a, b) => (a.status === 'failed' ? -1 : 0) - (b.status === 'failed' ? -1 : 0))
 
   const appById = useMemo(() => {
     const m = new Map<string, CatalogApp>()
@@ -102,6 +115,16 @@ function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
           )
         })}
       </div>
+      {entries.length > 0 && (
+        <div className="setup-trace-terminal" role="status" aria-live="polite" aria-label="Application download trace">
+          <div><Terminal className="h-3.5 w-3.5" /> <span>download trace</span><span className="setup-trace-stage">live status</span></div>
+          {traceLines.map(({ target, name, status, message }) => (
+            <p key={target} className={status === 'failed' ? 'setup-trace-error' : undefined}>
+              <span>{status === 'failed' ? '!' : '$'}</span> <strong>{name}:</strong> {message}
+            </p>
+          ))}
+        </div>
+      )}
       {!started && entries.length > 0 && notStartedCount === entries.length && (
         <p className="text-xs text-unknown">Downloads haven't started yet — go back to Step 2 to start them.</p>
       )}
@@ -796,7 +819,7 @@ export function OnboardingWizard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="space-y-1">
+              <div className="space-y-1">
                 <span className="text-xs font-semibold text-white flex items-center gap-1">
                   <KeyRound className="h-3 w-3 text-accent" /> NVIDIA NIM API Key (Recommended)
                 </span>
@@ -807,9 +830,12 @@ export function OnboardingWizard() {
                   placeholder="nvapi-..."
                   className="w-full text-xs p-2.5 bg-bg-base border border-border rounded text-white"
                 />
-              </label>
+                <a href="https://build.nvidia.com/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+                  Get an NVIDIA NIM key <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
 
-              <label className="space-y-1">
+              <div className="space-y-1">
                 <span className="text-xs font-semibold text-white flex items-center gap-1">
                   <KeyRound className="h-3 w-3 text-accent" /> Google Gemini API Key
                 </span>
@@ -820,7 +846,10 @@ export function OnboardingWizard() {
                   placeholder="AIzaSy..."
                   className="w-full text-xs p-2.5 bg-bg-base border border-border rounded text-white"
                 />
-              </label>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+                  Get a Gemini API key in Google AI Studio <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
             </div>
           </div>
 

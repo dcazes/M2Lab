@@ -1269,8 +1269,30 @@ async def _wait_for_service(sid: str, timeout: int = 180, *, job_id: str | None 
     return False
 
 
+def _check_service_setup_prerequisites(sid: str) -> None:
+    """Catch host-side requirements that Docker cannot repair from a container.
+
+    FreeLLMAPI deliberately runs as the regular host user and persists its
+    SQLite database in a bind mount.  A directory accidentally created by
+    root makes the container restart forever with an opaque database error,
+    which then blocks every dependent application.
+    """
+    if sid != "freellmapi":
+        return
+    data_dir = ROOT / service_by_id(sid)["dir"] / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    if not os.access(data_dir, os.W_OK | os.X_OK):
+        uid, gid = os.geteuid(), os.getegid()
+        raise RuntimeError(
+            "FreeLLMAPI cannot write its local database because "
+            "apps/FreeLLMAPI/data is owned by a different user. Run "
+            f"`sudo chown -R {uid}:{gid} apps/FreeLLMAPI/data`, then retry downloads."
+        )
+
+
 async def _start_setup_service(job_id: str, sid: str, progress: int) -> None:
     service = service_by_id(sid)
+    await asyncio.to_thread(_check_service_setup_prerequisites, sid)
     current_state = await asyncio.to_thread(svc_state, service)
     current_health = await asyncio.to_thread(http_health, service)
     if current_state["overall"] == "running" and current_health is not False:
