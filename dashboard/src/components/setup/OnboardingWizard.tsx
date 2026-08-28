@@ -9,7 +9,77 @@ import {
   fetchSystemStats, fetchSetupJobs, wireModelPipeline, createSetupApproval, startSetupTarget,
   resumeSetupJob, ollamaPullStreamUrl
 } from '../../lib/api'
-import type { SetupJob } from '../../lib/types'
+import type { SetupJob, CatalogApp } from '../../lib/types'
+
+function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
+  targets: Set<string>
+  jobByTarget: Map<string, SetupJob>
+  apps: CatalogApp[]
+  started: boolean
+}) {
+  const entries = [...targets].map(t => ({ target: t, job: jobByTarget.get(t) }))
+  const pct = entries.length
+    ? Math.round(entries.reduce((s, e) => s + (e.job?.progress ?? 0), 0) / entries.length)
+    : 0
+  const readyCount = entries.filter(e => e.job?.status === 'ready').length
+  const failedCount = entries.filter(e => e.job?.status === 'failed').length
+  const actionCount = entries.filter(e => e.job?.status === 'user_action_required').length
+  const runningCount = entries.filter(e =>
+    ['queued', 'preparing', 'starting', 'waiting', 'configuring', 'verifying'].includes(e.job?.status ?? '')
+  ).length
+  const notStartedCount = entries.filter(e => !e.job).length
+
+  const appById = useMemo(() => {
+    const m = new Map<string, CatalogApp>()
+    for (const a of apps) m.set(a.id, a)
+    return m
+  }, [apps])
+
+  return (
+    <div className="space-y-3 bg-surface-2 p-5 border border-border rounded-lg">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-bold text-white">Application Downloads</h4>
+        <span className="font-mono text-sm text-white">{pct}%</span>
+      </div>
+      <div className="w-full h-2 bg-bg-base rounded overflow-hidden">
+        <div className="h-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="text-xs text-unknown">
+        <span className="text-emerald-400">Ready {readyCount}</span> ·{' '}
+        <span className="text-amber-400">Running {runningCount}</span> ·{' '}
+        <span className="text-blue-400">Action needed {actionCount}</span> ·{' '}
+        <span className="text-rose-400">Failed {failedCount}</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        {entries.map(({ target, job }) => {
+          const app = appById.get(target)
+          const status = job
+            ? job.status === 'ready'
+              ? { label: 'Ready', cls: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' }
+              : job.status === 'failed'
+                ? { label: 'Failed', cls: 'bg-rose-500/20 text-rose-400 border border-rose-500/30' }
+                : job.status === 'user_action_required'
+                  ? { label: 'Action needed', cls: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' }
+                  : { label: 'Starting…', cls: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
+            : { label: 'Not started', cls: 'bg-surface-1/60 text-unknown border border-border' }
+          return (
+            <div key={target} className="p-3 bg-bg-base border border-border rounded flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span>{app?.icon}</span>
+                <span className="font-semibold text-white">{app?.name || target}</span>
+                <span className="font-mono text-[11px] text-unknown">{job?.progress ?? 0}%</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded font-mono text-[11px] font-bold ${status.cls}`}>{status.label}</span>
+            </div>
+          )
+        })}
+      </div>
+      {!started && entries.length > 0 && notStartedCount === entries.length && (
+        <p className="text-xs text-unknown">Downloads haven't started yet — go back to Step 2 to start them.</p>
+      )}
+    </div>
+  )
+}
 
 export function OnboardingWizard() {
   const [step, setStep] = useState<number>(1)
@@ -34,6 +104,9 @@ export function OnboardingWizard() {
   const [pullError, setPullError] = useState<string | null>(null)
   const [pullDone, setPullDone] = useState(false)
   const pullSourceRef = useRef<EventSource | null>(null)
+
+  // Downloads kickoff flag (set when launchAll succeeds on Step 2)
+  const [downloadsStarted, setDownloadsStarted] = useState(false)
 
   // System & Services queries
   const systemQuery = useQuery({ queryKey: ['system-stats'], queryFn: fetchSystemStats })
@@ -176,7 +249,11 @@ export function OnboardingWizard() {
 
   const [launching, setLaunching] = useState(false)
 
-  const launchAll = async () => {
+  const launchAll = async (): Promise<boolean> => {
+    if (foundationJob?.status !== 'ready') {
+      toast.error('Complete Authentik & Vaultwarden setup on Step 1 before starting downloads')
+      return false
+    }
     setLaunching(true)
     try {
       for (const target of launchTargets) {
@@ -185,8 +262,11 @@ export function OnboardingWizard() {
       }
       await queryClient.invalidateQueries({ queryKey: ['setup-jobs'] })
       toast.success(`Started ${launchTargets.size} application setup job(s)`)
+      setDownloadsStarted(true)
+      return true
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
+      return false
     } finally {
       setLaunching(false)
     }
@@ -212,6 +292,17 @@ export function OnboardingWizard() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     }
+  }
+
+  const foundationReady = foundationJob?.status === 'ready'
+
+  const handleNextFromSelection = async () => {
+    if (!foundationReady) {
+      toast.error('Complete Authentik & Vaultwarden setup on Step 1 first')
+      return
+    }
+    const ok = await launchAll()
+    if (ok) setStep(3)
   }
 
   return (
@@ -243,12 +334,12 @@ export function OnboardingWizard() {
         </div>
       </div>
 
-      {/* STEP 1: Host & Readiness Overview */}
+      {/* STEP 1: Host & Identity Foundation */}
       {step === 1 && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div>
-            <h2 className="text-xl font-bold text-white">1. Host & Infrastructure Readiness</h2>
-            <p className="text-sm text-unknown mt-1">Verify your system requirements and loopback access before selecting apps.</p>
+            <h2 className="text-xl font-bold text-white">1. Host & Identity Foundation</h2>
+            <p className="text-sm text-unknown mt-1">Verify your system requirements and establish your identity foundation before selecting apps.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -289,6 +380,86 @@ export function OnboardingWizard() {
               </p>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Authentik Foundation Status Card */}
+            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="eyebrow text-accent">Single Sign-On</span>
+                  <h3 className="text-base font-bold text-white">Authentik Master Account</h3>
+                </div>
+                <span className={`px-2.5 py-1 rounded text-xs font-bold ${foundationJob?.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                  {foundationJob?.status || 'Not Started'}
+                </span>
+              </div>
+
+              <p className="text-xs text-unknown">
+                Authentik provides single username & password access across M2Lab applications.
+              </p>
+
+              {foundationJob?.stage === 'create_vaultwarden_owner' && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
+                  <span className="text-xs text-white">Create your Vaultwarden master password first</span>
+                  <a href="http://127.0.0.1:8081" target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
+                    Open Vaultwarden <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              )}
+              {foundationJob?.stage === 'create_owner' && foundationJob?.action?.url && (
+                <div className="p-3 bg-accent/10 border border-accent/30 rounded flex items-center justify-between">
+                  <span className="text-xs text-white">Create master admin in Authentik</span>
+                  <a href={foundationJob.action.url} target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
+                    Authentik Flow <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                {!foundationJob ? (
+                  <button className="button-primary text-xs" onClick={startFoundation}>Start Authentik Setup</button>
+                ) : foundationJob.status === 'user_action_required' ? (
+                  <button className="button-primary text-xs" onClick={resumeFoundation}>
+                    {foundationJob.stage === 'create_vaultwarden_owner' ? 'Confirm Vaultwarden Created' : 'Confirm Admin Created'}
+                  </button>
+                ) : (
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Authentik Core Ready</span>
+                )}
+              </div>
+            </div>
+
+            {/* Vaultwarden Local Credentials Vault */}
+            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="eyebrow text-emerald-400">Local Password Vault</span>
+                  <h3 className="text-base font-bold text-white">Vaultwarden Vault</h3>
+                </div>
+                <span className={`px-2.5 py-1 rounded text-xs font-bold ${
+                  foundationJob?.stage === 'create_vaultwarden_owner'
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {foundationJob?.stage === 'create_vaultwarden_owner' ? 'Action needed' : 'Ready'}
+                </span>
+              </div>
+
+              <p className="text-xs text-unknown">
+                Vaultwarden stores your NVIDIA NIM, Google Gemini, or OpenAI API keys locally as secure notes so you can easily copy them into Step 3.
+              </p>
+
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
+                <span className="text-xs text-white">Open local Vaultwarden vault</span>
+                <a href="http://127.0.0.1:8081" target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1">
+                  Open Vault <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {!foundationReady && (
+            <p className="text-xs text-unknown">You can browse app selection while Authentik finishes — downloads start on the next page once it's ready.</p>
+          )}
 
           <div className="flex justify-end pt-4">
             <button className="button-primary flex items-center gap-2" onClick={() => setStep(2)}>
@@ -413,115 +584,30 @@ export function OnboardingWizard() {
 
           <div className="flex justify-between pt-4">
             <button className="button-secondary" onClick={() => setStep(1)}>Back</button>
-            <button className="button-primary flex items-center gap-2" onClick={() => setStep(3)}>
-              Continue to Authentik & Vaultwarden Setup <ArrowRight className="h-4 w-4" />
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                className="button-primary flex items-center gap-2"
+                disabled={launching || !foundationReady}
+                onClick={handleNextFromSelection}
+              >
+                {launching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                Start Downloads & Continue to API Keys
+              </button>
+              {!foundationReady && (
+                <span className="text-xs text-unknown">Complete Authentik & Vaultwarden setup on Step 1 to start downloads.</span>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* STEP 3: Authentik Identity & Vaultwarden Local Credential Storage */}
+      {/* STEP 3: API Keys & Provider Access */}
       {step === 3 && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div>
-            <h2 className="text-xl font-bold text-white">3. Single Login & Credential Vault</h2>
+            <h2 className="text-xl font-bold text-white">3. API Keys & Provider Access</h2>
             <p className="text-sm text-unknown mt-1">
-              Set up your single Authentik SSO account and access Vaultwarden to store your NVIDIA/Gemini API keys locally before configuring models.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Authentik Foundation Status Card */}
-            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="eyebrow text-accent">Single Sign-On</span>
-                  <h3 className="text-base font-bold text-white">Authentik Master Account</h3>
-                </div>
-                <span className={`px-2.5 py-1 rounded text-xs font-bold ${foundationJob?.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                  {foundationJob?.status || 'Not Started'}
-                </span>
-              </div>
-
-              <p className="text-xs text-unknown">
-                Authentik provides single username & password access across M2Lab applications.
-              </p>
-
-              {foundationJob?.stage === 'create_vaultwarden_owner' && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
-                  <span className="text-xs text-white">Create your Vaultwarden master password first</span>
-                  <a href="http://127.0.0.1:8081" target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
-                    Open Vaultwarden <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              )}
-              {foundationJob?.stage === 'create_owner' && foundationJob?.action?.url && (
-                <div className="p-3 bg-accent/10 border border-accent/30 rounded flex items-center justify-between">
-                  <span className="text-xs text-white">Create master admin in Authentik</span>
-                  <a href={foundationJob.action.url} target="_blank" rel="noreferrer" className="button-primary text-xs flex items-center gap-1">
-                    Authentik Flow <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                {!foundationJob ? (
-                  <button className="button-primary text-xs" onClick={startFoundation}>Start Authentik Setup</button>
-                ) : foundationJob.status === 'user_action_required' ? (
-                  <button className="button-primary text-xs" onClick={resumeFoundation}>
-                    {foundationJob.stage === 'create_vaultwarden_owner' ? 'Confirm Vaultwarden Created' : 'Confirm Admin Created'}
-                  </button>
-                ) : (
-                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><Check className="h-4 w-4" /> Authentik Core Ready</span>
-                )}
-              </div>
-            </div>
-
-            {/* Vaultwarden Local Credentials Vault */}
-            <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="eyebrow text-emerald-400">Local Password Vault</span>
-                  <h3 className="text-base font-bold text-white">Vaultwarden Vault</h3>
-                </div>
-                <span className={`px-2.5 py-1 rounded text-xs font-bold ${
-                  foundationJob?.stage === 'create_vaultwarden_owner'
-                    ? 'bg-amber-500/20 text-amber-400'
-                    : 'bg-emerald-500/20 text-emerald-400'
-                }`}>
-                  {foundationJob?.stage === 'create_vaultwarden_owner' ? 'Action needed' : 'Ready'}
-                </span>
-              </div>
-
-              <p className="text-xs text-unknown">
-                Vaultwarden stores your NVIDIA NIM, Google Gemini, or OpenAI API keys locally as secure notes so you can easily copy them into Step 4.
-              </p>
-
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between">
-                <span className="text-xs text-white">Open local Vaultwarden vault</span>
-                <a href="http://127.0.0.1:8081" target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1">
-                  Open Vault <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-between pt-4">
-            <button className="button-secondary" onClick={() => setStep(2)}>Back</button>
-            <button className="button-primary flex items-center gap-2" onClick={() => setStep(4)}>
-              Continue to AI Model Pipeline Wiring <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 4: AI Setup & Gateway Wiring */}
-      {step === 4 && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <div>
-            <h2 className="text-xl font-bold text-white">4. AI Model Pipeline Setup</h2>
-            <p className="text-sm text-unknown mt-1">
-              Enter provider keys (copied from Vaultwarden) and configure local embeddings. Model routing: <code>API Key → FreeLLMAPI → LiteLLM → Open WebUI / SurfSense</code>.
+              Paste your provider keys (from Vaultwarden) while your applications download in the background.
             </p>
           </div>
 
@@ -562,6 +648,27 @@ export function OnboardingWizard() {
             </div>
           </div>
 
+          <DownloadProgressPanel targets={launchTargets} jobByTarget={jobByTarget} apps={apps} started={downloadsStarted} />
+
+          <div className="flex justify-between pt-4">
+            <button className="button-secondary" onClick={() => setStep(2)}>Back</button>
+            <button className="button-primary flex items-center gap-2" onClick={() => setStep(4)}>
+              Continue to Model Wiring <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 4: AI Setup & Gateway Wiring */}
+      {step === 4 && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div>
+            <h2 className="text-xl font-bold text-white">4. AI Model Pipeline Setup</h2>
+            <p className="text-sm text-unknown mt-1">
+              With your provider keys entered on Step 3, configure local embeddings. Model routing: <code>API Key → FreeLLMAPI → LiteLLM → Open WebUI / SurfSense</code>.
+            </p>
+          </div>
+
           <div className="space-y-3 bg-surface-2 p-5 border border-border rounded-lg">
             <h4 className="text-sm font-bold text-white">2. Local Embedding Model Requirement</h4>
             <p className="text-xs text-unknown">
@@ -577,6 +684,8 @@ export function OnboardingWizard() {
               <span>Automatically pull <code>nomic-embed-text</code> in Ollama upon confirmation</span>
             </label>
           </div>
+
+          <DownloadProgressPanel targets={launchTargets} jobByTarget={jobByTarget} apps={apps} started={downloadsStarted} />
 
           <div className="flex items-center justify-between pt-4">
             <button className="button-secondary" onClick={() => setStep(3)}>Back</button>
@@ -619,7 +728,7 @@ export function OnboardingWizard() {
 
           {wiredDone && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold flex items-center justify-between">
-              <span>✓ Model pipeline wired successfully! Ready for installation.</span>
+              <span>✓ Model pipeline wired successfully!</span>
               <button className="underline" onClick={() => setStep(5)}>Proceed to Launch & Workspace →</button>
             </div>
           )}
@@ -633,16 +742,41 @@ export function OnboardingWizard() {
             <span className="text-4xl">🚀</span>
             <h2 className="text-2xl font-bold text-white">Launch Your Workspace</h2>
             <p className="text-sm text-unknown max-w-lg mx-auto">
-              Start your selected applications. Each launches as a setup job — the same jobs the Settings tab drives — and status below updates live.
+              Your applications are downloading in the background as setup jobs — the same jobs the Settings tab drives — and progress below updates live.
             </p>
           </div>
 
-          <div className="flex justify-center pt-1">
-            <button className="button-primary flex items-center gap-2 px-8 py-3 text-base" onClick={launchAll} disabled={launching}>
-              {launching ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
-              {launching ? 'Starting applications…' : `Launch ${launchTargets.size} Selected Applications`}
-            </button>
-          </div>
+          <DownloadProgressPanel targets={launchTargets} jobByTarget={jobByTarget} apps={apps} started={downloadsStarted} />
+
+          {(() => {
+            const startedCount = [...launchTargets].filter(t => jobByTarget.has(t)).length
+            const failedCount = [...launchTargets].filter(t => jobByTarget.get(t)?.status === 'failed').length
+            if (startedCount === 0) {
+              return (
+                <div className="flex justify-center pt-1">
+                  <button className="button-primary flex items-center gap-2 px-8 py-3 text-base" onClick={launchAll} disabled={launching}>
+                    {launching ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
+                    {launching ? 'Starting applications…' : `Launch ${launchTargets.size} Selected Applications`}
+                  </button>
+                </div>
+              )
+            }
+            if (failedCount > 0) {
+              return (
+                <div className="flex justify-center pt-1">
+                  <button className="button-primary flex items-center gap-2 px-8 py-3 text-base" onClick={launchAll} disabled={launching}>
+                    {launching ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
+                    {launching ? 'Retrying failed applications…' : 'Retry Failed Applications'}
+                  </button>
+                </div>
+              )
+            }
+            return (
+              <div className="flex justify-center pt-1">
+                <span className="text-sm text-unknown">All applications are downloading or ready.</span>
+              </div>
+            )
+          })()}
 
           <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
             <h4 className="text-sm font-bold text-white border-b border-border pb-2">Selected Applications & Endpoints</h4>
