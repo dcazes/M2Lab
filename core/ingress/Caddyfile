@@ -30,6 +30,34 @@
   }
 }
 
+# Machine-local variant of the Authentik forward-auth integration.  Keeping
+# the public host explicit is important: Authentik session cookies are scoped
+# to this HTTPS origin, so all local SSO applications share one session.
+(authentik_local_gate) {
+  request_header -X-Authentik-Username
+  request_header -X-Authentik-Groups
+  request_header -X-Authentik-Email
+  request_header -X-Authentik-Uid
+  forward_auth 127.0.0.1:9001 {
+    uri /outpost.goauthentik.io/auth/caddy
+    header_up Host 127.0.0.1:19462
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Host 127.0.0.1:19447
+    # The embedded outpost reaches Authentik on its loopback listener. Send
+    # browser redirects back through the canonical HTTPS SSO origin so the
+    # Authentik session is reused by every protected local app.
+    header_down Location http://127.0.0.1:9001 https://127.0.0.1:19462
+    copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Uid
+  }
+}
+
+(authentik_local_outpost) {
+  reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:9001 {
+    header_up Host 127.0.0.1:19462
+    header_up X-Forwarded-Proto https
+  }
+}
+
 (dashboard_headers) {
   header_up X-OmniLab-Ingress {$OMNILAB_INGRESS_TOKEN}
 }
@@ -162,5 +190,7 @@ https://127.0.0.1:19462 {
 # Authentik provider.
 https://127.0.0.1:19447 {
   tls internal
+  import authentik_local_outpost
+  import authentik_local_gate
   reverse_proxy 127.0.0.1:8081
 }

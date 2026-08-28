@@ -147,16 +147,16 @@ export function OnboardingWizard() {
   const drivenApps = apps.filter(a => a.category === 'agent_driven')
   const supportApps = apps.filter(a => a.category === 'agent_support')
 
-  // During setup, use Authentik's own listener. Caddy's local HTTPS endpoint is
-  // intentionally not advertised until the ingress container has been started.
+  // Use the canonical Caddy HTTPS origin once ingress is available. This keeps
+  // the browser's Authentik session shared with every protected local app.
   const authentikService = servicesQuery.data?.services.find(s => s.id === 'authentik')
+  const authentikAvailable = authentikService?.state === 'running' && authentikService.healthy !== false
   const authentikUrl = systemQuery.data?.tailscale_required
     ? (authentikService?.tailnet_url || 'http://127.0.0.1:9001')
-    : (authentikService?.url || 'http://127.0.0.1:9001')
-  const authentikAvailable = authentikService?.state === 'running' && authentikService.healthy !== false
+    : (authentikAvailable ? 'https://127.0.0.1:19462' : (authentikService?.url || 'http://127.0.0.1:9001'))
   const vaultwardenUrl = systemQuery.data?.tailscale_required
     ? (servicesQuery.data?.services.find(s => s.id === 'vaultwarden')?.tailnet_url || 'http://127.0.0.1:8081')
-    : (servicesQuery.data?.services.find(s => s.id === 'vaultwarden')?.url || 'http://localhost:8081')
+    : 'https://127.0.0.1:19447'
 
   // Calculate required infrastructure dependencies based on selected driven apps
   const requiredDeps = useMemo(() => {
@@ -605,18 +605,18 @@ export function OnboardingWizard() {
               </div>
 
               <p className="text-xs text-unknown">
-                SSO-enabled via Authentik. Stores your provider API keys as secure notes; the vault still unlocks with your master password.
+                Protected by your Authentik session. Opening the vault redirects through the same sign-on as the rest of M2Lab.
               </p>
 
               <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center justify-between gap-2">
-                <span className="text-[11px] text-white">Open local vault setup</span>
+                <span className="text-[11px] text-white">Open vault with Authentik SSO</span>
                 <a href={vaultwardenUrl} target="_blank" rel="noreferrer" className="button-secondary text-xs flex items-center gap-1 shrink-0">
                   Open Vault <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>
               {vaultwardenActionNeeded && (
                 <div className="space-y-2">
-                  <p className="text-xs text-unknown">Create your vault account and master password here, then continue. This initial local page avoids the browser certificate warning.</p>
+                  <p className="text-xs text-unknown">Complete the initial vault setup, then continue. Later visits use the Authentik SSO entry above.</p>
                   <button className="button-primary text-xs w-full" onClick={resumeFoundation}>Confirm Vaultwarden Created</button>
                 </div>
               )}

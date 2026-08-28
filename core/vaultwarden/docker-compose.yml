@@ -3,16 +3,10 @@ services:
   vaultwarden:
     image: vaultwarden/server:latest
     container_name: vaultwarden
+    env_file:
+      - .env
     environment:
-      # DOMAIN must match HOW you open Vaultwarden. We expose it securely over
-      # Tailscale HTTPS (see the `tailscale serve --https=8446 ...` mapping),
-      # so the public URL is https and Vaultwarden is happy. Access it at
-      # https://home.taile2cc7a.ts.net:8446
-      # Direct http://localhost:8081 will then show the "insecure URL" error
-      # by design — always use the https URL.
-      DOMAIN: "https://home.taile2cc7a.ts.net:8446"
       ROCKET_PORT: "80"
-      ADMIN_TOKEN: ${ADMIN_TOKEN}
     volumes:
       - ./data:/data
     ports:
