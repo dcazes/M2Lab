@@ -21,6 +21,13 @@ services:
       - OPENID_REDIRECT_URI=${OPENID_REDIRECT_URI:-}
       - OAUTH_SCOPES=${OAUTH_SCOPES:-openid profile email groups}
       - ENABLE_OAUTH_SIGNUP=${ENABLE_OAUTH_SIGNUP:-false}
+      - OAUTH_AUTO_REDIRECT=${OAUTH_AUTO_REDIRECT:-false}
+      - ENABLE_LOGIN_FORM=${ENABLE_LOGIN_FORM:-true}
     volumes:
       - ./data:/app/backend/data
+    # Authentik is published by the host's private Caddy bridge. Docker for
+    # Linux does not provide this hostname automatically, so declare it
+    # explicitly for both OIDC discovery and the LiteLLM connection above.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped

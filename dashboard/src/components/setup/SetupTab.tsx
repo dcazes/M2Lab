@@ -414,9 +414,9 @@ function AppsSettings({
                   </div>
                   <div className="settings-active-actions">
                     <UpdateControl service={activeService} />
-                    {activeService.external_ready
+                    {activeService.launch_available
                       ? <a href={getServiceUrl(activeService)} target="_blank" rel="noreferrer">Open app <ExternalLink /></a>
-                      : <span className="settings-open-unavailable">Private URL unavailable</span>}
+                      : <span className="settings-open-unavailable">{activeService.launch_reason || 'SSO route unavailable'}</span>}
                   </div>
                 </div>
                 <AppSetupWizard service={activeService} />

@@ -1,4 +1,4 @@
-"""Tailscale is optional for first-run (switch-gated by settings/env)."""
+"""Tailscale is the required private browser entrypoint."""
 import asyncio
 import os
 import tempfile
@@ -9,32 +9,32 @@ from unittest.mock import patch
 from ctl.registry import SETTINGS, tailscale_required
 
 
-class TailscaleRequiredSwitchTests(unittest.TestCase):
+class TailscaleRequiredTests(unittest.TestCase):
     def tearDown(self):
         os.environ.pop("OMNILAB_REQUIRE_TAILSCALE", None)
 
-    def test_default_is_permissive(self):
-        self.assertFalse(tailscale_required())
+    def test_tailscale_is_always_required(self):
+        self.assertTrue(tailscale_required())
 
-    def test_env_true_wins(self):
+    def test_env_true_keeps_requirement_enabled(self):
         os.environ["OMNILAB_REQUIRE_TAILSCALE"] = "true"
         self.assertTrue(tailscale_required())
 
-    def test_env_false_overrides_yaml(self):
+    def test_env_false_cannot_disable_requirement(self):
         with patch.dict(SETTINGS, {"tailscale_required": True}):
             self.assertTrue(tailscale_required())
             os.environ["OMNILAB_REQUIRE_TAILSCALE"] = "false"
-            self.assertFalse(tailscale_required())
+            self.assertTrue(tailscale_required())
 
 
-class ExternalUrlModeTests(unittest.TestCase):
+class ExternalUrlTests(unittest.TestCase):
     def tearDown(self):
         os.environ.pop("OMNILAB_REQUIRE_TAILSCALE", None)
 
-    def test_loopback_when_not_required(self):
+    def test_loopback_override_cannot_expose_a_browser_url(self):
         os.environ["OMNILAB_REQUIRE_TAILSCALE"] = "false"
         from ctl.identity import external_url
-        self.assertEqual(external_url("authentik"), "http://127.0.0.1:9001/")
+        self.assertTrue(external_url("authentik").startswith(SETTINGS["tailnet_base"]))
 
     def test_tailnet_when_required(self):
         os.environ["OMNILAB_REQUIRE_TAILSCALE"] = "true"
@@ -43,7 +43,7 @@ class ExternalUrlModeTests(unittest.TestCase):
 
 
 class FoundationPreflightTests(unittest.TestCase):
-    """Preflight must not gate on Tailscale when it isn't required."""
+    """Preflight always blocks when the required Tailscale session is absent."""
 
     def tearDown(self):
         os.environ.pop("OMNILAB_REQUIRE_TAILSCALE", None)
@@ -59,9 +59,9 @@ class FoundationPreflightTests(unittest.TestCase):
             dli.networks.get.return_value = object()
             return asyncio.run(_run_preflight("job1"))
 
-    def test_no_tailscale_no_block_when_not_required(self):
-        # Should complete without raising.
-        self._run(required=False)
+    def test_no_tailscale_blocks_even_with_legacy_false_override(self):
+        with self.assertRaises(RuntimeError):
+            self._run(required=False)
 
     def test_tailscale_missing_blocks_when_required(self):
         from ctl import app

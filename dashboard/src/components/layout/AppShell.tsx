@@ -34,7 +34,7 @@ export function AppShell() {
         <TabNav activeTab={activeTab} onChange={setActiveTab} showSysAdminChat={isLocalDashboard} />
         <div className="mt-6 animate-in fade-in duration-200">
           {activeTab === 'workspace' && <ServicesTab onOpenSettings={openSettings} onOpenSystem={() => setActiveTab('system')} />}
-          {activeTab === 'onboarding' && <OnboardingWizard />}
+          {activeTab === 'onboarding' && <OnboardingWizard onGoWorkspace={() => setActiveTab('workspace')} />}
           {activeTab === 'sysadmin-chat' && isLocalDashboard && <SysAdminChatTab />}
           {activeTab === 'system' && <SystemTab />}
           {activeTab === 'settings' && <SetupTab initialSelectedId={settingsServiceId} initialSection={settingsSection} />}

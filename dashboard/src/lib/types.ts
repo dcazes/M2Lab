@@ -20,6 +20,10 @@ export interface Service {
   tailnet_route_active: boolean | null
   tailnet_proxy: string | null
   external_ready: boolean
+  launch_url: string | null
+  launch_available: boolean
+  launch_transport: 'local_sso' | 'tailnet_sso' | 'tailnet_private' | 'none'
+  launch_reason: string | null
   state: 'running' | 'stopped' | 'degraded' | 'absent'
   containers: ServiceContainer[]
   healthy: boolean | null
@@ -307,6 +311,50 @@ export interface SetupJobsResponse {
   attention: number
 }
 
+export type SetupBatchStatus =
+  | 'queued' | 'running' | 'paused_memory' | 'paused_handoff'
+  | 'paused_interrupted' | 'ready' | 'failed' | 'cancelled'
+
+export interface SetupBatchItem {
+  batch_id: string
+  ordinal: number
+  service_id: string
+  role: 'infrastructure' | 'application'
+  dependencies: string[]
+  status: string
+  phase: string
+  sso_strategy: string
+  baseline_bytes: number
+  peak_bytes: number
+  steady_bytes: number
+  marginal_bytes: number
+  gpu_peak_bytes: number
+  projected_bytes: number
+  confidence: string
+  measured_at: string | null
+  error: string | null
+}
+
+export interface SetupBatch {
+  id: string
+  status: SetupBatchStatus
+  phase: string
+  current_index: number
+  reserve_ratio: number
+  pull_embedding: number
+  host_total_bytes: number
+  host_baseline_bytes: number
+  measured_bytes: number
+  projected_bytes: number
+  error: string | null
+  created_at: string
+  updated_at: string
+  items: SetupBatchItem[]
+  events: Array<{ timestamp: string; service_id: string | null; phase: string; status: string; message: string }>
+}
+
+export interface SetupBatchesResponse { batches: SetupBatch[] }
+
 export type McpState = 'unavailable' | 'installing' | 'authentication_required' | 'verifying' | 'live' | 'degraded' | 'disabled'
 export type McpKind = 'native' | 'community' | 'm2lab-adapter' | 'unsupported'
 
@@ -364,4 +412,17 @@ export interface ModelAccessResponse {
   free_providers: ModelAccessProvider[]
   direct_providers: ModelAccessProvider[]
   ollama_models: Array<{ name: string; size: number; modified_at?: string }>
+}
+
+export type ModelAccessValidationStatus = 'valid' | 'invalid' | 'available' | 'unavailable' | 'not_checked'
+
+export interface ModelAccessValidationResult {
+  status: ModelAccessValidationStatus
+  message: string
+  model_count: number | null
+}
+
+export interface ModelAccessValidationResponse {
+  ok: boolean
+  providers: Record<'nvidia' | 'gemini' | 'ollama', ModelAccessValidationResult>
 }

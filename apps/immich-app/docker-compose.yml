@@ -24,9 +24,12 @@ services:
       # storage location on your system, edit the value of
       # UPLOAD_LOCATION in the .env file
       - ${UPLOAD_LOCATION}:/data
+      - ${IMMICH_CONFIG_SOURCE:-./immich-config.example.json}:/config/immich-config.json:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:
       - .env
+    environment:
+      IMMICH_CONFIG_FILE: ${IMMICH_CONFIG_FILE:-/config/immich-config.json}
     ports:
       - '2283:2283'
     depends_on:

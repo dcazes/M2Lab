@@ -1,202 +1,209 @@
 {
-  # auto-HTTPS only for sites that explicitly request TLS via https:// + a
-  # local_certs (internal CA) cert; existing bare :PORT sites stay plain HTTP.
-  auto_https disable_redirects
-  local_certs
-  admin off
+	# Tailscale terminates every browser-facing TLS connection. Caddy accepts
+	# only loopback HTTP from Tailscale Serve and is never a public listener.
+	auto_https off
+	default_bind 127.0.0.1
+	admin off
 }
 
-# Caddy listens only on loopback high ports. Tailscale Serve remains the sole
-# external TLS endpoint and is switched per app only after verification.
+# Forward-auth receives the exact tailnet host and port registered in the
+# corresponding Authentik proxy provider. This creates one shared SSO origin.
 (authentik_gate) {
-  request_header -X-Authentik-Username
-  request_header -X-Authentik-Groups
-  request_header -X-Authentik-Email
-  request_header -X-Authentik-Uid
-  forward_auth 127.0.0.1:9001 {
-    uri /outpost.goauthentik.io/auth/caddy
-    # The embedded outpost is reached over loopback, but it must see the
-    # public Authentik host to generate a usable authorization redirect.
-    header_up Host home.taile2cc7a.ts.net:8462
-    # The embedded outpost reaches Authentik on its private listener. Keep
-    # browser navigation on the public Caddy/Tailscale origin so one session
-    # is shared by every gated application.
-    header_down Location http://127.0.0.1:9001 https://home.taile2cc7a.ts.net:8462
-    copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Uid
-  }
+	request_header -X-Authentik-Username
+	request_header -X-Authentik-Groups
+	request_header -X-Authentik-Email
+	request_header -X-Authentik-Uid
+	forward_auth 127.0.0.1:9001 {
+		uri /outpost.goauthentik.io/auth/caddy
+		header_up Host {$M2LAB_TAILNET_HOST}:{args[0]}
+		header_up X-Forwarded-Host {$M2LAB_TAILNET_HOST}:{args[0]}
+		header_up X-Forwarded-Proto https
+		header_down Location http://127.0.0.1:9001 https://{$M2LAB_TAILNET_HOST}:8462
+		copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Uid
+	}
 }
 
-# Forward the proxy-outpost endpoints without applying the gate itself. These
-# endpoints complete Authentik's redirect, session, and sign-out flows.
 (authentik_outpost) {
-  reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:9001 {
-    header_up Host home.taile2cc7a.ts.net:8462
-  }
+	reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:9001 {
+		header_up Host {$M2LAB_TAILNET_HOST}:{args[0]}
+		header_up X-Forwarded-Host {$M2LAB_TAILNET_HOST}:{args[0]}
+		header_up X-Forwarded-Proto https
+	}
 }
 
-# Machine-local variant of the Authentik forward-auth integration.  Keeping
-# the public host explicit is important: Authentik session cookies are scoped
-# to this HTTPS origin, so all local SSO applications share one session.
-(authentik_local_gate) {
-  request_header -X-Authentik-Username
-  request_header -X-Authentik-Groups
-  request_header -X-Authentik-Email
-  request_header -X-Authentik-Uid
-  forward_auth 127.0.0.1:9001 {
-    uri /outpost.goauthentik.io/auth/caddy
-    header_up Host 127.0.0.1:19462
-    header_up X-Forwarded-Proto https
-    header_up X-Forwarded-Host 127.0.0.1:19447
-    # The embedded outpost reaches Authentik on its loopback listener. Send
-    # browser redirects back through the canonical HTTPS SSO origin so the
-    # Authentik session is reused by every protected local app.
-    header_down Location http://127.0.0.1:9001 https://127.0.0.1:19462
-    copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Uid
-  }
-}
-
-(authentik_local_outpost) {
-  reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:9001 {
-    header_up Host 127.0.0.1:19462
-    header_up X-Forwarded-Proto https
-  }
+(tailnet_headers) {
+	header_up Host {$M2LAB_TAILNET_HOST}:{args[0]}
+	header_up X-Forwarded-Host {$M2LAB_TAILNET_HOST}:{args[0]}
+	header_up X-Forwarded-Proto https
 }
 
 (dashboard_headers) {
-  header_up X-OmniLab-Ingress {$OMNILAB_INGRESS_TOKEN}
+	header_up X-OmniLab-Ingress {$OMNILAB_INGRESS_TOKEN}
 }
 
-:19460 {
-  import authentik_outpost
-  import authentik_gate
-  @owners header X-Authentik-Groups *omnilab-owners*
-  handle @owners {
-    reverse_proxy 127.0.0.1:8787 {
-      import dashboard_headers
-    }
-  }
-  respond "OmniLab owner access required" 403
+# Dashboard access remains loopback-only; application routes below are
+# published individually through Tailscale Serve after foundation preflight.
+http://:19460 {
+	reverse_proxy 127.0.0.1:8787 {
+		import dashboard_headers
+	}
 }
 
-:19461 {
-  import authentik_gate
-  @owners header X-Authentik-Groups *omnilab-owners*
-  handle @owners {
-    reverse_proxy 127.0.0.1:4096
-  }
-  respond "OmniLab owner access required" 403
+http://:19444 {
+	import authentik_outpost 8444
+	import authentik_gate 8444
+	@bridge path /m2lab-sso/start
+	handle @bridge {
+		rewrite * /api/identity/bridge/surfsense
+		reverse_proxy 127.0.0.1:8787 {
+			import dashboard_headers
+		}
+	}
+	respond /auth/register 404
+	@entry path / /login
+	redir @entry /m2lab-sso/start 302
+	handle {
+		reverse_proxy 127.0.0.1:3929 {
+			import tailnet_headers 8444
+		}
+	}
 }
 
-:19444 {
-  import authentik_outpost
-  import authentik_gate
-  reverse_proxy 127.0.0.1:3929
+http://:19445 {
+	import authentik_outpost 8445
+	import authentik_gate 8445
+	@litellm_root path /
+	redir @litellm_root /ui/ 302
+	@owners header X-Authentik-Groups *omnilab-owners*
+	handle @owners {
+		reverse_proxy 127.0.0.1:4000 {
+			import tailnet_headers 8445
+		}
+	}
+	respond "M2Lab owner access required" 403
 }
 
-:19445 {
-  import authentik_outpost
-  import authentik_gate
-  @litellm_root path /
-  redir @litellm_root /ui/ 302
-  @owners header X-Authentik-Groups *omnilab-owners*
-  handle @owners {
-    reverse_proxy 127.0.0.1:4000
-  }
-  respond "OmniLab owner access required" 403
+http://:19458 {
+	# Firecrawl has no interactive account/session to provision. It remains
+	# reachable only through its private Tailnet route and enforces its own API
+	# bearer key for requests.
+	reverse_proxy 127.0.0.1:3002 {
+		import tailnet_headers 8458
+	}
 }
 
-:19458 {
-  import authentik_outpost
-  import authentik_gate
-  @owners header X-Authentik-Groups *omnilab-owners*
-  handle @owners {
-    reverse_proxy 127.0.0.1:3002
-  }
-  respond "OmniLab owner access required" 403
+# Ollama is a private, machine-facing API. It deliberately has no browser
+# launch link or Authentik session; callers reach it over the Tailnet API route.
+http://:19457 {
+	reverse_proxy 127.0.0.1:11434 {
+		import tailnet_headers 8457
+	}
 }
 
-:19459 {
-  import authentik_outpost
-  import authentik_gate
-  @owners header X-Authentik-Groups *omnilab-owners*
-  handle @owners {
-    reverse_proxy 127.0.0.1:3001
-  }
-  respond "OmniLab owner access required" 403
+http://:19459 {
+	import authentik_outpost 8459
+	import authentik_gate 8459
+	@owners header X-Authentik-Groups *omnilab-owners*
+	handle @owners {
+		reverse_proxy 127.0.0.1:3001 {
+			import tailnet_headers 8459
+		}
+	}
+	respond "M2Lab owner access required" 403
 }
 
-# Native SSO apps are pass-through initially so their exact, documented OIDC
-# callbacks and their local break-glass logins remain available.
-:19443 {
-  reverse_proxy 127.0.0.1:2283
+# Native OIDC applications own their documented callbacks and are passed
+# through with the canonical tailnet origin preserved.
+http://:19443 {
+	reverse_proxy 127.0.0.1:2283 {
+		import tailnet_headers 8443
+	}
 }
-:19446 {
-  import authentik_outpost
-  import authentik_gate
-  reverse_proxy 127.0.0.1:8081
+http://:19446 {
+	import authentik_outpost 8446
+	import authentik_gate 8446
+	reverse_proxy 127.0.0.1:8081 {
+		import tailnet_headers 8446
+	}
 }
-:19448 {
-  reverse_proxy 127.0.0.1:8082
+http://:19448 {
+	import authentik_outpost 8448
+	import authentik_gate 8448
+	reverse_proxy 127.0.0.1:8082 {
+		import tailnet_headers 8448
+	}
 }
-:19450 {
-  reverse_proxy 127.0.0.1:8090
+http://:19450 {
+	import authentik_outpost 8450
+	import authentik_gate 8450
+	reverse_proxy 127.0.0.1:8090 {
+		import tailnet_headers 8450
+	}
 }
-:19451 {
-  reverse_proxy 127.0.0.1:8010
+http://:19451 {
+	reverse_proxy 127.0.0.1:8010 {
+		import tailnet_headers 8451
+	}
 }
-:19452 {
-  reverse_proxy 127.0.0.1:5006
+http://:19452 {
+	reverse_proxy 127.0.0.1:5006 {
+		import tailnet_headers 8452
+	}
 }
-:19453 {
-  reverse_proxy 127.0.0.1:8020
+http://:19453 {
+	import authentik_outpost 8453
+	import authentik_gate 8453
+	reverse_proxy 127.0.0.1:8020 {
+		import tailnet_headers 8453
+	}
 }
-:19454 {
-  reverse_proxy 127.0.0.1:8015
+http://:19454 {
+	reverse_proxy 127.0.0.1:8015 {
+		import tailnet_headers 8454
+	}
 }
-:19455 {
-  reverse_proxy 127.0.0.1:9000
+http://:19455 {
+	import authentik_outpost 8455
+	import authentik_gate 8455
+	reverse_proxy 127.0.0.1:9000 {
+		import tailnet_headers 8455
+	}
 }
-:19456 {
-  reverse_proxy 127.0.0.1:8084
+http://:19456 {
+	reverse_proxy 127.0.0.1:8084 {
+		import tailnet_headers 8456
+	}
 }
-:19090 {
-  import authentik_gate
-  @owners header X-Authentik-Groups *omnilab-owners*
-  handle @owners {
-    reverse_proxy 127.0.0.1:9090
-  }
-  respond "OmniLab owner access required" 403
-}
-:19062 {
-  reverse_proxy 127.0.0.1:9001 {
-    # Tailscale terminates TLS before forwarding to Caddy. Preserve the
-    # external scheme so Authentik builds correct HTTPS/WSS flow URLs.
-    header_up X-Forwarded-Proto https
-  }
+http://:19090 {
+	import authentik_outpost 9090
+	import authentik_gate 9090
+	@owners header X-Authentik-Groups *omnilab-owners*
+	handle @owners {
+		reverse_proxy 127.0.0.1:9090 {
+			import tailnet_headers 9090
+		}
+	}
+	respond "M2Lab owner access required" 403
 }
 
-# Local HTTPS via Caddy's internal CA so OIDC SSO works machine-locally
-# before Tailscale is available. The root CA at
-#   caddy-data/pki/authorities/local/root.crt
-# must be trusted by the local browser for these to be trusted. Tailscale
-# later maps the same backs to the tailnet HTTPS host for other devices.
-https://127.0.0.1:19462 {
-  tls internal
-  # Authentik infers its own OIDC issuer/report URLs from these headers, so
-  # the machine-local HTTPS origin must match the one Vaultwarden discovers.
-  reverse_proxy 127.0.0.1:9001 {
-    header_up X-Forwarded-Proto https
-    header_up X-Forwarded-Host 127.0.0.1:19462
-    header_up Host 127.0.0.1:19462
-  }
+# Authentik is served directly by Tailscale on 8462.
+http://:19062 {
+	reverse_proxy 127.0.0.1:9001 {
+		header_up Host {$M2LAB_TAILNET_HOST}:8462
+		header_up X-Forwarded-Host {$M2LAB_TAILNET_HOST}:8462
+		header_up X-Forwarded-Proto https
+	}
 }
 
-# Vaultwarden served over local HTTPS; Vaultwarden's OIDC redirect URI
-# (https://127.0.0.1:19447/identity/connect/oidc-signin) is registered on the
-# Authentik provider.
-https://127.0.0.1:19447 {
-  tls internal
-  import authentik_local_outpost
-  import authentik_local_gate
-  reverse_proxy 127.0.0.1:8081
+# Containers fetch discovery through Docker's host gateway, while Authentik
+# advertises the canonical tailnet HTTPS issuer and authorization endpoints to
+# browsers. The explicit bridge address is reachable only by local Docker
+# workloads, not by the LAN or Tailnet.
+http://:19463 {
+	bind 127.0.0.1 172.17.0.1
+	reverse_proxy 127.0.0.1:9001 {
+		header_up Host {$M2LAB_TAILNET_HOST}:8462
+		header_up X-Forwarded-Host {$M2LAB_TAILNET_HOST}:8462
+		header_up X-Forwarded-Proto https
+	}
 }

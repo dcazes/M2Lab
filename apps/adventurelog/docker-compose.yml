@@ -4,25 +4,35 @@ services:
     container_name: adventurelog
     restart: unless-stopped
     depends_on:
-      - db
+      - adventurelog-db
     ports:
       - "127.0.0.1:8015:80"
     volumes:
       - ./media:/app/media
     environment:
-      PGHOST: db
+      # The shared backend network contains other projects with a `db`
+      # service, so use an AdventureLog-specific database hostname.
+      PGHOST: adventurelog-db
       PGUSER: adventure
       PGPASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: adventure
       POSTGRES_USER: adventure
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SITE_URL: ${SITE_URL}
+      M2LAB_OIDC_CLIENT_ID: ${M2LAB_OIDC_CLIENT_ID:-}
+      M2LAB_OIDC_CLIENT_SECRET: ${M2LAB_OIDC_CLIENT_SECRET:-}
+      M2LAB_OIDC_ISSUER: ${M2LAB_OIDC_ISSUER:-}
+      M2LAB_OIDC_SERVER_URL: ${M2LAB_OIDC_SERVER_URL:-}
+      SOCIALACCOUNT_ALLOW_SIGNUP: ${SOCIALACCOUNT_ALLOW_SIGNUP:-false}
+      FORCE_SOCIALACCOUNT_LOGIN: ${FORCE_SOCIALACCOUNT_LOGIN:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     security_opt:
       - no-new-privileges:true
     networks:
       - frontend-net
       - backend-net
-  db:
+  adventurelog-db:
     image: postgis/postgis:16-3.5
     container_name: adventurelog-db
     restart: unless-stopped

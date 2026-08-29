@@ -151,7 +151,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
       </div>
 
       <div className="flex items-center gap-2 pt-2 border-t border-border">
-        <a
+        {service.launch_available ? <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
@@ -159,7 +159,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
         >
           <ExternalLink className="h-3.5 w-3.5" />
           Open
-        </a>
+        </a> : <button disabled title={service.launch_reason || 'This app cannot be opened yet'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-unknown bg-surface-2 rounded-btn opacity-50 cursor-not-allowed"><ExternalLink className="h-3.5 w-3.5" />Unavailable</button>}
         <div className="flex items-center gap-1">
           {ACTIONS.map(({ action, label, icon: Icon, confirm }) => (
             <button

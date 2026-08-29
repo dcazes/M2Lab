@@ -1,16 +1,50 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Check, Cpu, ExternalLink, Layers, LoaderCircle, Rocket, ShieldCheck, Sparkles, Terminal, ArrowRight, Lock, KeyRound
+  Check, Cpu, ExternalLink, Layers, LoaderCircle, ShieldCheck, Sparkles, Terminal, ArrowRight, Lock, KeyRound,
+  Eye, EyeOff
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useServices } from '../../hooks/useServices'
 import {
-  fetchSystemStats, fetchSetupJobs, wireModelPipeline, createSetupApproval, startSetupTarget,
-  resumeSetupJob, ollamaPullStreamUrl, createAuthentikTempPassword, fetchAudit
+  fetchSystemStats, fetchSetupJobs, fetchSetupBatches, wireModelPipeline, validateModelAccess, createSetupApproval,
+  startSetupBatch, resumeSetupBatch, cancelSetupBatch, startSetupTarget, resumeSetupJob, createAuthentikTempPassword, fetchAudit
 } from '../../lib/api'
-import type { SetupJob, CatalogApp, AuthentikTempPassword } from '../../lib/types'
+import type { SetupJob, SetupBatch, CatalogApp, AuthentikTempPassword, ModelAccessValidationResponse } from '../../lib/types'
+
+function KeyInput({ label, value, onChange, placeholder, prefix }: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  prefix: string
+}) {
+  const [visible, setVisible] = useState(false)
+  const trimmed = value.trim()
+  const valid = trimmed.startsWith(prefix) && trimmed.length > prefix.length
+  const inputId = `provider-key-${prefix.replace(/\W/g, '').toLowerCase()}`
+  return <div className="space-y-1">
+    <label htmlFor={inputId} className="text-xs font-semibold text-white flex items-center gap-1">
+      <KeyRound className="h-3 w-3 text-accent" /> {label}
+    </label>
+    <div className="relative">
+      <input id={inputId} type={visible ? 'text' : 'password'} value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} autoComplete="off"
+        className={`w-full text-xs p-2.5 pr-10 bg-bg-base border rounded text-white ${trimmed ? (valid ? 'border-emerald-500/50' : 'border-rose-500/50') : 'border-border'}`} />
+      <button type="button" onClick={() => setVisible(current => !current)}
+        className="absolute inset-y-0 right-0 px-3 text-unknown hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-r"
+        aria-label={`${visible ? 'Hide' : 'Show'} ${label}`} title={`${visible ? 'Hide' : 'Show'} key`}>
+        {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+    {trimmed && <p className={`text-[11px] ${valid ? 'text-emerald-400' : 'text-rose-400'}`} role="status">
+      {valid ? <><Check className="inline h-3 w-3 mr-1" />Looks valid</> : `Expected a key beginning with ${prefix}`}
+    </p>}
+  </div>
+}
+
+const AI_INFRASTRUCTURE_IDS = new Set(['litellm', 'freellmapi', 'firecrawl', 'ollama'])
 
 function SetupTraceTerminal({ job }: { job: SetupJob }) {
   const lines = job.events.slice(-6)
@@ -39,108 +73,48 @@ function UsageMeter({ label, total, percent }: { label: string, total: string, p
   </div>
 }
 
-function DownloadProgressPanel({ targets, jobByTarget, apps, started }: {
-  targets: Set<string>
-  jobByTarget: Map<string, SetupJob>
-  apps: CatalogApp[]
-  started: boolean
-}) {
-  const entries = [...targets].map(t => ({ target: t, job: jobByTarget.get(t) }))
-  const pct = entries.length
-    ? Math.round(entries.reduce((s, e) => s + (e.job?.status === 'user_action_required' ? 100 : (e.job?.progress ?? 0)), 0) / entries.length)
-    : 0
-  const readyCount = entries.filter(e => e.job?.status === 'ready').length
-  const failedCount = entries.filter(e => e.job?.status === 'failed').length
-  const actionCount = entries.filter(e => e.job?.status === 'user_action_required').length
-  const runningCount = entries.filter(e =>
-    ['queued', 'preparing', 'starting', 'waiting', 'configuring', 'verifying'].includes(e.job?.status ?? '')
-  ).length
-  const notStartedCount = entries.filter(e => !e.job).length
-
-  const appById = useMemo(() => {
-    const m = new Map<string, CatalogApp>()
-    for (const a of apps) m.set(a.id, a)
-    return m
-  }, [apps])
-  const traceLines = entries
-    .flatMap(({ target, job }) => {
-      const name = appById.get(target)?.name || target
-      if (!job) return [{ key: `${target}-queued`, timestamp: '', name, status: 'queued', message: 'Waiting for download to start.' }]
-      const lines = job.events.slice(-4).map((event, index) => ({
-        key: `${target}-${event.timestamp}-${index}`,
-        timestamp: event.timestamp,
-        name,
-        status: event.status,
-        message: event.message,
-      }))
-      if (job.error && !lines.some(line => line.message === job.error)) {
-        lines.push({ key: `${target}-error`, timestamp: job.updated_at, name, status: 'failed', message: job.error })
-      }
-      return lines
-    })
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    .slice(-30)
-  const downloadedCount = readyCount + actionCount
-
-  return (
-    <div className="space-y-3 bg-surface-2 p-5 border border-border rounded-lg">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-bold text-white">Application Downloads</h4>
-        <span className="font-mono text-sm text-white">{pct}% · {downloadedCount}/{entries.length} downloaded</span>
-      </div>
-      <div className="w-full h-2 bg-bg-base rounded overflow-hidden">
-        <div className="h-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="text-xs text-unknown">
-        <span className="text-emerald-400">Ready {readyCount}</span> ·{' '}
-        <span className="text-amber-400">Running {runningCount}</span> ·{' '}
-        <span className="text-blue-400">Action needed {actionCount}</span> ·{' '}
-        <span className="text-rose-400">Failed {failedCount}</span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-        {entries.map(({ target, job }) => {
-          const app = appById.get(target)
-          const status = job
-            ? job.status === 'ready'
-              ? { label: 'Ready', cls: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' }
-              : job.status === 'failed'
-                ? { label: 'Failed', cls: 'bg-rose-500/20 text-rose-400 border border-rose-500/30' }
-                : job.status === 'user_action_required'
-                  ? { label: 'Downloaded · setup next', cls: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' }
-                  : { label: 'Starting…', cls: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
-            : { label: 'Not started', cls: 'bg-surface-1/60 text-unknown border border-border' }
-          return (
-            <div key={target} className="p-3 bg-bg-base border border-border rounded flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span>{app?.icon}</span>
-                <span className="font-semibold text-white">{app?.name || target}</span>
-                <span className="font-mono text-[11px] text-unknown">{job?.progress ?? 0}%</span>
-              </div>
-              <span className={`px-2 py-0.5 rounded font-mono text-[11px] font-bold ${status.cls}`}>{status.label}</span>
-            </div>
-          )
-        })}
-      </div>
-      {entries.length > 0 && (
-        <div className="setup-trace-terminal download-trace" role="status" aria-live="polite" aria-label="Application download trace">
-          <div><Terminal className="h-3.5 w-3.5" /> <span>download trace</span><span className="setup-trace-stage">{traceLines.length} recent events</span></div>
-          {traceLines.map(({ key, timestamp, name, status, message }) => (
-            <p key={key} className={status === 'failed' ? 'setup-trace-error' : undefined}>
-              <span>{status === 'failed' ? '!' : '$'}</span>{' '}
-              {timestamp && <time>{new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>}{' '}
-              <strong>{name}:</strong> {message}
-            </p>
-          ))}
-        </div>
-      )}
-      {!started && entries.length > 0 && notStartedCount === entries.length && (
-        <p className="text-xs text-unknown">Downloads haven't started yet — go back to Step 2 to start them.</p>
-      )}
+function BatchProgressPanel({ batch, apps }: { batch?: SetupBatch; apps: CatalogApp[] }) {
+  if (!batch) return <div className="p-5 bg-surface-2 border border-border rounded-lg text-sm text-unknown">Safe sequential setup has not started.</div>
+  const names = new Map(apps.filter(app => app.service_id).map(app => [app.service_id as string, app]))
+  const formatBytes = (value: number) => `${(value / 1024 ** 3).toFixed(1)} GB`
+  const projectedPercent = batch.host_total_bytes ? Math.min(100, batch.projected_bytes / batch.host_total_bytes * 100) : 0
+  const current = batch.items[batch.current_index]
+  return <div className="space-y-4 bg-surface-2 p-5 border border-border rounded-lg" aria-live="polite">
+    <div className="flex items-center justify-between gap-4">
+      <div><h4 className="text-sm font-bold text-white">Safe Sequential Setup</h4><p className="text-xs text-unknown capitalize">{batch.phase.replace(/_/g, ' ')}</p></div>
+      <span className="font-mono text-xs text-white">{batch.items.filter(item => item.status === 'ready').length}/{batch.items.length} ready</span>
     </div>
-  )
+    {current && !['ready', 'cancelled'].includes(batch.status) && <p className="text-xs text-unknown">Current service: <strong className="text-white">{names.get(current.service_id)?.name || current.service_id}</strong></p>}
+    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+      <div className="p-2 bg-bg-base rounded"><span className="block text-unknown">Measured peaks</span><strong className="text-white">{formatBytes(batch.measured_bytes)}</strong></div>
+      <div className="p-2 bg-bg-base rounded"><span className="block text-unknown">Projected</span><strong className="text-white">{formatBytes(batch.projected_bytes)}</strong></div>
+      <div className="p-2 bg-bg-base rounded"><span className="block text-unknown">Reserved</span><strong className="text-white">{formatBytes(batch.host_total_bytes * batch.reserve_ratio)}</strong></div>
+    </div>
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs"><span className="text-unknown">Projected initialization / idle RAM</span><strong className={projectedPercent > 80 ? 'text-rose-400' : 'text-white'}>{formatBytes(batch.projected_bytes)} · {projectedPercent.toFixed(1)}%</strong></div>
+      <div className="h-2 bg-bg-base rounded overflow-hidden"><div className={projectedPercent > 80 ? 'h-full bg-rose-500' : 'h-full bg-accent'} style={{ width: `${projectedPercent}%` }} /></div>
+      <p className="text-[11px] text-unknown">20% host reserve enforced. Active OCR, indexing, crawling, and inference can use more.</p>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+      {batch.items.map(item => {
+        const app = names.get(item.service_id)
+        const ready = item.status === 'ready'
+        const failed = item.status === 'failed'
+        return <div key={item.service_id} className="p-3 bg-bg-base border border-border rounded flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2"><span>{app?.icon || (item.role === 'infrastructure' ? '⚙' : '◌')}</span><span><strong className="block text-white">{app?.name || item.service_id}</strong><small className="capitalize text-unknown">{item.phase.replace(/_/g, ' ')}</small></span></span>
+          <span className={`px-2 py-0.5 rounded font-mono text-[10px] ${ready ? 'bg-emerald-500/20 text-emerald-400' : failed ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'}`}>{ready ? 'Ready' : failed ? 'Failed' : item.status === 'prepared' ? 'Prepared' : 'Working'}</span>
+        </div>
+      })}
+    </div>
+    <div className="setup-trace-terminal download-trace">
+      <div><Terminal className="h-3.5 w-3.5" /><span>sequential setup trace</span><span className="setup-trace-stage">{batch.events.length} events</span></div>
+      {batch.events.slice(-30).map((event, index) => <p key={`${event.timestamp}-${index}`} className={event.status === 'failed' ? 'setup-trace-error' : undefined}><span>{event.status === 'failed' ? '!' : '$'}</span> <strong>{event.service_id || 'batch'}:</strong> {event.message}</p>)}
+      {batch.error && <p className="setup-trace-error"><span>!</span> {batch.error}</p>}
+    </div>
+  </div>
 }
 
-export function OnboardingWizard() {
+export function OnboardingWizard({ onGoWorkspace }: { onGoWorkspace?: () => void }) {
   const [step, setStep] = useState<number>(1)
 
   // Selected user-facing applications (Agent-Driven)
@@ -153,43 +127,40 @@ export function OnboardingWizard() {
   const [nvidiaKey, setNvidiaKey] = useState('')
   const [geminiKey, setGeminiKey] = useState('')
   const [pullEmbeddings, setPullEmbeddings] = useState(true)
+  const [localOnly, setLocalOnly] = useState(false)
+  const [validationBusy, setValidationBusy] = useState(false)
+  const [validationResults, setValidationResults] = useState<ModelAccessValidationResponse | null>(null)
   const [wiringBusy, setWiringBusy] = useState(false)
+  const [operationStatus, setOperationStatus] = useState<string | null>(null)
   const [wiredDone, setWiredDone] = useState(false)
-
-  // Live Ollama embedding pull state (streamed via Server-Sent-Events)
-  const [pulling, setPulling] = useState(false)
-  const [pullProgress, setPullProgress] = useState(0)
-  const [pullLog, setPullLog] = useState<string[]>([])
-  const [pullError, setPullError] = useState<string | null>(null)
-  const [pullDone, setPullDone] = useState(false)
-  const pullSourceRef = useRef<EventSource | null>(null)
-
-  // Downloads kickoff flag (set when launchAll succeeds on Step 2)
-  const [downloadsStarted, setDownloadsStarted] = useState(false)
 
   // System & Services queries
   const systemQuery = useQuery({ queryKey: ['system-stats'], queryFn: fetchSystemStats })
   const catalogQuery = useCatalog()
   const servicesQuery = useServices()
   const jobsQuery = useQuery({ queryKey: ['setup-jobs'], queryFn: fetchSetupJobs, refetchInterval: 2000 })
+  const batchesQuery = useQuery({ queryKey: ['setup-batches'], queryFn: fetchSetupBatches, refetchInterval: 2000 })
   const auditQuery = useQuery({ queryKey: ['audit'], queryFn: fetchAudit, refetchInterval: 5000 })
   const queryClient = useQueryClient()
 
   const apps = catalogQuery.data?.apps || []
   const drivenApps = apps.filter(a => a.category === 'agent_driven')
   const supportApps = apps.filter(a => a.category === 'agent_support')
+  const nvidiaFormatValid = nvidiaKey.trim().startsWith('nvapi-') && nvidiaKey.trim().length > 'nvapi-'.length
+  const geminiFormatValid = geminiKey.trim().startsWith('AIzaSy') && geminiKey.trim().length > 'AIzaSy'.length
+  const hasMalformedKey = !localOnly && Boolean(
+    (nvidiaKey.trim() && !nvidiaFormatValid) || (geminiKey.trim() && !geminiFormatValid)
+  )
+  const canWireModels = localOnly || ((nvidiaFormatValid || geminiFormatValid) && !hasMalformedKey)
+  const activeBatch = batchesQuery.data?.batches[0]
 
-  // Use the canonical Caddy HTTPS origin once ingress is available. This keeps
-  // the browser's Authentik session shared with every protected local app.
+  // Tailscale is the only browser origin. This keeps the Authentik session
+  // consistent on this host and every other device on the tailnet.
   const authentikService = servicesQuery.data?.services.find(s => s.id === 'authentik')
   const vaultwardenService = servicesQuery.data?.services.find(s => s.id === 'vaultwarden')
-  const authentikAvailable = authentikService?.state === 'running' && authentikService.healthy !== false
-  const authentikUrl = authentikService?.tailnet_route_active
-    ? (authentikService.tailnet_url || 'http://127.0.0.1:9001')
-    : (authentikAvailable ? 'https://127.0.0.1:19462' : (authentikService?.url || 'http://127.0.0.1:9001'))
-  const vaultwardenUrl = vaultwardenService?.tailnet_route_active
-    ? (vaultwardenService.tailnet_url || 'http://127.0.0.1:8081')
-    : 'https://127.0.0.1:19447'
+  const authentikAvailable = authentikService?.state === 'running' && authentikService.healthy !== false && authentikService.tailnet_route_active
+  const authentikUrl = authentikService?.tailnet_url || ''
+  const vaultwardenUrl = vaultwardenService?.tailnet_url || ''
 
   // Calculate required infrastructure dependencies based on selected driven apps
   const requiredDeps = useMemo(() => {
@@ -224,82 +195,58 @@ export function OnboardingWizard() {
   }
 
   const handleWireModels = async () => {
-    setWiringBusy(true)
-    setPullError(null)
+    const nvidia = localOnly ? '' : nvidiaKey.trim()
+    const gemini = localOnly ? '' : geminiKey.trim()
+    const nvidiaValid = nvidia.startsWith('nvapi-') && nvidia.length > 'nvapi-'.length
+    const geminiValid = gemini.startsWith('AIzaSy') && gemini.length > 'AIzaSy'.length
+    const malformedKey = Boolean((nvidia && !nvidiaValid) || (gemini && !geminiValid))
+    if ((!localOnly && !nvidiaValid && !geminiValid) || malformedKey) {
+      toast.error('Correct the provider key format before continuing')
+      return
+    }
+    setValidationBusy(true)
+    setOperationStatus('Validating provider access…')
+    setValidationResults(null)
     try {
+      if (!localOnly || nvidia || gemini) {
+        const validation = await validateModelAccess({
+          NVIDIA_NIM_API_KEY: nvidia || undefined,
+          GEMINI_API_KEY: gemini || undefined,
+          check_ollama: true,
+        })
+        setValidationResults(validation)
+        if (!validation.ok) {
+          toast.error('One or more provider keys could not be validated')
+          return
+        }
+      }
+
+      setValidationBusy(false)
+      setWiringBusy(true)
+      setOperationStatus('Saving validated model routing…')
       const approval = await createSetupApproval('models', 'model-wire')
       const res = await wireModelPipeline({
-        NVIDIA_NIM_API_KEY: nvidiaKey.trim() || undefined,
-        GEMINI_API_KEY: geminiKey.trim() || undefined,
+        NVIDIA_NIM_API_KEY: nvidia || undefined,
+        GEMINI_API_KEY: gemini || undefined,
         pull_embedding: pullEmbeddings,
       }, approval)
       if (res.ok) {
         setWiredDone(true)
-        toast.success('Model pipeline wired! LiteLLM config generated instantly.')
-        if (pullEmbeddings) {
-          await startOllamaPull()
-        }
+        setWiringBusy(false)
+        setOperationStatus('Starting safe sequential setup… this can take a few minutes while services are prepared.')
+        toast.success('Model pipeline wired. Safe sequential setup is starting.')
+        const started = await launchAll()
+        if (started) setStep(4)
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err))
+      const status = (err as Error & { status?: number })?.status
+      toast.error(status === 404 || status === 405
+        ? 'The running dashboard backend is out of date; restart the M2Lab control plane.'
+        : err instanceof Error ? err.message : String(err))
     } finally {
+      setValidationBusy(false)
       setWiringBusy(false)
-    }
-  }
-
-  const startOllamaPull = async () => {
-    setPulling(true)
-    setPullProgress(0)
-    setPullLog([])
-    setPullDone(false)
-    setPullError(null)
-    let finished = false
-    try {
-      const approval = await createSetupApproval('ollama', 'model-pull')
-      const source = new EventSource(ollamaPullStreamUrl('nomic-embed-text', approval))
-      pullSourceRef.current = source
-      source.onmessage = (event) => {
-        let payload: Record<string, unknown>
-        try {
-          payload = JSON.parse(event.data)
-        } catch {
-          return
-        }
-        const status = typeof payload.status === 'string' ? payload.status : ''
-        const completed = typeof payload.completed === 'number' ? payload.completed : null
-        const total = typeof payload.total === 'number' ? payload.total : null
-        setPullLog((prev) => [...prev, status || JSON.stringify(payload)].slice(-200))
-        if (completed != null && total && total > 0) {
-          setPullProgress(Math.min(100, Math.round((completed / total) * 100)))
-        }
-        if (status === 'success') {
-          finished = true
-          setPullDone(true)
-          setPulling(false)
-          source.close()
-          toast.success('Embedding model pulled successfully.')
-        } else if (status === 'skipped') {
-          finished = true
-          setPulling(false)
-          source.close()
-          toast.info('Ollama is not running yet — the embedding pull will run when Ollama launches.')
-        } else if (status === 'error') {
-          finished = true
-          setPullError(typeof payload.error === 'string' ? payload.error : 'Pull failed')
-          setPulling(false)
-          source.close()
-        }
-      }
-      source.onerror = () => {
-        if (!finished) {
-          setPullError('Connection to the pull stream was lost. Retry the pull.')
-          setPulling(false)
-        }
-        source.close()
-      }
-    } catch (err) {
-      setPullError(err instanceof Error ? err.message : String(err))
-      setPulling(false)
+      setOperationStatus(null)
     }
   }
 
@@ -319,13 +266,6 @@ export function OnboardingWizard() {
     return targets
   }, [apps, requiredDeps, selectedApps, selectedSupport, drivenApps, supportApps])
 
-  // Live setup-job status keyed by target, for honest step-5 status chips
-  const jobByTarget = useMemo(() => {
-    const byTarget = new Map<string, SetupJob>()
-    for (const job of jobsQuery.data?.jobs || []) byTarget.set(job.target, job)
-    return byTarget
-  }, [jobsQuery.data])
-
   const [launching, setLaunching] = useState(false)
 
   const launchAll = async (): Promise<boolean> => {
@@ -335,13 +275,10 @@ export function OnboardingWizard() {
     }
     setLaunching(true)
     try {
-      for (const target of launchTargets) {
-        const approval = await createSetupApproval(target, 'setup-start')
-        await startSetupTarget(target, approval)
-      }
-      await queryClient.invalidateQueries({ queryKey: ['setup-jobs'] })
-      toast.success(`Started ${launchTargets.size} application setup job(s)`)
-      setDownloadsStarted(true)
+      const approval = await createSetupApproval('onboarding', 'setup-batch-start')
+      await startSetupBatch([...launchTargets], approval, pullEmbeddings)
+      await queryClient.invalidateQueries({ queryKey: ['setup-batches'] })
+      toast.success(`Started safe sequential setup for ${launchTargets.size} selected services`)
       return true
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -349,6 +286,41 @@ export function OnboardingWizard() {
     } finally {
       setLaunching(false)
     }
+  }
+  const resumeBatch = async () => {
+    if (!activeBatch) return
+    setLaunching(true)
+    try {
+      const approval = await createSetupApproval('onboarding', 'setup-batch-resume')
+      await resumeSetupBatch(activeBatch.id, approval)
+      await queryClient.invalidateQueries({ queryKey: ['setup-batches'] })
+      toast.success('Sequential setup resumed after rechecking host capacity')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLaunching(false)
+    }
+  }
+  const cancelBatch = async () => {
+    if (!activeBatch) return
+    setLaunching(true)
+    try {
+      const approval = await createSetupApproval('onboarding', 'setup-batch-cancel')
+      await cancelSetupBatch(activeBatch.id, approval)
+      await queryClient.invalidateQueries({ queryKey: ['setup-batches'] })
+      toast.info('Remaining onboarding work was cancelled; prepared services and data were preserved.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLaunching(false)
+    }
+  }
+
+  const canonicalBatchUrl = (serviceId: string) => {
+    if (serviceId === 'ollama') return null
+    const service = servicesQuery.data?.services.find(candidate => candidate.id === serviceId)
+    if (service?.tailnet_route_active && service.tailnet_url) return service.tailnet_url
+    return null
   }
   const startFoundation = async () => {
     try {
@@ -407,8 +379,7 @@ export function OnboardingWizard() {
       toast.error('Complete Authentik & Vaultwarden setup on Step 1 first')
       return
     }
-    const ok = await launchAll()
-    if (ok) setStep(3)
+    setStep(3)
   }
 
   // Authentik & Vaultwarden are the foundation — install them by default as
@@ -433,10 +404,11 @@ export function OnboardingWizard() {
           <h1 className="text-2xl font-bold text-white mt-1">M2Lab Setup & Initialization</h1>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono">
-          {[1, 2, 3, 4, 5].map(s => (
+          {[1, 2, 3, 4].map(s => (
             <button
               key={s}
               onClick={() => setStep(s)}
+              aria-label={`Go to onboarding step ${s}`}
               className={`w-8 h-8 rounded-full font-bold transition-all ${
                 step === s
                   ? 'bg-accent text-bg-base ring-2 ring-accent/50'
@@ -494,19 +466,11 @@ export function OnboardingWizard() {
               <span className="text-xs font-mono text-unknown">Tailscale Support</span>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-white">{systemQuery.data?.tailscale?.hostname || 'Localhost'}</span>
-                {systemQuery.data?.tailscale_required ? (
-                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${systemQuery.data?.tailscale?.connected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400'}`}>
-                    {systemQuery.data?.tailscale?.connected ? 'Connected' : 'Required'}
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    Loopback
-                  </span>
-                )}
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${systemQuery.data?.tailscale?.connected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400'}`}>
+                  {systemQuery.data?.tailscale?.connected ? 'Connected' : 'Required'}
+                </span>
               </div>
-              {!systemQuery.data?.tailscale_required && (
-                <p className="text-xs text-unknown">Running on 127.0.0.1 — Tailscale not required.</p>
-              )}
+              <p className="text-xs text-unknown">Required for private HTTPS access from every approved device.</p>
             </div>
             </div>
           </section>
@@ -595,35 +559,20 @@ export function OnboardingWizard() {
                   <span className="eyebrow text-amber-400">2 · HTTPS Door</span>
                   <h3 className="text-base font-bold text-white">Tailscale Access</h3>
                 </div>
-                {systemQuery.data?.tailscale_required ? (
-                  <span className={`px-2.5 py-1 rounded text-xs font-bold ${
-                    systemQuery.data?.tailscale?.connected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                  }`}>
-                    {systemQuery.data?.tailscale?.connected ? 'Connected' : 'Required'}
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400">Loopback HTTPS</span>
-                )}
+                <span className={`px-2.5 py-1 rounded text-xs font-bold ${
+                  systemQuery.data?.tailscale?.connected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                }`}>
+                  {systemQuery.data?.tailscale?.connected ? 'Connected' : 'Required'}
+                </span>
               </div>
 
               <p className="text-xs text-unknown">
-                The network door. Caddy serves Authentik and Vaultwarden over a machine-local HTTPS port now; Tailscale opens the same URLs to your other devices later.
+                The only network door. Tailscale provides trusted HTTPS access to every M2Lab app from any approved tailnet device.
               </p>
 
-              {!systemQuery.data?.tailscale_required ? (
-                <div className="text-[11px] text-unknown space-y-1">
-                  <p className="flex items-start gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                    <span>Local HTTPS via Caddy is active.<code className="block mt-1 text-white">127.0.0.1</code></span>
-                  </p>
-                  <p className="flex items-start gap-1.5"><KeyRound className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                    <span>To remove the browser's local HTTPS warning, trust Caddy's root certificate:<code className="block mt-1 text-white whitespace-nowrap">.state/caddy-local-root.crt</code></span>
-                  </p>
-                </div>
-              ) : (
-                <div className="text-[11px] text-unknown">
-                  Tailscale must be connected and serving the tailnet HTTPS ports before apps are exposed.
-                </div>
-              )}
+              <div className="text-[11px] text-unknown">
+                Tailscale must be connected and serving the private HTTPS routes before apps are exposed.
+              </div>
             </div>
 
             {/* Card 3: Vaultwarden — password vault with SSO */}
@@ -804,7 +753,7 @@ export function OnboardingWizard() {
                 onClick={handleNextFromSelection}
               >
                 {launching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                Start Downloads & Continue to API Keys
+                Continue to AI Provider Setup
               </button>
               {!foundationReady && (
                 <span className="text-xs text-unknown">Complete Authentik & Vaultwarden setup on Step 1 to start downloads.</span>
@@ -814,78 +763,50 @@ export function OnboardingWizard() {
         </div>
       )}
 
-      {/* STEP 3: API Keys & Provider Access */}
+      {/* STEP 3: AI Provider Setup */}
       {step === 3 && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div>
-            <h2 className="text-xl font-bold text-white">3. API Keys & Provider Access</h2>
+            <h2 className="text-xl font-bold text-white">3. AI Provider Setup</h2>
             <p className="text-sm text-unknown mt-1">
-              Paste your provider keys (from Vaultwarden) while your applications download in the background.
+              Add cloud provider access or choose local-only inference. After wiring, M2Lab prepares every selected service one at a time.
+              Keys are validated live before they are saved to LiteLLM.
+            </p>
+            <p className="text-xs text-unknown mt-2">
+              Model routing: <code>API Key → FreeLLMAPI → LiteLLM → Open WebUI / SurfSense</code>
             </p>
           </div>
 
           <div className="space-y-4 bg-surface-2 p-5 border border-border rounded-lg">
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-white">1. Enter API Keys (NVIDIA NIM Recommended)</h4>
-                <p className="text-xs text-unknown">NVIDIA NIM offers a generous free tier with fast llama-3 models.</p>
-              </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">1. Enter API Keys — NVIDIA NIM Recommended</h4>
+              <p className="text-xs text-unknown">Cloud keys are optional when using local Ollama. NVIDIA NIM offers a generous free tier with fast Llama models.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <span className="text-xs font-semibold text-white flex items-center gap-1">
-                  <KeyRound className="h-3 w-3 text-accent" /> NVIDIA NIM API Key (Recommended)
-                </span>
-                <input
-                  type="password"
-                  value={nvidiaKey}
-                  onChange={e => setNvidiaKey(e.target.value)}
-                  placeholder="nvapi-..."
-                  className="w-full text-xs p-2.5 bg-bg-base border border-border rounded text-white"
-                />
+                <KeyInput label="NVIDIA NIM API Key" value={nvidiaKey} placeholder="nvapi-..." prefix="nvapi-"
+                  onChange={value => { setNvidiaKey(value); setValidationResults(null) }} />
                 <a href="https://build.nvidia.com/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
                   Get an NVIDIA NIM key <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
 
               <div className="space-y-1">
-                <span className="text-xs font-semibold text-white flex items-center gap-1">
-                  <KeyRound className="h-3 w-3 text-accent" /> Google Gemini API Key
-                </span>
-                <input
-                  type="password"
-                  value={geminiKey}
-                  onChange={e => setGeminiKey(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full text-xs p-2.5 bg-bg-base border border-border rounded text-white"
-                />
+                <KeyInput label="Google Gemini API Key" value={geminiKey} placeholder="AIzaSy..." prefix="AIzaSy"
+                  onChange={value => { setGeminiKey(value); setValidationResults(null) }} />
                 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
                   Get a Gemini API key in Google AI Studio <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
             </div>
-          </div>
-
-          <DownloadProgressPanel targets={launchTargets} jobByTarget={jobByTarget} apps={apps} started={downloadsStarted} />
-
-          <div className="flex justify-between pt-4">
-            <button className="button-secondary" onClick={() => setStep(2)}>Back</button>
-            <button className="button-primary flex items-center gap-2" onClick={() => setStep(4)}>
-              Continue to Model Wiring <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 4: AI Setup & Gateway Wiring */}
-      {step === 4 && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <div>
-            <h2 className="text-xl font-bold text-white">4. AI Model Pipeline Setup</h2>
-            <p className="text-sm text-unknown mt-1">
-              With your provider keys entered on Step 3, configure local embeddings. Model routing: <code>API Key → FreeLLMAPI → LiteLLM → Open WebUI / SurfSense</code>.
-            </p>
+            <label className="flex items-center gap-2 text-xs font-semibold text-white cursor-pointer">
+              <input type="checkbox" checked={localOnly} onChange={event => {
+                setLocalOnly(event.target.checked)
+                if (event.target.checked) { setNvidiaKey(''); setGeminiKey(''); setValidationResults(null) }
+              }} className="h-4 w-4 rounded accent-accent" />
+              <span>Use local Ollama only (no cloud provider key)</span>
+            </label>
           </div>
 
           <div className="space-y-3 bg-surface-2 p-5 border border-border rounded-lg">
@@ -904,131 +825,97 @@ export function OnboardingWizard() {
             </label>
           </div>
 
-          <DownloadProgressPanel targets={launchTargets} jobByTarget={jobByTarget} apps={apps} started={downloadsStarted} />
-
           <div className="flex items-center justify-between pt-4">
-            <button className="button-secondary" onClick={() => setStep(3)}>Back</button>
+            <button className="button-secondary" onClick={() => setStep(2)}>Back</button>
             <button
               className="button-primary flex items-center gap-2"
               onClick={handleWireModels}
-              disabled={wiringBusy}
+              disabled={validationBusy || wiringBusy || Boolean(operationStatus) || !canWireModels}
             >
-              {wiringBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              {wiredDone ? 'Re-wire Model Pipeline' : 'Approve & Wire Model Pipeline'}
+              {validationBusy || wiringBusy || operationStatus ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              {operationStatus || (wiredDone ? 'Re-wire Model Pipeline' : 'Validate & Wire Model Pipeline')}
             </button>
           </div>
 
-          {pulling && (
-            <div className="space-y-2 bg-surface-2 p-4 border border-border rounded-lg">
-              <div className="flex items-center justify-between text-xs text-white">
-                <span className="font-semibold flex items-center gap-1.5">
-                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Pulling nomic-embed-text…
-                </span>
-                <span className="font-mono">{pullProgress}%</span>
-              </div>
-              <div className="w-full h-2 bg-bg-base rounded overflow-hidden">
-                <div className="h-full bg-accent transition-all duration-300" style={{ width: `${pullProgress}%` }} />
-              </div>
-              <pre className="text-[10px] text-unknown max-h-32 overflow-auto font-mono whitespace-pre-wrap">{pullLog.join('\n')}</pre>
-            </div>
+          {operationStatus && <p className="text-xs text-accent text-right" role="status" aria-live="polite">{operationStatus}</p>}
+
+          {!canWireModels && (
+            <p className="text-xs text-unknown text-right">
+              {hasMalformedKey ? 'Correct invalid key formats to continue.' : 'Enter a correctly formatted provider key or choose local Ollama only.'}
+            </p>
           )}
 
-          {pullDone && !pulling && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold flex items-center gap-1">
-              <Check className="h-3.5 w-3.5" /> Embedding model pulled successfully.
-            </div>
-          )}
-
-          {pullError && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded text-xs text-rose-400 font-semibold">
-              Embedding pull issue: {pullError}
+          {validationResults && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-live="polite">
+              {(['nvidia', 'gemini', 'ollama'] as const).map(provider => {
+                const result = validationResults.providers[provider]
+                const successful = result.status === 'valid' || result.status === 'available'
+                const neutral = result.status === 'not_checked'
+                return <div key={provider} className={`p-3 rounded border text-xs ${successful ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : neutral ? 'bg-surface-2 border-border text-unknown' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+                  <strong className="block text-white mb-1">{provider === 'nvidia' ? 'NVIDIA NIM' : provider === 'gemini' ? 'Google Gemini' : 'Local Ollama'}</strong>
+                  {result.message}{result.model_count != null ? ` · ${result.model_count} models` : ''}
+                </div>
+              })}
             </div>
           )}
 
           {wiredDone && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded text-xs text-emerald-400 font-semibold flex items-center justify-between">
               <span>✓ Model pipeline wired successfully!</span>
-              <button className="underline" onClick={() => setStep(5)}>Proceed to Launch & Workspace →</button>
+              {operationStatus ? (
+                <span className="text-accent" role="status" aria-live="polite">Preparing selected services…</span>
+              ) : (
+                <button className="underline" onClick={async () => { if (await launchAll()) setStep(4) }}>Start Safe Setup →</button>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* STEP 5: Summary & Launch */}
-      {step === 5 && (
+      {/* STEP 4: Summary & Launch */}
+      {step === 4 && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div className="text-center space-y-2 py-4">
             <span className="text-4xl">🚀</span>
-            <h2 className="text-2xl font-bold text-white">Launch Your Workspace</h2>
+            <h2 className="text-2xl font-bold text-white">4. Safe Setup & Capacity Check</h2>
             <p className="text-sm text-unknown max-w-lg mx-auto">
-              Your applications are downloading in the background as setup jobs — the same jobs the Settings tab drives — and progress below updates live.
+              M2Lab configures, verifies, and measures one service at a time. Final activation happens sequentially only when the projected idle footprint leaves at least 20% of host RAM available.
             </p>
           </div>
 
-          <DownloadProgressPanel targets={launchTargets} jobByTarget={jobByTarget} apps={apps} started={downloadsStarted} />
+          <BatchProgressPanel batch={activeBatch} apps={apps} />
 
-          {(() => {
-            const startedCount = [...launchTargets].filter(t => jobByTarget.has(t)).length
-            const failedCount = [...launchTargets].filter(t => jobByTarget.get(t)?.status === 'failed').length
-            if (startedCount === 0) {
-              return (
-                <div className="flex justify-center pt-1">
-                  <button className="button-primary flex items-center gap-2 px-8 py-3 text-base" onClick={launchAll} disabled={launching}>
-                    {launching ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
-                    {launching ? 'Starting applications…' : `Launch ${launchTargets.size} Selected Applications`}
-                  </button>
-                </div>
-              )
-            }
-            if (failedCount > 0) {
-              return (
-                <div className="flex justify-center pt-1">
-                  <button className="button-primary flex items-center gap-2 px-8 py-3 text-base" onClick={launchAll} disabled={launching}>
-                    {launching ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
-                    {launching ? 'Retrying failed applications…' : 'Retry Failed Applications'}
-                  </button>
-                </div>
-              )
-            }
-            return (
-              <div className="flex justify-center pt-1">
-                <span className="text-sm text-unknown">All applications are downloading or ready.</span>
-              </div>
-            )
-          })()}
-
-          <div className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
-            <h4 className="text-sm font-bold text-white border-b border-border pb-2">Selected Applications & Endpoints</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              {apps.filter(a => selectedApps.has(a.id) || requiredDeps.has(a.id) || selectedSupport.has(a.id)).map(app => {
-                const target = app.service_id || app.id
-                const job = jobByTarget.get(target)
-                const status = job
-                  ? job.status === 'ready'
-                    ? { label: 'Ready', cls: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' }
-                    : job.status === 'failed'
-                      ? { label: 'Failed', cls: 'bg-rose-500/20 text-rose-400 border border-rose-500/30' }
-                      : job.status === 'user_action_required'
-                        ? { label: 'Action needed', cls: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' }
-                        : { label: 'Starting…', cls: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
-                  : { label: 'Not started', cls: 'bg-surface-1/60 text-unknown border border-border' }
-                return (
-                  <div key={app.id} className="p-3 bg-bg-base border border-border rounded flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span>{app.icon}</span>
-                      <span className="font-semibold text-white">{app.name}</span>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded font-mono text-[11px] font-bold ${status.cls}`}>{status.label}</span>
-                  </div>
-                )
-              })}
+          {activeBatch && ['paused_memory', 'paused_handoff', 'paused_interrupted', 'failed'].includes(activeBatch.status) && (
+            <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div><strong className="text-sm text-amber-300">Setup is paused</strong><p className="text-xs text-unknown">Resolve the reported capacity or configuration issue, then resume. M2Lab will recheck actual state before continuing.</p></div>
+              <button className="button-primary flex items-center gap-2 shrink-0" onClick={resumeBatch} disabled={launching}>{launching && <LoaderCircle className="h-4 w-4 animate-spin" />} Recheck & Resume</button>
             </div>
-          </div>
+          )}
 
-          <div className="flex justify-center pt-4">
-            <a href="/" className="button-primary px-8 py-3 text-base flex items-center gap-2">
-              Go to M2Lab Workspace <ArrowRight className="h-5 w-5" />
-            </a>
+          {(['AI Infrastructure', 'Applications'] as const).map(group => {
+            const items = (activeBatch?.items || []).filter(item => group === 'AI Infrastructure' ? AI_INFRASTRUCTURE_IDS.has(item.service_id) : !AI_INFRASTRUCTURE_IDS.has(item.service_id))
+            if (!items.length) return null
+            return <section key={group} className="p-5 bg-surface-2 border border-border rounded-lg space-y-4">
+              <h4 className="text-sm font-bold text-white border-b border-border pb-2">{group}</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {items.map(item => {
+                  const app = apps.find(candidate => candidate.service_id === item.service_id)
+                  const ready = item.status === 'ready'
+                  const url = ready ? canonicalBatchUrl(item.service_id) : null
+                  const content = <><span className="flex items-center gap-2"><span>{app?.icon || (group === 'AI Infrastructure' ? '⚙' : '◌')}</span><span className="font-semibold text-white">{app?.name || item.service_id}</span></span><span className={`px-2 py-0.5 rounded font-mono text-[11px] font-bold ${ready ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : item.status === 'failed' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>{ready ? 'Ready' : item.phase.replace(/_/g, ' ')}</span></>
+                  return url
+                    ? <a key={item.service_id} href={url} target="_blank" rel="noreferrer" className="p-3 bg-bg-base border border-border rounded flex items-center justify-between hover:border-accent/60">{content}</a>
+                    : <div key={item.service_id} className="p-3 bg-bg-base border border-border rounded flex items-center justify-between">{content}</div>
+                })}
+              </div>
+            </section>
+          })}
+
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-4">
+            {activeBatch && !['ready', 'cancelled'].includes(activeBatch.status) && <button className="button-secondary" onClick={cancelBatch} disabled={launching}>Cancel Remaining Setup</button>}
+            {activeBatch && ['ready', 'cancelled'].includes(activeBatch.status)
+              ? <button onClick={onGoWorkspace} className="button-primary px-8 py-3 text-base flex items-center gap-2">Go to M2Lab Workspace <ArrowRight className="h-5 w-5" /></button>
+              : <button className="button-primary px-8 py-3 text-base flex items-center gap-2 opacity-50 cursor-not-allowed" disabled>Go to M2Lab Workspace <ArrowRight className="h-5 w-5" /></button>}
           </div>
         </div>
       )}

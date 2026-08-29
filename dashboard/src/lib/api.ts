@@ -17,7 +17,10 @@ import type {
   SetupJob,
   SetupJobsResponse,
   ModelAccessResponse,
+  ModelAccessValidationResponse,
   AuthentikTempPassword,
+  SetupBatch,
+  SetupBatchesResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -36,7 +39,9 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     const message = error.detail || error.message || response.statusText
     // Action/destroy responses include `output` (docker compose output) — surface it.
     const fullMessage = error.output ? `${message}\n${error.output}` : message
-    throw new Error(fullMessage || `HTTP ${response.status}`)
+    const requestError = new Error(fullMessage || `HTTP ${response.status}`) as Error & { status?: number }
+    requestError.status = response.status
+    throw requestError
   }
 
   return response.json()
@@ -61,7 +66,7 @@ export async function createApproval(id: string, action: ServiceAction): Promise
   return result.token
 }
 
-export async function createSetupApproval(id: string, action: 'setup-start' | 'setup-resume' | 'model-wire' | 'model-pull'): Promise<string> {
+export async function createSetupApproval(id: string, action: 'setup-start' | 'setup-resume' | 'setup-batch-start' | 'setup-batch-resume' | 'setup-batch-cancel' | 'model-wire' | 'model-pull'): Promise<string> {
   const result = await fetchJson<{ token: string }>(`${API_BASE}/approvals`, {
     method: 'POST',
     body: JSON.stringify({ service_id: id, action, confirm: `${action}:${id}` }),
@@ -71,6 +76,28 @@ export async function createSetupApproval(id: string, action: 'setup-start' | 's
 
 export async function fetchSetupJobs(): Promise<SetupJobsResponse> {
   return fetchJson(`${API_BASE}/setup/jobs`)
+}
+
+export async function fetchSetupBatches(): Promise<SetupBatchesResponse> {
+  return fetchJson(`${API_BASE}/setup/batches`)
+}
+
+export async function startSetupBatch(targets: string[], approval: string, pullEmbedding = true): Promise<SetupBatch> {
+  return fetchJson(`${API_BASE}/setup/batches`, {
+    method: 'POST', headers: { 'X-M2Lab-Approval': approval }, body: JSON.stringify({ targets, pull_embedding: pullEmbedding }),
+  })
+}
+
+export async function resumeSetupBatch(id: string, approval: string): Promise<SetupBatch> {
+  return fetchJson(`${API_BASE}/setup/batches/${id}/resume`, {
+    method: 'POST', headers: { 'X-M2Lab-Approval': approval }, body: JSON.stringify({}),
+  })
+}
+
+export async function cancelSetupBatch(id: string, approval: string): Promise<SetupBatch> {
+  return fetchJson(`${API_BASE}/setup/batches/${id}/cancel`, {
+    method: 'POST', headers: { 'X-M2Lab-Approval': approval }, body: JSON.stringify({}),
+  })
 }
 
 export async function startSetupTarget(target: string, approval: string): Promise<SetupJob> {
@@ -99,6 +126,17 @@ export async function fetchMcpServers(verify = false): Promise<McpRegistryRespon
 
 export async function fetchModelAccess(): Promise<ModelAccessResponse> {
   return fetchJson<ModelAccessResponse>(`${API_BASE}/model-access`)
+}
+
+export async function validateModelAccess(config: {
+  NVIDIA_NIM_API_KEY?: string
+  GEMINI_API_KEY?: string
+  check_ollama?: boolean
+}): Promise<ModelAccessValidationResponse> {
+  return fetchJson(`${API_BASE}/model-access/validate`, {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
 }
 
 export async function wireModelPipeline(
@@ -241,7 +279,7 @@ export async function regenerateSecret(sid: string, key: string): Promise<{ ok: 
 }
 
 export function getServiceUrl(service: Service): string {
-  return service.tailnet_url ?? service.url
+  return service.launch_url ?? service.url
 }
 
 export function getServiceIconUrl(id: string): string {

@@ -14,16 +14,8 @@ SVCS = {s["id"]: s for s in SERVICES}
 
 
 def tailscale_required() -> bool:
-    """Whether onboarding must gate on an installed+connected Tailscale.
-
-    The env override wins over the services.yaml setting so operators can opt
-    in/out without touching tracked config. False (the default) lets the
-    identity foundation run entirely on loopback with no Tailscale present.
-    """
-    env = os.environ.get("OMNILAB_REQUIRE_TAILSCALE")
-    if env is not None:
-        return env.lower() == "true"
-    return str(SETTINGS.get("tailscale_required", False)).lower() == "true"
+    """Browser access and onboarding always require an active tailnet."""
+    return True
 
 
 def base_cmd(s: dict) -> list[str]:

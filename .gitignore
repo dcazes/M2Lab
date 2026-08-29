@@ -37,6 +37,7 @@ apps/paperless-ngx/media/
 apps/paperless-ngx/consume/
 apps/paperless-ngx/export/
 apps/actual-budget/server-files/
+apps/immich-app/immich-config.json
 apps/nextcloud/data/
 apps/nextcloud/html/
 apps/adventurelog/media/

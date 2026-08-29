@@ -18,6 +18,7 @@ from .registry import SETTINGS, service_by_id, tailscale_required
 NATIVE = "native_sso"
 GATE = "access_gate_only"
 MACHINE = "machine_only"
+API = "tailnet_api"
 PENDING = "configuration_pending"
 
 # Callback paths are deliberately explicit.  A value of None means the app's
@@ -37,7 +38,7 @@ APPS: tuple[dict, ...] = (
     {"id": "portainer", "mode": PENDING, "provider": "portainer", "callback": None, "groups": True},
     {"id": "surfsense", "mode": GATE, "provider": "surfsense-gate", "callback": None, "local_login_required": True},
     {"id": "litellm", "mode": GATE, "provider": "litellm-gate", "callback": None, "owner_only": True},
-    {"id": "firecrawl", "mode": GATE, "provider": "firecrawl-gate", "callback": None, "owner_only": True},
+    {"id": "firecrawl", "mode": API, "provider": None, "callback": None},
     {"id": "freellmapi", "mode": GATE, "provider": "freellmapi-gate", "callback": None, "owner_only": True},
     {"id": "ollama", "mode": MACHINE, "provider": None, "callback": None},
 )
@@ -45,11 +46,8 @@ APPS: tuple[dict, ...] = (
 
 def external_url(service_id: str) -> str | None:
     service = service_by_id(service_id)
-    if tailscale_required():
-        port = service.get("tailnet_port")
-        return f"{SETTINGS['tailnet_base']}:{port}/" if port else None
-    port = service.get("port") or service.get("tailnet_port")
-    return f"http://127.0.0.1:{port}/" if port else None
+    port = service.get("tailnet_port")
+    return f"{SETTINGS['tailnet_base']}:{port}/" if port else None
 
 
 def app_inventory(states: dict[str, str] | None = None) -> list[dict]:
@@ -103,6 +101,6 @@ def status(states: dict[str, str]) -> dict:
         "enforced": False,
         "provider": "authentik",
         "groups": ["omnilab-owners", "omnilab-members"],
-        "apps": {mode: sum(1 for app in rows if app["mode"] == mode) for mode in (NATIVE, GATE, MACHINE, PENDING)},
+        "apps": {mode: sum(1 for app in rows if app["mode"] == mode) for mode in (NATIVE, GATE, MACHINE, API, PENDING)},
         "note": "Identity enforcement is enabled only after Caddy and Authentik pass the staged cutover check.",
     }

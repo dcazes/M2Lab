@@ -1,6 +1,8 @@
 import asyncio
 import grp
 import base64
+import hashlib
+import hmac
 import json
 import os
 import pwd
@@ -8,6 +10,7 @@ import re
 import secrets
 import select
 import sqlite3
+import ssl
 import string
 import subprocess
 import time
@@ -22,7 +25,7 @@ import docker
 import psutil
 import yaml
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .compose import run_compose
@@ -34,7 +37,11 @@ from .mcp_registry import (
     write_harness_exports,
 )
 from .registry import ROOT, SERVICES, service_by_id, SETTINGS, tailscale_required
-from .setup_jobs import create_job, get_job, list_jobs, recover_interrupted_jobs, update_job
+from .setup_jobs import (
+    create_batch, create_job, get_batch, get_job, list_batches, list_jobs,
+    recover_interrupted_batches, recover_interrupted_jobs, update_batch,
+    update_batch_item, update_job,
+)
 
 DLI = docker.DockerClient.from_env()
 API = DLI.api
@@ -47,13 +54,21 @@ _audit_lock = asyncio.Lock()
 _approvals: dict[str, dict] = {}
 _APPROVAL_TTL = 120
 _setup_tasks: dict[str, asyncio.Task] = {}
+_batch_tasks: dict[str, asyncio.Task] = {}
 _setup_service_locks: dict[str, asyncio.Lock] = {}
 _app_setup_slots = asyncio.Semaphore(2)
-recover_interrupted_jobs()
 _STATE_DIR = ROOT / ".state"
 _AUDIT_PATH = _STATE_DIR / "audit.jsonl"
 _CALENDAR_CONNECTION_PATH = _STATE_DIR / "nextcloud-calendar.json"
 _IDENTITY_KEYS = ("OMNILAB_IDENTITY_EMAIL", "OMNILAB_IDENTITY_PASSWORD")
+
+
+@app.on_event("startup")
+async def recover_setup_state_on_startup() -> None:
+    # Only the serving control plane owns interruption recovery. Importing this
+    # module in tests or maintenance scripts must not mutate a live batch.
+    await asyncio.to_thread(recover_interrupted_jobs)
+    await asyncio.to_thread(recover_interrupted_batches)
 
 _PROVIDER_LABELS = {
     "cerebras": "Cerebras",
@@ -74,6 +89,77 @@ _LITELLM_PROVIDER_KEYS = {
     "MISTRAL_API_KEY": "Mistral",
     "OPENAI_API_KEY": "OpenAI",
 }
+
+_MODEL_VALIDATION_PROVIDERS = {
+    "nvidia": {
+        "key_name": "NVIDIA_NIM_API_KEY",
+        # /v1/models is publicly readable and cannot validate a credential.
+        # A one-token inference is the smallest authenticated provider call.
+        "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+        "header": "Authorization",
+        "header_value": "Bearer {key}",
+        "body": {
+            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "messages": [{"role": "user", "content": "Reply OK"}],
+            "max_tokens": 1,
+            "stream": False,
+        },
+    },
+    "gemini": {
+        "key_name": "GEMINI_API_KEY",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models",
+        "header": "x-goog-api-key",
+        "header_value": "{key}",
+    },
+}
+_MODEL_VALIDATION_TIMEOUT = 20
+
+_BATCH_INFRA = {"litellm", "freellmapi", "firecrawl", "ollama"}
+_BATCH_SSO_STRATEGIES = {
+    "open-webui": "native_oidc",
+    "immich": "native_oidc",
+    "paperless-ngx": "native_oidc",
+    "actual-budget": "native_oidc",
+    "adventurelog": "native_oidc",
+    "surfsense": "session_bridge",
+    "litellm": "owner_gate",
+    "freellmapi": "owner_gate",
+    # Firecrawl is a private API service. Its API key and the tailnet are the
+    # access boundary; it has no user session to provision through Authentik.
+    "firecrawl": "tailnet_api",
+    "ollama": "machine_only",
+}
+_LOCAL_PROXY_GATE_IDS = (
+    "surfsense", "litellm", "freellmapi", "vaultwarden",
+    "puppygraph", "beszel", "nextcloud", "mealie", "portainer",
+)
+_BATCH_MEMORY_FLOORS = {
+    "surfsense": 4 * 1024**3,
+    "immich": 2 * 1024**3,
+    "paperless-ngx": 1536 * 1024**2,
+    "firecrawl": 1536 * 1024**2,
+    "open-webui": 768 * 1024**2,
+    "litellm": 768 * 1024**2,
+    "actual-budget": 512 * 1024**2,
+    "adventurelog": 768 * 1024**2,
+    "freellmapi": 512 * 1024**2,
+    "ollama": 1024 * 1024**2,
+}
+_INGRESS_PORTS = {
+    "immich": 19443, "surfsense": 19444, "litellm": 19445,
+    "vaultwarden": 19447, "puppygraph": 19448, "beszel": 19450,
+    "paperless-ngx": 19451, "actual-budget": 19452, "nextcloud": 19453,
+    "adventurelog": 19454, "mealie": 19455, "open-webui": 19456,
+    "ollama": 19457,
+    "firecrawl": 19458, "freellmapi": 19459, "portainer": 19090,
+}
+_MACHINE_ONLY_LAUNCH_IDS = {"ollama"}
+_TAILNET_API_IDS = {"firecrawl"}
+_BATCH_SAMPLE_SECONDS = int(os.environ.get("OMNILAB_MEMORY_SAMPLE_SECONDS", "60"))
+
+
+class OperatorHandoff(RuntimeError):
+    """A safe conflict that requires an explicit operator decision."""
 
 # ---------- TTL cache for HTTP health probes ----------
 _health_cache: dict[str, tuple[bool | None, float]] = {}
@@ -292,12 +378,15 @@ async def create_approval(request: Request):
     body = await request.json()
     sid = str(body.get("service_id", ""))
     action = str(body.get("action", ""))
-    if action not in {"up", "stop", "restart", "pull", "update", "mcp-edit", "mcp-verify", "mcp-sync", "setup-start", "setup-resume", "model-wire", "model-pull"}:
+    if action not in {"up", "stop", "restart", "pull", "update", "mcp-edit", "mcp-verify", "mcp-sync", "setup-start", "setup-resume", "setup-batch-start", "setup-batch-resume", "setup-batch-cancel", "model-wire", "model-pull"}:
         raise HTTPException(400, "Unknown approval action")
     if action.startswith("mcp-"):
         known = {item["id"] for item in registry_snapshot()["servers"]} | {"registry"}
         if sid not in known:
             raise HTTPException(404, "Unknown MCP server")
+    elif action.startswith("setup-batch-"):
+        if sid != "onboarding":
+            raise HTTPException(400, "setup batch approvals must target 'onboarding'")
     elif action.startswith("setup-"):
         if sid != "foundation":
             service_by_id(sid)
@@ -356,6 +445,103 @@ async def verify_identity_application(sid: str, request: Request):
         raise HTTPException(404, "Unknown identity application") from None
     await audit_event(request, "identity.verify", service_id=sid, result=result["verification"])
     return result
+
+
+def _surfsense_bridge_password(subject: str) -> str:
+    values = _parse_env_file(ROOT / ".env")
+    secret = values.get("OMNILAB_SESSION_BRIDGE_SECRET", "")
+    if _secret_missing(secret):
+        raise RuntimeError("SurfSense session bridge secret is not configured")
+    digest = hmac.new(secret.encode(), f"surfsense:{subject}".encode(), hashlib.sha256).hexdigest()
+    return f"M2!{digest}"
+
+
+def _surfsense_auth_request(path: str, *, data: bytes, content_type: str):
+    request_obj = urllib.request.Request(
+        f"http://127.0.0.1:3929{path}", data=data, method="POST",
+        headers={"Content-Type": content_type, "X-Forwarded-Proto": "https" if tailscale_required() else "http"},
+    )
+    try:
+        return urllib.request.urlopen(request_obj, timeout=10)
+    except urllib.error.HTTPError as error:
+        return error
+
+
+@app.get("/api/identity/bridge/surfsense")
+async def bridge_surfsense_session(request: Request):
+    """Exchange trusted Authentik identity for SurfSense's supported cookie session."""
+    identity = request_identity(request)
+    if not identity:
+        raise HTTPException(401, "SurfSense bridge must be reached through the Authentik ingress")
+    password = await asyncio.to_thread(_surfsense_bridge_password, identity["subject"])
+    register_body = json.dumps({
+        "email": identity["email"], "password": password, "is_active": True,
+        "is_superuser": "omnilab-owners" in identity["groups"], "is_verified": True,
+    }).encode()
+    registration = await asyncio.to_thread(
+        _surfsense_auth_request, "/auth/register", data=register_body, content_type="application/json"
+    )
+    registration_status = getattr(registration, "status", getattr(registration, "code", 500))
+    # 400/409 means the account likely exists; authenticate to distinguish a
+    # bridge-managed account from an email collision without resetting it.
+    if registration_status not in {200, 201, 400, 409}:
+        raise HTTPException(502, "SurfSense user provisioning failed")
+    login_body = urllib.parse.urlencode({
+        "username": identity["email"], "password": password, "grant_type": "password",
+    }).encode()
+    login = await asyncio.to_thread(
+        _surfsense_auth_request, "/auth/jwt/login", data=login_body,
+        content_type="application/x-www-form-urlencoded",
+    )
+    login_status = getattr(login, "status", getattr(login, "code", 500))
+    if login_status not in {200, 204}:
+        raise HTTPException(409, "This SurfSense email belongs to an account not managed by the Authentik bridge")
+    allowed = {"surfsense_session", "surfsense_refresh", "csrf_token"}
+    cookies = []
+    for value in login.headers.get_all("Set-Cookie") or []:
+        if value.split("=", 1)[0].strip() in allowed:
+            cookies.append(value)
+    token = None
+    if not cookies:
+        try:
+            login_payload = json.loads(login.read().decode())
+            candidate = login_payload.get("access_token")
+            token = candidate if isinstance(candidate, str) and candidate else None
+        except (AttributeError, UnicodeDecodeError, json.JSONDecodeError):
+            token = None
+    if cookies:
+        response = RedirectResponse(url="/dashboard", status_code=302)
+        for cookie in cookies:
+            response.raw_headers.append((b"set-cookie", cookie.encode("latin-1")))
+    elif token:
+        # SurfSense LOCAL auth stores this token in same-origin localStorage.
+        # A no-store, nonce-restricted handoff mirrors that supported contract
+        # without putting the credential in a URL, audit event, or server log.
+        nonce = secrets.token_urlsafe(18)
+        script = (
+            "localStorage.setItem('surfsense_bearer_token',"
+            f"{json.dumps(token)});location.replace('/dashboard');"
+        )
+        response = HTMLResponse(
+            f"<!doctype html><meta charset=utf-8><title>Opening SurfSense</title>"
+            f"<script nonce={json.dumps(nonce)}>{script}</script>", status_code=200,
+            headers={
+                "Cache-Control": "no-store", "Pragma": "no-cache",
+                "Content-Security-Policy": f"default-src 'none'; script-src 'nonce-{nonce}'; base-uri 'none'",
+                "Referrer-Policy": "no-referrer",
+            },
+        )
+    else:
+        raise HTTPException(502, "SurfSense did not issue a supported browser session")
+    subject_hash = hashlib.sha256(identity["subject"].encode()).hexdigest()[:16]
+    async with _audit_lock:
+        _STATE_DIR.mkdir(mode=0o700, exist_ok=True)
+        with _AUDIT_PATH.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({
+                "timestamp": datetime.now(timezone.utc).isoformat(), "event": "identity.surfsense_bridge",
+                "source": request_source(request), "subject_hash": subject_hash, "result": "session_issued",
+            }, separators=(",", ":")) + "\n")
+    return response
 
 
 def _authentik_admin_payload() -> dict | None:
@@ -487,11 +673,28 @@ async def list_services(request: Request):
         svc["healthy"] = healthy
         if healthy is False and svc["state"] == "running":
             svc["state"] = "degraded"
-        svc["external_ready"] = bool(
-            svc["state"] == "running"
-            and healthy is not False
-            and (svc["tailnet_route_active"] is not False)
-        )
+        launch_url: str | None = None
+        launch_transport = "none"
+        launch_reason: str | None = None
+        if sid in _MACHINE_ONLY_LAUNCH_IDS:
+            launch_reason = "Machine-only API; use it through its connected applications."
+        elif svc["state"] != "running":
+            launch_reason = "Start this service before opening it."
+        elif healthy is False:
+            launch_reason = "The service is running but its health check is failing."
+        elif svc["tailnet_route_active"] and svc["tailnet_url"]:
+            # A tailnet route is mandatory even when the dashboard itself was
+            # opened from localhost: browser access has exactly one HTTPS origin.
+            launch_url = svc["tailnet_url"]
+            launch_transport = "tailnet_private" if sid in _TAILNET_API_IDS else "tailnet_sso"
+        else:
+            launch_reason = "Its private Tailscale route is not active."
+        svc["launch_url"] = launch_url
+        svc["launch_transport"] = launch_transport
+        svc["launch_reason"] = launch_reason
+        svc["launch_available"] = launch_url is not None
+        # Compatibility for older clients. New UI code uses launch_available.
+        svc["external_ready"] = svc["launch_available"]
         del svc["_health_probe"]
     
     await asyncio.gather(*[probe_health(svc) for svc in service_data])
@@ -519,6 +722,52 @@ def _ollama_models() -> list[dict]:
         for model in models
         if isinstance(model, dict) and (model.get("name") or model.get("model"))
     ]
+
+
+def _validation_result(status: str, message: str, model_count: int | None = None) -> dict:
+    return {"status": status, "message": message, "model_count": model_count}
+
+
+def _validate_provider_key(provider: str, key: str) -> dict:
+    """Validate a provider key without persisting or returning the secret."""
+    config = _MODEL_VALIDATION_PROVIDERS[provider]
+    body = json.dumps(config["body"]).encode() if config.get("body") else None
+    request = urllib.request.Request(
+        config["url"],
+        data=body,
+        headers={
+            config["header"]: config["header_value"].format(key=key),
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "M2Lab/1.0",
+        },
+        method="POST" if body else "GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=_MODEL_VALIDATION_TIMEOUT) as response:
+            payload = json.load(response)
+        models = payload.get("models", []) if isinstance(payload, dict) and provider == "gemini" else []
+        count = len(models) if provider == "gemini" and isinstance(models, list) else None
+        return _validation_result("valid", "API key accepted", count)
+    except urllib.error.HTTPError as error:
+        if error.code in {400, 401, 403}:
+            return _validation_result("invalid", "API key was rejected")
+        if error.code == 429:
+            return _validation_result("unavailable", "Provider rate limit prevented validation")
+        return _validation_result("unavailable", f"Provider returned HTTP {error.code}")
+    except (TimeoutError, OSError, ValueError, urllib.error.URLError):
+        return _validation_result("unavailable", "Provider could not be reached")
+
+
+def _validate_ollama_access() -> dict:
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=2) as response:
+            payload = json.load(response)
+        models = payload.get("models", []) if isinstance(payload, dict) else []
+        count = len(models) if isinstance(models, list) else 0
+        return _validation_result("available", "Ollama is reachable", count)
+    except (TimeoutError, OSError, ValueError, urllib.error.URLError):
+        return _validation_result("unavailable", "Ollama is not reachable yet")
 
 
 def _pull_ollama_model(model_name: str = "nomic-embed-text") -> bool:
@@ -637,6 +886,45 @@ async def wire_model_pipeline(request: Request):
         "ok": True,
         "configured_keys": list(keys_to_update.keys()),
         "embedding_status": embed_status,
+    }
+
+
+@app.post("/api/model-access/validate")
+async def validate_model_access(request: Request):
+    """Validate transient provider credentials and local Ollama availability."""
+    require_trusted_request(request)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Request body must be valid JSON") from None
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Request body must be an object")
+
+    keys: dict[str, str] = {}
+    for provider, config in _MODEL_VALIDATION_PROVIDERS.items():
+        value = body.get(config["key_name"], "")
+        if not isinstance(value, str):
+            raise HTTPException(400, f'{config["key_name"]} must be a string')
+        value = value.strip()
+        if len(value) > 4096:
+            raise HTTPException(400, f'{config["key_name"]} is too long')
+        if value:
+            keys[provider] = value
+
+    if not keys:
+        raise HTTPException(400, "At least one provider key is required")
+
+    tasks = {provider: asyncio.to_thread(_validate_provider_key, provider, key) for provider, key in keys.items()}
+    if bool(body.get("check_ollama", True)):
+        tasks["ollama"] = asyncio.to_thread(_validate_ollama_access)
+    results = await asyncio.gather(*tasks.values()) if tasks else []
+    providers = dict(zip(tasks, results))
+    for provider in _MODEL_VALIDATION_PROVIDERS:
+        providers.setdefault(provider, _validation_result("not_checked", "No key entered"))
+    providers.setdefault("ollama", _validation_result("not_checked", "Ollama check skipped"))
+    return {
+        "ok": all(providers[provider]["status"] == "valid" for provider in keys),
+        "providers": providers,
     }
 
 
@@ -1234,6 +1522,10 @@ def _prepare_identity_foundation() -> list[str]:
     if ingress_values.get("OMNILAB_INGRESS_TOKEN") != ingress_token:
         ingress_values["OMNILAB_INGRESS_TOKEN"] = ingress_token
         changed.append("caddy ingress token")
+    tailnet_host = urllib.parse.urlparse(str(SETTINGS["tailnet_base"])).netloc
+    if ingress_values.get("M2LAB_TAILNET_HOST") != tailnet_host:
+        ingress_values["M2LAB_TAILNET_HOST"] = tailnet_host
+        changed.append("caddy tailnet host")
     ingress_dir.mkdir(parents=True, exist_ok=True)
     _write_env_file(ingress_dir / ".env", ingress_values)
     return changed
@@ -1357,8 +1649,6 @@ async def _foundation_preflight(job_id: str) -> None:
             missing_networks.append(network)
     if missing_networks:
         raise RuntimeError(f"Required Docker networks are missing: {', '.join(missing_networks)}. Run the host bootstrap, then retry.")
-    if not tailscale_required():
-        return
     tailscale = await asyncio.to_thread(_tailscale_snapshot)
     if not tailscale["installed"]:
         raise RuntimeError("Tailscale is not installed. Install it and sign in before continuing.")
@@ -1394,6 +1684,39 @@ async def _route_authentik() -> tuple[bool, str | None]:
     return False, "Tailscale could not publish the Authentik URL."
 
 
+async def _route_tailnet_service(sid: str) -> tuple[bool, str | None]:
+    """Publish one browser route through loopback Caddy, never the app port."""
+    service = service_by_id(sid)
+    tailnet_port = service.get("tailnet_port")
+    ingress_port = _INGRESS_PORTS.get(sid)
+    if not tailnet_port or not ingress_port:
+        return True, None
+    target = f"http://127.0.0.1:{ingress_port}"
+    process = await asyncio.create_subprocess_exec(
+        "tailscale", "serve", "--bg", "--yes", f"--https={tailnet_port}", target,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    _stdout, stderr = await process.communicate()
+    if process.returncode == 0:
+        proxies = await asyncio.to_thread(_tailscale_serve_proxies)
+        if proxies.get(int(tailnet_port)) == target:
+            return True, None
+        return False, f"Tailscale did not report the expected {tailnet_port} listener for {service['display_name']}."
+    message = stderr.decode(errors="replace").strip()
+    if "permission" in message.lower() or "sudo" in message.lower():
+        return False, "Tailscale needs one-time operator permission before M2Lab can manage private routes."
+    return False, f"Tailscale could not publish {service['display_name']}."
+
+
+async def _route_tailnet_services() -> tuple[bool, str | None]:
+    """Publish every reviewed browser or private-API endpoint via Tailscale."""
+    for sid in _INGRESS_PORTS:
+        routed, error = await _route_tailnet_service(sid)
+        if not routed:
+            return False, error
+    return True, None
+
+
 async def _verify_external_authentik(timeout: int = 45) -> bool:
     url = f"{SETTINGS['tailnet_base']}:8462/-/health/ready/"
     deadline = time.monotonic() + timeout
@@ -1411,14 +1734,8 @@ async def _verify_external_authentik(timeout: int = 45) -> bool:
 
 
 def _authentik_setup_url() -> str:
-    """Point the user at Authentik's initial-setup flow for the active mode.
-
-    Without Tailscale we use the loopback address directly; with it required we
-    hand back the published tailnet URL.
-    """
-    if tailscale_required():
-        return f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"
-    return "http://127.0.0.1:9001/if/flow/initial-setup/"
+    """Point initial identity setup at its sole tailnet HTTPS origin."""
+    return f"{SETTINGS['tailnet_base']}:8462/if/flow/initial-setup/"
 
 
 async def _run_foundation_job(job_id: str) -> None:
@@ -1438,22 +1755,24 @@ async def _run_foundation_job(job_id: str) -> None:
                    summary="Validating private ingress", message="Checking every Caddy listener before it can receive traffic")
         await _validate_caddy()
         await _start_setup_service(job_id, "sso-ingress", 58)
-        if tailscale_required():
-            update_job(job_id, status="configuring", stage="tailscale", progress=72,
-                       summary="Publishing private Authentik URL", message="Connecting the existing tailnet URL to the identity gateway")
-            routed, route_error = await _route_authentik()
-            if not routed:
-                update_job(job_id, status="user_action_required", stage="tailscale_permission", progress=72,
-                           summary="Tailscale permission required", message=route_error or "Tailscale route needs attention",
-                           action={"kind": "tailscale_permission", "label": "Review host permission"}, error=route_error)
-                return
-            update_job(job_id, status="verifying", stage="verify_external_authentik", progress=80,
-                       summary="Verifying Authentik", message="Checking the complete Tailscale, Caddy, and Authentik path")
-            if not await _verify_external_authentik():
-                raise RuntimeError("Authentik started locally, but its private 8462 URL did not pass the end-to-end health check.")
+        update_job(job_id, status="configuring", stage="tailscale", progress=72,
+                   summary="Publishing private M2Lab routes", message="Connecting Authentik and browser application routes to the tailnet HTTPS gateway")
+        routed, route_error = await _route_authentik()
+        if routed:
+            routed, route_error = await _route_tailnet_services()
+        if not routed:
+            update_job(job_id, status="user_action_required", stage="tailscale_permission", progress=72,
+                       summary="Tailscale permission required", message=route_error or "Tailscale route needs attention",
+                       action={"kind": "tailscale_permission", "label": "Review host permission"}, error=route_error)
+            return
+        update_job(job_id, status="verifying", stage="verify_external_authentik", progress=80,
+                   summary="Verifying Authentik", message="Checking the complete tailnet HTTPS identity path")
+        if not await _verify_external_authentik():
+            raise RuntimeError("The private Authentik URL did not pass the end-to-end health check.")
+        await asyncio.to_thread(_ensure_authentik_local_proxy_gates)
         update_job(job_id, status="user_action_required", stage="create_vaultwarden_owner", progress=84,
                    summary="Create your Vaultwarden master password", message="Vaultwarden is ready. Create its master account now so you can store provider API keys while Authentik finishes configuring.",
-                   action={"kind": "open_url", "label": "Open Vaultwarden", "url": "http://127.0.0.1:8081"})
+                   action={"kind": "open_url", "label": "Open Vaultwarden", "url": _canonical_app_url("vaultwarden")})
     except Exception as error:
         update_job(job_id, status="failed", stage="failed", progress=0,
                    summary="Core setup needs attention", message="Setup stopped safely at the failed stage.", error=str(error)[:500])
@@ -1466,13 +1785,475 @@ def _foundation_ready() -> bool:
     completed = any(job["target"] == "foundation" and job["status"] == "ready" for job in snapshot["jobs"])
     if not completed:
         return False
-    if tailscale_required() and _tailscale_serve_proxies().get(8462) != "http://127.0.0.1:19062":
+    if _tailscale_serve_proxies().get(8462) != "http://127.0.0.1:19062":
         return False
     return all(
         svc_state(service_by_id(sid))["overall"] == "running"
         and http_health(service_by_id(sid)) is not False
         for sid in _FOUNDATION_SERVICES
     )
+
+
+def _canonical_app_url(sid: str) -> str | None:
+    service = service_by_id(sid)
+    port = service.get("tailnet_port")
+    return f"{SETTINGS['tailnet_base']}:{port}" if port else None
+
+
+def _authentik_issuer(slug: str) -> str:
+    base = f"{SETTINGS['tailnet_base']}:8462"
+    return f"{base}/application/o/{slug}/"
+
+
+def _authentik_discovery_url(slug: str, *, container: bool = False) -> str:
+    """Return the exact OIDC discovery endpoint expected by an OIDC client."""
+    if container:
+        base = f"http://host.docker.internal:19463/application/o/{slug}/"
+    else:
+        base = _authentik_issuer(slug)
+    return f"{base.rstrip('/')}/.well-known/openid-configuration"
+
+
+def _authentik_api(method: str, path: str, payload: dict | None = None) -> dict:
+    admin = _authentik_admin_payload()
+    if not admin:
+        raise RuntimeError("Authentik bootstrap API token is not configured")
+    data = json.dumps(payload).encode() if payload is not None else None
+    request_obj = urllib.request.Request(
+        f"http://127.0.0.1:{admin['port']}/api/v3/{path.lstrip('/')}", data=data, method=method,
+        headers={"Authorization": f"Bearer {admin['token']}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request_obj, timeout=10) as response:
+            raw = response.read()
+            return json.loads(raw.decode()) if raw else {}
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode(errors="replace")[:400]
+        raise RuntimeError(f"Authentik API {method} {path} failed ({error.code}): {detail}") from None
+
+
+def _authentik_first(path: str, **matches) -> dict | None:
+    # Authentik paginates list endpoints. A managed record created after the
+    # first page must still be found on a later onboarding/resume run.
+    separator = "&" if "?" in path else "?"
+    query_path = path if "page_size=" in path else f"{path}{separator}page_size=100"
+    result = _authentik_api("GET", query_path)
+    rows = result.get("results", result if isinstance(result, list) else [])
+    return next((row for row in rows if all(row.get(key) == value for key, value in matches.items())), None)
+
+
+def _authentik_application(slug: str) -> dict | None:
+    """Fetch an application by its stable slug without relying on list filters."""
+    try:
+        return _authentik_api("GET", f"core/applications/{slug}/")
+    except RuntimeError as error:
+        if "failed (404)" in str(error):
+            return None
+        raise
+
+
+def _ensure_authentik_oidc(sid: str, redirect_uris: list[dict]) -> dict:
+    """Create/update one provider and application without returning its secret to the browser."""
+    slug = sid.replace("-", "_")
+    env = _parse_env_file(_env_path(sid))
+    client_id = env.get("M2LAB_OIDC_CLIENT_ID") or f"m2lab-{sid}-{secrets.token_hex(6)}"
+    client_secret = env.get("M2LAB_OIDC_CLIENT_SECRET") or secrets.token_urlsafe(36)
+
+    authorization = _authentik_first("flows/instances/?designation=authorization", designation="authorization")
+    invalidation = _authentik_first("flows/instances/?designation=invalidation", designation="invalidation")
+    signing = _authentik_first("crypto/certificatekeypairs/?has_key=true")
+    if not authorization or not invalidation or not signing:
+        raise RuntimeError("Authentik authorization/invalidation flows or signing key are unavailable")
+    scopes_payload = _authentik_api("GET", "propertymappings/provider/scope/")
+    scopes = scopes_payload.get("results", [])
+    mappings = [row["pk"] for row in scopes if row.get("scope_name") in {"openid", "email", "profile", "groups"}]
+    if not mappings:
+        raise RuntimeError("Authentik OIDC scope mappings are unavailable")
+
+    application = _authentik_application(slug)
+    provider_name = f"M2Lab {service_by_id(sid)['display_name']}"
+    # Authentik's list filters are not stable across releases; an application
+    # slug is stable and gives us its exact managed provider primary key.
+    existing = {"pk": application["provider"]} if application else _authentik_first(
+        f"providers/oauth2/?name={urllib.parse.quote(provider_name)}", name=provider_name
+    )
+    managed_before = bool(env.get("M2LAB_OIDC_CLIENT_ID") and env.get("M2LAB_OIDC_CLIENT_SECRET"))
+    if not managed_before and (existing or application):
+        raise OperatorHandoff(
+            f"Existing Authentik configuration for {service_by_id(sid)['display_name']} was not created by M2Lab"
+        )
+    payload = {
+        "name": provider_name,
+        "authorization_flow": authorization["pk"],
+        "invalidation_flow": invalidation["pk"],
+        "signing_key": signing["pk"],
+        "property_mappings": mappings,
+        "client_type": "confidential",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uris": redirect_uris,
+        "sub_mode": "user_uuid",
+        "issuer_mode": "per_provider",
+        "include_claims_in_id_token": True,
+    }
+    provider = _authentik_api("PATCH", f"providers/oauth2/{existing['pk']}/", payload) if existing else _authentik_api("POST", "providers/oauth2/", payload)
+    app_payload = {
+        "name": service_by_id(sid)["display_name"], "slug": slug, "provider": provider["pk"],
+        "open_in_new_tab": True, "meta_launch_url": _canonical_app_url(sid), "policy_engine_mode": "all",
+    }
+    if application:
+        _authentik_api("PATCH", f"core/applications/{application['slug']}/", app_payload)
+    else:
+        _authentik_api("POST", "core/applications/", app_payload)
+    env.update({"M2LAB_OIDC_CLIENT_ID": client_id, "M2LAB_OIDC_CLIENT_SECRET": client_secret})
+    _write_env_file(_env_path(sid), env)
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "issuer": _authentik_issuer(slug),
+        "discovery_url": _authentik_discovery_url(slug),
+        "container_discovery_url": _authentik_discovery_url(slug, container=True),
+    }
+
+
+def _ensure_authentik_local_proxy_gates() -> None:
+    """Make each local Caddy forward-auth route resolvable by the embedded outpost.
+
+    Authentik's forward-auth providers are matched by their external host. A
+    tailnet-only provider cannot authenticate a request to the local HTTPS
+    ingress, even when the same browser is signed in. We therefore create one
+    explicitly M2Lab-managed provider/application pair per local gate and add
+    those providers to the embedded outpost. No provider secrets are created or
+    returned by this flow.
+    """
+    authorization = _authentik_first("flows/instances/?designation=authorization", designation="authorization")
+    invalidation = _authentik_first("flows/instances/?designation=invalidation", designation="invalidation")
+    if not authorization or not invalidation:
+        raise RuntimeError("Authentik authorization or invalidation flow is unavailable")
+
+    provider_ids: list[int] = []
+    for sid in _LOCAL_PROXY_GATE_IDS:
+        origin = _canonical_app_url(sid)
+        if not origin:
+            raise RuntimeError(f"No canonical local route is registered for {sid}")
+        provider_name = f"M2Lab Local Gate: {service_by_id(sid)['display_name']}"
+        slug = f"m2lab-gate-{sid}"
+        application = _authentik_application(slug)
+        provider = {"pk": application["provider"]} if application else None
+        payload = {
+            "name": provider_name,
+            "authorization_flow": authorization["pk"],
+            "invalidation_flow": invalidation["pk"],
+            "mode": "forward_single",
+            "external_host": origin,
+            "internal_host": "",
+            "internal_host_ssl_validation": True,
+            "intercept_header_auth": True,
+        }
+        provider = (
+            _authentik_api("PATCH", f"providers/proxy/{provider['pk']}/", payload)
+            if provider else _authentik_api("POST", "providers/proxy/", payload)
+        )
+        provider_ids.append(int(provider["pk"]))
+
+        app_payload = {
+            "name": provider_name,
+            "slug": slug,
+            "provider": provider["pk"],
+            "open_in_new_tab": True,
+            "meta_launch_url": origin,
+            "policy_engine_mode": "all",
+        }
+        if application and application.get("provider") not in {provider["pk"], int(provider["pk"])}:
+            raise OperatorHandoff(f"Existing Authentik application {slug} is not managed by this local gate")
+        if application:
+            _authentik_api("PATCH", f"core/applications/{application['slug']}/", app_payload)
+        else:
+            _authentik_api("POST", "core/applications/", app_payload)
+
+    outpost = _authentik_first("outposts/instances/?page_size=100", name="authentik Embedded Outpost")
+    if not outpost:
+        raise RuntimeError("Authentik embedded proxy outpost is unavailable")
+    existing_providers = [int(pk) for pk in outpost.get("providers", [])]
+    desired_providers = list(dict.fromkeys(existing_providers + provider_ids))
+    config = dict(outpost.get("config") or {})
+    config["authentik_host_browser"] = f"{SETTINGS['tailnet_base']}:8462"
+    _authentik_api("PATCH", f"outposts/instances/{outpost['pk']}/", {
+        "providers": desired_providers,
+        "config": config,
+    })
+
+
+def _write_json_secret(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temporary.chmod(0o600)
+    temporary.replace(path)
+
+
+def _configure_application_sso(sid: str) -> None:
+    origin = _canonical_app_url(sid)
+    if not origin:
+        raise RuntimeError(f"No canonical identity URL is registered for {sid}")
+    callbacks: dict[str, list[dict]] = {
+        "open-webui": [{"matching_mode": "strict", "url": f"{origin}/oauth/oidc/callback", "redirect_uri_type": "authorization"}],
+        "immich": [
+            {"matching_mode": "strict", "url": f"{origin}/auth/login", "redirect_uri_type": "authorization"},
+            {"matching_mode": "strict", "url": f"{origin}/user-settings", "redirect_uri_type": "authorization"},
+        ],
+        "paperless-ngx": [{"matching_mode": "strict", "url": f"{origin}/accounts/oidc/authentik/login/callback/", "redirect_uri_type": "authorization"}],
+        "actual-budget": [{"matching_mode": "strict", "url": f"{origin}/openid/callback", "redirect_uri_type": "authorization"}],
+        "adventurelog": [{"matching_mode": "regex", "url": f"^{re.escape(origin)}/accounts/oidc/.*$", "redirect_uri_type": "authorization"}],
+    }
+    if sid not in callbacks:
+        return
+    existing_env = _parse_env_file(_env_path(sid))
+    existing_client_keys = {
+        "open-webui": ["OAUTH_CLIENT_ID"],
+        "paperless-ngx": ["PAPERLESS_SOCIALACCOUNT_PROVIDERS"],
+        "actual-budget": ["ACTUAL_OPENID_CLIENT_ID"],
+        "adventurelog": ["M2LAB_OIDC_CLIENT_ID"],
+        "immich": [],
+    }[sid]
+    has_manual_client = any(not _secret_missing(existing_env.get(key)) and existing_env.get(key) not in {"{}", "[]"}
+                            for key in existing_client_keys)
+    if has_manual_client and not existing_env.get("M2LAB_OIDC_CLIENT_ID"):
+        raise OperatorHandoff(f"{service_by_id(sid)['display_name']} already has a manual identity configuration")
+    if sid == "immich" and not existing_env.get("M2LAB_OIDC_CLIENT_ID"):
+        config_path = ROOT / service_by_id(sid)["dir"] / "immich-config.json"
+        if config_path.exists():
+            try:
+                if json.loads(config_path.read_text(encoding="utf-8")).get("oauth", {}).get("enabled"):
+                    raise OperatorHandoff("Immich already has a manual OAuth configuration")
+            except json.JSONDecodeError:
+                raise OperatorHandoff("Immich has an existing configuration file that needs review") from None
+    oidc = _ensure_authentik_oidc(sid, callbacks[sid])
+    env = _parse_env_file(_env_path(sid))
+    if sid == "open-webui":
+        # Open WebUI resolves OIDC discovery server-side. Browser-local
+        # 127.0.0.1 points at the container itself, not Authentik, so use the
+        # private host bridge during a local deployment. Authentik still
+        # advertises the canonical HTTPS browser URLs in its discovery data.
+        discovery_url = oidc.get("container_discovery_url") or _authentik_discovery_url(
+            sid.replace("-", "_"), container=True
+        )
+        env.update({
+            "OPENID_PROVIDER_URL": discovery_url, "OAUTH_CLIENT_ID": oidc["client_id"],
+            "OAUTH_CLIENT_SECRET": oidc["client_secret"], "OPENID_REDIRECT_URI": callbacks[sid][0]["url"],
+            "OAUTH_SCOPES": "openid profile email groups", "ENABLE_OAUTH_SIGNUP": "true",
+            "OAUTH_AUTO_REDIRECT": "false", "ENABLE_LOGIN_FORM": "true",
+        })
+    elif sid == "paperless-ngx":
+        env.update({
+            "PAPERLESS_URL": origin, "PAPERLESS_CSRF_TRUSTED_ORIGINS": origin,
+            "PAPERLESS_APPS": "allauth.socialaccount.providers.openid_connect",
+            "PAPERLESS_SOCIAL_AUTO_SIGNUP": "true", "PAPERLESS_SOCIALACCOUNT_ALLOW_SIGNUPS": "true",
+            "PAPERLESS_DISABLE_REGULAR_LOGIN": "false", "PAPERLESS_REDIRECT_LOGIN_TO_SSO": "false",
+            "PAPERLESS_SOCIALACCOUNT_PROVIDERS": json.dumps({"openid_connect": {"APPS": [{
+                "provider_id": "authentik", "name": "Authentik", "client_id": oidc["client_id"],
+                "secret": oidc["client_secret"], "settings": {"server_url": oidc["issuer"]},
+            }]}}),
+        })
+    elif sid == "actual-budget":
+        env.update({
+            "ACTUAL_OPENID_DISCOVERY_URL": f"{oidc['issuer']}.well-known/openid-configuration",
+            "ACTUAL_OPENID_CLIENT_ID": oidc["client_id"], "ACTUAL_OPENID_CLIENT_SECRET": oidc["client_secret"],
+            "ACTUAL_OPENID_SERVER_HOSTNAME": origin, "ACTUAL_OPENID_AUTH_METHOD": "openid",
+            "ACTUAL_LOGIN_METHOD": "openid", "ACTUAL_ALLOWED_LOGIN_METHODS": "openid,password",
+            "ACTUAL_OPENID_ENFORCE": "false", "ACTUAL_USER_CREATION_MODE": "login",
+        })
+    elif sid == "adventurelog":
+        server_url = f"http://host.docker.internal:19463/application/o/{sid.replace('-', '_')}"
+        env.update({
+            "SITE_URL": origin, "M2LAB_OIDC_ISSUER": oidc["issuer"],
+            "M2LAB_OIDC_SERVER_URL": server_url,
+            "SOCIALACCOUNT_ALLOW_SIGNUP": "true", "FORCE_SOCIALACCOUNT_LOGIN": "false",
+        })
+    elif sid == "immich":
+        env["IMMICH_CONFIG_FILE"] = "/config/immich-config.json"
+        env["IMMICH_CONFIG_SOURCE"] = "./immich-config.json"
+        _write_json_secret(ROOT / service_by_id(sid)["dir"] / "immich-config.json", {
+            "oauth": {"enabled": True, "issuerUrl": oidc["issuer"], "clientId": oidc["client_id"],
+                      "clientSecret": oidc["client_secret"], "scope": "openid email profile groups",
+                      "autoRegister": True, "autoLaunch": False, "buttonText": "Login with Authentik"}
+        })
+    _write_env_file(_env_path(sid), env)
+
+
+def _finalize_application_sso(sid: str) -> None:
+    """Enforce SSO-only UX only after discovery and the app route verify."""
+    env = _parse_env_file(_env_path(sid))
+    if sid == "open-webui":
+        env.update({"OAUTH_AUTO_REDIRECT": "true", "ENABLE_LOGIN_FORM": "false"})
+    elif sid == "paperless-ngx":
+        env.update({"PAPERLESS_DISABLE_REGULAR_LOGIN": "true", "PAPERLESS_REDIRECT_LOGIN_TO_SSO": "true"})
+    elif sid == "actual-budget":
+        env.update({"ACTUAL_ALLOWED_LOGIN_METHODS": "openid", "ACTUAL_OPENID_ENFORCE": "true"})
+    elif sid == "adventurelog":
+        env["FORCE_SOCIALACCOUNT_LOGIN"] = "true"
+    elif sid == "immich":
+        config_path = ROOT / service_by_id(sid)["dir"] / "immich-config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config.setdefault("oauth", {})["autoLaunch"] = True
+        _write_json_secret(config_path, config)
+    _write_env_file(_env_path(sid), env)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _probe_url(url: str) -> int:
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=ssl._create_unverified_context()), _NoRedirect()
+    )
+    request_obj = urllib.request.Request(url, headers={"User-Agent": "M2Lab-Onboarding/1"})
+    try:
+        with opener.open(request_obj, timeout=10) as response:
+            return response.status
+    except urllib.error.HTTPError as error:
+        return error.code
+    except urllib.error.URLError:
+        return 599
+
+
+def _probe_local_app(sid: str) -> int:
+    """Probe the host-local Caddy route; public/Tailscale DNS is not needed."""
+    port = _INGRESS_PORTS.get(sid)
+    if not port:
+        return 599
+    status = _probe_url(f"https://127.0.0.1:{port}")
+    return _probe_url(f"http://127.0.0.1:{port}") if status == 599 else status
+
+
+def _verify_batch_access(sid: str, strategy: str) -> None:
+    if sid == "ollama":
+        if _validate_ollama_access()["status"] != "available":
+            raise RuntimeError("Ollama loopback API is not reachable")
+        return
+    if strategy == "native_oidc":
+        env = _parse_env_file(_env_path(sid))
+        if _secret_missing(env.get("M2LAB_OIDC_CLIENT_ID")) or _secret_missing(env.get("M2LAB_OIDC_CLIENT_SECRET")):
+            raise RuntimeError(f"{service_by_id(sid)['display_name']} OIDC credentials were not applied")
+        discovery = f"{_authentik_issuer(sid.replace('-', '_'))}.well-known/openid-configuration"
+        if _probe_url(discovery) >= 400:
+            raise RuntimeError("Authentik OIDC discovery is not reachable")
+    status = _probe_local_app(sid)
+    if status >= 500:
+        raise RuntimeError(f"{service_by_id(sid)['display_name']} protected route is not reachable")
+
+
+async def _configure_adventurelog_social_app() -> None:
+    service = service_by_id("adventurelog")
+    script = (
+        "import os; from django.contrib.sites.models import Site; "
+        "from allauth.socialaccount.models import SocialApp; "
+        "server_url=os.environ.get('M2LAB_OIDC_SERVER_URL') or os.environ['M2LAB_OIDC_ISSUER']; "
+        "a,_=SocialApp.objects.update_or_create(provider='openid_connect',name='Authentik',defaults={"
+        "'provider_id':os.environ['M2LAB_OIDC_CLIENT_ID'],'client_id':os.environ['M2LAB_OIDC_CLIENT_ID'],"
+        "'secret':os.environ['M2LAB_OIDC_CLIENT_SECRET'],'settings':{'server_url':server_url.rstrip('/')}}); "
+        "a.sites.set(Site.objects.all())"
+    )
+    rc, _output = await run_compose(service, ["exec", "-T", "server", "python", "manage.py", "shell", "-c", script])
+    if rc != 0:
+        raise RuntimeError("AdventureLog OIDC provider could not be applied")
+
+
+def _container_working_set(sid: str) -> int:
+    total = 0
+    for container in project_containers(service_by_id(sid)["project"]):
+        if container.status != "running":
+            continue
+        stats = container.stats(stream=False)
+        memory = stats.get("memory_stats", {})
+        usage = int(memory.get("usage", 0))
+        inactive = int(memory.get("stats", {}).get("inactive_file", 0))
+        total += max(0, usage - inactive)
+    return total
+
+
+def _gpu_vram_used() -> int:
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=used_memory", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=3, check=False,
+        )
+        if result.returncode != 0:
+            return 0
+        return sum(int(line.strip()) for line in result.stdout.splitlines() if line.strip().isdigit()) * 1024**2
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return 0
+
+
+async def _measure_service_memory(sid: str, host_baseline: int) -> tuple[int, int, int, int, str]:
+    samples: list[int] = []
+    host_samples: list[int] = []
+    gpu_samples: list[int] = []
+    deadline = time.monotonic() + max(2, _BATCH_SAMPLE_SECONDS)
+    while time.monotonic() < deadline:
+        try:
+            samples.append(await asyncio.to_thread(_container_working_set, sid))
+            host_samples.append(psutil.virtual_memory().used)
+            gpu_samples.append(await asyncio.to_thread(_gpu_vram_used))
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+    if not samples:
+        floor = _BATCH_MEMORY_FLOORS.get(sid, 1024**3)
+        return floor, floor, 0, 0, "estimated"
+    marginal = max(0, max(host_samples, default=host_baseline) - host_baseline)
+    return max(samples), samples[-1], marginal, max(gpu_samples, default=0), "measured"
+
+
+def _expand_batch_targets(targets: list[str]) -> list[dict]:
+    catalog = load_catalog()
+    app_by_id = {item["id"]: item for item in catalog.get("apps", [])}
+    app_by_service = {item.get("service_id"): item for item in app_by_id.values() if item.get("service_id")}
+    ordered: list[str] = []
+    dependencies: dict[str, list[str]] = {}
+    seen: set[str] = set()
+
+    def add_service(service_id: str) -> None:
+        if service_id in seen:
+            return
+        service_by_id(service_id)
+        app = app_by_service.get(service_id)
+        deps: list[str] = []
+        for app_id in (app or {}).get("dependencies", []):
+            dependency = app_by_id.get(app_id, {}).get("service_id")
+            if dependency:
+                add_service(dependency)
+                deps.append(dependency)
+        seen.add(service_id)
+        dependencies[service_id] = deps
+        ordered.append(service_id)
+
+    for target in targets:
+        add_service(target)
+    unknown = [sid for sid in ordered if sid not in _BATCH_SSO_STRATEGIES]
+    if unknown:
+        raise ValueError(f"No reviewed onboarding identity adapter for: {', '.join(unknown)}")
+    stable = [sid for sid in ordered if sid in _BATCH_INFRA] + [sid for sid in ordered if sid not in _BATCH_INFRA]
+    return [{
+        "service_id": sid, "role": "infrastructure" if sid in _BATCH_INFRA else "application",
+        "dependencies": dependencies[sid], "sso_strategy": _BATCH_SSO_STRATEGIES[sid],
+        "projected_bytes": _BATCH_MEMORY_FLOORS.get(sid, 1024**3),
+    } for sid in stable]
+
+
+def _project_batch_memory(items: list[dict], host_baseline_bytes: int) -> int:
+    service_total = sum(
+        max(int(item.get("peak_bytes") or item.get("projected_bytes") or 0),
+            _BATCH_MEMORY_FLOORS.get(item["service_id"], 1024**3))
+        for item in items
+    )
+    return int(host_baseline_bytes) + int(service_total * 1.15)
+
+
+def _memory_gate_exceeded(projected_bytes: int, host_total_bytes: int, reserve_ratio: float = 0.20) -> bool:
+    return projected_bytes > int(host_total_bytes * (1.0 - reserve_ratio))
 
 
 async def _run_app_setup_job(job_id: str, sid: str) -> None:
@@ -1534,12 +2315,233 @@ async def _run_app_setup_job(job_id: str, sid: str) -> None:
             return
         update_job(job_id, status="ready", stage="ready", progress=100,
                    summary=f"{service_by_id(sid)['display_name']} is ready", message="Application health and setup checks passed")
+    except OperatorHandoff as error:
+        current = get_batch(batch_id)
+        index = min(int(current["current_index"]), max(0, len(current["items"]) - 1))
+        if current["items"]:
+            update_batch_item(batch_id, index, status="paused_handoff", phase="paused_handoff",
+                              error=str(error)[:500], message="Existing identity configuration needs operator review")
+        update_batch(batch_id, status="paused_handoff", phase="paused_handoff", error=str(error)[:500],
+                     message="Sequential onboarding paused without overwriting existing identity configuration")
     except Exception as error:
         update_job(job_id, status="failed", stage="failed", progress=0,
                    summary=f"{service_by_id(sid)['display_name']} setup needs attention", message="Setup stopped safely.", error=str(error)[:500])
     finally:
         _app_setup_slots.release()
         _setup_tasks.pop(job_id, None)
+
+
+async def _batch_start_service(batch_id: str, ordinal: int, sid: str) -> None:
+    service = service_by_id(sid)
+    update_batch_item(batch_id, ordinal, status="running", phase="downloading",
+                      message=f"Downloading missing images for {service['display_name']}")
+    await asyncio.to_thread(_check_service_setup_prerequisites, sid)
+    rc, _output = await run_compose(service, ["up", "-d"])
+    if rc != 0:
+        raise RuntimeError(f"{service['display_name']} could not be started")
+    update_batch_item(batch_id, ordinal, status="running", phase="starting",
+                      message=f"Waiting for {service['display_name']} health")
+    if not await _wait_for_service(sid, timeout=300):
+        raise RuntimeError(f"{service['display_name']} did not become healthy before timeout")
+
+
+async def _run_setup_batch(batch_id: str) -> None:
+    try:
+        batch = get_batch(batch_id)
+        if not _foundation_ready():
+            raise RuntimeError("Complete the Authentik identity foundation before starting applications")
+        total = psutil.virtual_memory().total
+        cap = int(total * (1.0 - float(batch["reserve_ratio"])))
+        start_index = max(0, int(batch["current_index"]))
+        update_batch(batch_id, status="running", phase="preflight", current_index=start_index,
+                     message="Preflight passed; beginning one-at-a-time setup")
+        await _validate_caddy()
+        await asyncio.to_thread(_ensure_authentik_local_proxy_gates)
+
+        for ordinal, original in enumerate(get_batch(batch_id)["items"]):
+            if ordinal < start_index or original["status"] in {"prepared", "ready"}:
+                continue
+            sid = original["service_id"]
+            memory = psutil.virtual_memory()
+            floor = max(int(original["projected_bytes"]), _BATCH_MEMORY_FLOORS.get(sid, 1024**3))
+            existing_working_set = await asyncio.to_thread(_container_working_set, sid)
+            anticipated_increase = max(0, floor - existing_working_set)
+            if memory.used + anticipated_increase > cap or memory.available - anticipated_increase < int(total * batch["reserve_ratio"]):
+                update_batch(batch_id, status="paused_memory", phase="paused_memory", current_index=ordinal,
+                             projected_bytes=memory.used + anticipated_increase,
+                             error="Starting the next service would consume the 20% host memory reserve.",
+                             service_id=sid, message=f"Paused before {service_by_id(sid)['display_name']} to preserve memory")
+                return
+
+            update_batch(batch_id, status="running", phase="preparing", current_index=ordinal,
+                         service_id=sid, message=f"Preparing protected configuration for {service_by_id(sid)['display_name']}")
+            current = _parse_env_file(_env_path(sid))
+            example = _parse_env_file(_env_example_path(sid))
+            if sid in AUTOMATED_SERVICES:
+                prepared, _changed = prepare_environment(sid, current, example, identity=None)
+            else:
+                prepared = {**example, **current}
+            _apply_automatic_model_wiring(sid, prepared)
+            if prepared:
+                _write_env_file(_env_path(sid), prepared)
+
+            update_batch_item(batch_id, ordinal, status="running", phase="configuring_authentik",
+                              baseline_bytes=memory.used, message="Configuring Authentik and the application login path")
+            if original["sso_strategy"] == "native_oidc":
+                await asyncio.to_thread(_configure_application_sso, sid)
+            elif original["sso_strategy"] == "session_bridge":
+                root_env = _parse_env_file(ROOT / ".env")
+                if _secret_missing(root_env.get("OMNILAB_SESSION_BRIDGE_SECRET")):
+                    root_env["OMNILAB_SESSION_BRIDGE_SECRET"] = secrets.token_hex(32)
+                    _write_env_file(ROOT / ".env", root_env)
+
+            await _batch_start_service(batch_id, ordinal, sid)
+            update_batch_item(batch_id, ordinal, status="running", phase="applying_app_sso",
+                              message=f"Applying {original['sso_strategy'].replace('_', ' ')}")
+            if sid == "adventurelog":
+                await _configure_adventurelog_social_app()
+            if sid == "ollama" and bool(batch["pull_embedding"]) and not await asyncio.to_thread(_pull_ollama_model, "nomic-embed-text"):
+                raise RuntimeError("Ollama could not pull the required nomic-embed-text model")
+
+            update_batch_item(batch_id, ordinal, status="running", phase="verifying_access",
+                              message="Checking health and configured authentication state")
+            if not await _wait_for_service(sid, timeout=30):
+                raise RuntimeError(f"{service_by_id(sid)['display_name']} failed its access verification")
+            await asyncio.to_thread(_verify_batch_access, sid, original["sso_strategy"])
+            if original["sso_strategy"] == "native_oidc":
+                await asyncio.to_thread(_finalize_application_sso, sid)
+                rc, _output = await run_compose(service_by_id(sid), ["up", "-d"])
+                if rc != 0 or not await _wait_for_service(sid, timeout=180):
+                    raise RuntimeError(f"{service_by_id(sid)['display_name']} could not enforce its verified SSO configuration")
+                await asyncio.to_thread(_verify_batch_access, sid, original["sso_strategy"])
+
+            update_batch_item(batch_id, ordinal, status="running", phase="measuring_memory",
+                              message=f"Measuring stabilized memory for up to {_BATCH_SAMPLE_SECONDS} seconds")
+            peak, steady, marginal, gpu_peak, confidence = await _measure_service_memory(sid, memory.used)
+            projected = max(peak, floor)
+            update_batch_item(
+                batch_id, ordinal, status="prepared", phase="prepared", peak_bytes=peak,
+                steady_bytes=steady, marginal_bytes=marginal, gpu_peak_bytes=gpu_peak,
+                projected_bytes=projected, confidence=confidence,
+                measured_at=datetime.now(timezone.utc).isoformat(),
+                message=f"Prepared {service_by_id(sid)['display_name']}; memory measurement recorded",
+            )
+            if original["role"] == "application":
+                rc, _output = await run_compose(service_by_id(sid), ["stop"])
+                if rc != 0:
+                    raise RuntimeError(f"Could not stop {service_by_id(sid)['display_name']} after measurement")
+
+            current_batch = get_batch(batch_id)
+            measured = sum(int(item["peak_bytes"]) for item in current_batch["items"] if item["peak_bytes"])
+            projection = _project_batch_memory(current_batch["items"], current_batch["host_baseline_bytes"])
+            update_batch(batch_id, status="running", phase="preparing", current_index=ordinal + 1,
+                         measured_bytes=measured, projected_bytes=projection,
+                         message=f"Capacity projection updated after {service_by_id(sid)['display_name']}")
+
+        batch = get_batch(batch_id)
+        if _memory_gate_exceeded(int(batch["projected_bytes"]), total, float(batch["reserve_ratio"])):
+            update_batch(batch_id, status="paused_memory", phase="paused_memory",
+                         error="The complete selection is projected to exceed 80% of physical memory.",
+                         message="Preparation completed, but final activation is paused to preserve the 20% reserve")
+            return
+
+        update_batch(batch_id, status="running", phase="starting_for_use", current_index=0,
+                     message="Capacity check passed; starting prepared services sequentially")
+        for ordinal, item in enumerate(get_batch(batch_id)["items"]):
+            update_batch_item(batch_id, ordinal, status="running", phase="starting_for_use",
+                              message=f"Starting {service_by_id(item['service_id'])['display_name']} for use")
+            await _batch_start_service(batch_id, ordinal, item["service_id"])
+            await asyncio.to_thread(_verify_batch_access, item["service_id"], item["sso_strategy"])
+            update_batch_item(batch_id, ordinal, status="ready", phase="ready",
+                              message=f"{service_by_id(item['service_id'])['display_name']} is ready")
+        update_batch(batch_id, status="ready", phase="ready", current_index=len(batch["items"]),
+                     message="All selected services are configured and ready")
+    except Exception as error:
+        current = get_batch(batch_id)
+        index = min(int(current["current_index"]), max(0, len(current["items"]) - 1))
+        if current["items"]:
+            update_batch_item(batch_id, index, status="failed", phase="failed", error=str(error)[:500],
+                              message="Sequential setup stopped at this service")
+        update_batch(batch_id, status="failed", phase="failed", error=str(error)[:500],
+                     message="Sequential onboarding stopped safely")
+    finally:
+        _batch_tasks.pop(batch_id, None)
+
+
+@app.get("/api/setup/batches")
+async def get_setup_batches(request: Request):
+    require_trusted_request(request)
+    return await asyncio.to_thread(list_batches)
+
+
+@app.get("/api/setup/batches/{batch_id}")
+async def get_setup_batch(batch_id: str, request: Request):
+    require_trusted_request(request)
+    try:
+        return await asyncio.to_thread(get_batch, batch_id)
+    except KeyError:
+        raise HTTPException(404, "Unknown setup batch") from None
+
+
+@app.post("/api/setup/batches")
+async def start_setup_batch(request: Request):
+    require_trusted_request(request)
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "onboarding", "setup-batch-start")
+    body = await request.json()
+    targets = body.get("targets", [])
+    pull_embedding = bool(body.get("pull_embedding", True))
+    if not isinstance(targets, list) or not targets or not all(isinstance(item, str) for item in targets):
+        raise HTTPException(400, "targets must be a non-empty service-id list")
+    try:
+        items = await asyncio.to_thread(_expand_batch_targets, targets)
+    except (KeyError, ValueError) as error:
+        raise HTTPException(400, str(error)) from None
+    memory = psutil.virtual_memory()
+    running_selection_bytes = 0
+    for item in items:
+        running_selection_bytes += await asyncio.to_thread(_container_working_set, item["service_id"])
+    batch = await asyncio.to_thread(create_batch, items, reserve_ratio=0.20,
+                                    host_total_bytes=memory.total,
+                                    host_baseline_bytes=max(0, memory.used - running_selection_bytes),
+                                    pull_embedding=pull_embedding)
+    if batch["status"] in {"queued", "paused_interrupted"} and batch["id"] not in _batch_tasks:
+        _batch_tasks[batch["id"]] = asyncio.create_task(_run_setup_batch(batch["id"]))
+    await audit_event(request, "setup.batch_started", batch_id=batch["id"], targets=targets)
+    return batch
+
+
+@app.post("/api/setup/batches/{batch_id}/resume")
+async def resume_setup_batch(batch_id: str, request: Request):
+    require_trusted_request(request)
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "onboarding", "setup-batch-resume")
+    try:
+        batch = get_batch(batch_id)
+    except KeyError:
+        raise HTTPException(404, "Unknown setup batch") from None
+    if batch["status"] not in {"paused_memory", "paused_handoff", "paused_interrupted", "failed"}:
+        raise HTTPException(409, "This batch is not paused")
+    update_batch(batch_id, status="queued", phase="queued", error=None, message="Operator resumed sequential setup")
+    if batch_id not in _batch_tasks:
+        _batch_tasks[batch_id] = asyncio.create_task(_run_setup_batch(batch_id))
+    await audit_event(request, "setup.batch_resumed", batch_id=batch_id)
+    return get_batch(batch_id)
+
+
+@app.post("/api/setup/batches/{batch_id}/cancel")
+async def cancel_setup_batch(batch_id: str, request: Request):
+    require_trusted_request(request)
+    _consume_approval(request, request.headers.get("X-M2Lab-Approval"), "onboarding", "setup-batch-cancel")
+    try:
+        get_batch(batch_id)
+    except KeyError:
+        raise HTTPException(404, "Unknown setup batch") from None
+    task = _batch_tasks.pop(batch_id, None)
+    if task:
+        task.cancel()
+    result = update_batch(batch_id, status="cancelled", phase="cancelled", error=None,
+                          message="Cancelled future setup work; configured services were preserved")
+    await audit_event(request, "setup.batch_cancelled", batch_id=batch_id)
+    return result
 
 
 @app.get("/api/setup/jobs")
@@ -1563,6 +2565,11 @@ async def start_setup_job(target: str, request: Request):
     _consume_approval(request, request.headers.get("X-M2Lab-Approval"), target, "setup-start")
     if target != "foundation":
         service_by_id(target)
+        active_batches = list_batches(limit=1)["batches"]
+        if active_batches and active_batches[0]["status"] in {
+            "queued", "running", "paused_memory", "paused_handoff", "paused_interrupted"
+        } and any(item["service_id"] == target for item in active_batches[0]["items"]):
+            raise HTTPException(409, "This service is owned by the active onboarding batch")
     job = await asyncio.to_thread(create_job, target, "foundation" if target == "foundation" else "application",
                                   "Preparing identity foundation" if target == "foundation" else f"Preparing {service_by_id(target)['display_name']}")
     if job["status"] == "queued" and job["id"] not in _setup_tasks:
@@ -1584,9 +2591,9 @@ async def resume_setup_job(job_id: str, request: Request):
     if not body.get("completed"):
         raise HTTPException(400, "Confirm the displayed handoff is complete before resuming")
     if job["target"] == "foundation" and job["stage"] == "tailscale_permission":
-        if not tailscale_required():
-            raise HTTPException(409, "Tailscale is not required in this install mode")
         routed, route_error = await _route_authentik()
+        if routed:
+            routed, route_error = await _route_tailnet_services()
         if not routed:
             raise HTTPException(409, route_error or "The Authentik route is not ready")
         if not await _verify_external_authentik():
@@ -1594,7 +2601,7 @@ async def resume_setup_job(job_id: str, request: Request):
         result = update_job(job_id, status="user_action_required", stage="create_vaultwarden_owner", progress=84,
                             summary="Create your Vaultwarden master password",
                             message="Vaultwarden is ready. Create its master account now so you can store provider API keys while Authentik finishes configuring.",
-                            action={"kind": "open_url", "label": "Open Vaultwarden", "url": "http://127.0.0.1:8081"})
+                            action={"kind": "open_url", "label": "Open Vaultwarden", "url": _canonical_app_url("vaultwarden")})
     elif job["target"] == "foundation" and job["stage"] == "create_vaultwarden_owner":
         if not await _wait_for_service("vaultwarden", 10):
             raise HTTPException(409, "Vaultwarden is not reachable yet")
@@ -1603,12 +2610,9 @@ async def resume_setup_job(job_id: str, request: Request):
                             message="Authentik auto-created the built-in 'akadmin' owner during first start, so the initial-setup flow is disabled. Log in with the temporary admin password, change it on first login, then enroll MFA or a passkey and save recovery codes.",
                             action={"kind": "open_url", "label": "Open Authentik login", "url": _authentik_login_url()})
     elif job["target"] == "foundation" and job["stage"] == "create_owner":
-        if tailscale_required():
-            if not await _verify_external_authentik(10):
-                raise HTTPException(409, "Authentik is not reachable yet")
-            if not await _wait_for_service("authentik", 10):
-                raise HTTPException(409, "Authentik is not reachable yet")
-        elif not await _wait_for_service("authentik", 10):
+        if not await _verify_external_authentik(10):
+            raise HTTPException(409, "Authentik is not reachable yet")
+        if not await _wait_for_service("authentik", 10):
             raise HTTPException(409, "Authentik is not reachable yet")
         # Vaultwarden was started early in the foundation job; ensure it is still up.
         if svc_state(service_by_id("vaultwarden"))["overall"] != "running":
@@ -1619,8 +2623,7 @@ async def resume_setup_job(job_id: str, request: Request):
                            summary="Vaultwarden needs attention", message="Identity is ready, but Vaultwarden did not start.", error=str(error)[:500])
                 raise HTTPException(500, str(error)) from error
         result = update_job(job_id, status="ready", stage="ready", progress=100,
-                            summary="Identity foundation is ready", message="Authentik, Caddy, and Vaultwarden are ready"
-                            + (", with Tailscale routing" if tailscale_required() else " (loopback mode)"))
+                            summary="Identity foundation is ready", message="Authentik, Caddy, Vaultwarden, and Tailscale routes are ready")
     elif job["status"] == "user_action_required":
         sid = job["target"]
         if not await _wait_for_service(sid, 10):

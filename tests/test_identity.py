@@ -1,6 +1,6 @@
 import unittest
 
-from ctl.identity import APPS, GATE, MACHINE, NATIVE, app_inventory, status
+from ctl.identity import API, APPS, GATE, MACHINE, NATIVE, app_inventory, status
 from ctl.registry import SERVICES
 
 
@@ -18,8 +18,9 @@ class IdentityTests(unittest.TestCase):
     def test_modes_are_explicit(self):
         result = status({})
         self.assertEqual(result["apps"][NATIVE], 10)
-        self.assertEqual(result["apps"][GATE], 4)
+        self.assertEqual(result["apps"][GATE], 3)
         self.assertEqual(result["apps"][MACHINE], 1)
+        self.assertEqual(result["apps"][API], 1)
 
 
 if __name__ == "__main__":
